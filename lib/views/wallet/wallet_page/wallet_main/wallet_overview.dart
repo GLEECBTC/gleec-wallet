@@ -68,11 +68,10 @@ class _WalletOverviewState extends State<WalletOverview> {
         final int assetCount = state.walletCoins.length;
 
         // Get asset overview state data
+        final overviewState = portfolioAssetsOverviewBloc.state;
         final stateWithData =
-            portfolioAssetsOverviewBloc.state
-                is PortfolioAssetsOverviewLoadSuccess
-            ? portfolioAssetsOverviewBloc.state
-                  as PortfolioAssetsOverviewLoadSuccess
+            overviewState is PortfolioAssetsOverviewLoadSuccess
+            ? overviewState
             : null;
 
         // Calculate the total balance from the SDK balances and market data
@@ -114,6 +113,12 @@ class _WalletOverviewState extends State<WalletOverview> {
           );
           _logged = true;
         }
+
+        // The all-time cards wait for the wallet balance, so that the row of
+        // statistics fills in together.
+        final allTimeOverview = totalBalance == null
+            ? const AssetOverviewInitial()
+            : overviewState;
 
         // Create the statistic cards - replace first card with BalanceSummaryWidget for mobile
         final List<Widget> statisticCards = [
@@ -174,9 +179,8 @@ class _WalletOverviewState extends State<WalletOverview> {
               onTap: widget.onAssetsPressed,
               onLongPress: totalBalance != null && !hideBalances
                   ? () {
-                      final formattedValue = NumberFormat.currency(
-                        symbol: '\$',
-                      ).format(totalBalance);
+                      final formattedValue = NumberFormat.currency(symbol: '\$')
+                          .format(totalBalance);
                       copyToClipBoard(context, formattedValue);
                     }
                   : null,
@@ -197,41 +201,22 @@ class _WalletOverviewState extends State<WalletOverview> {
                           upColor: themeCustom.increaseColor,
                           downColor: themeCustom.decreaseColor,
                           value: totalChange24h,
-                          valueFormatter: NumberFormat.currency(
-                            symbol: '\$',
-                          ).format,
+                          valueFormatter: NumberFormat.currency(symbol: '\$')
+                              .format,
                         );
                       },
                     )
                   : null,
             ),
           ],
-          StatisticCard(
+          AllTimeStatisticCard(
             key: const Key('overview-all-time-investment'),
-            caption: SizedBox(
-              height: _desktopCaptionHeight,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(LocaleKeys.allTimeInvestment.tr()),
-              ),
-            ),
-            value: totalBalance != null
-                ? (stateWithData?.totalInvestment.value)
-                : null,
-            valueText: hideBalances && totalBalance != null
-                ? '\$$maskedBalanceText'
-                : null,
+            title: LocaleKeys.allTimeInvestment.tr(),
+            overview: allTimeOverview,
+            amount: (totals) => totals.totalInvestment.value,
+            hideBalances: hideBalances,
             onTap: widget.onPortfolioGrowthPressed,
-            onLongPress:
-                totalBalance != null && stateWithData != null && !hideBalances
-                ? () {
-                    final formattedValue = NumberFormat.currency(
-                      symbol: '\$',
-                    ).format(stateWithData.totalInvestment.value);
-                    copyToClipBoard(context, formattedValue);
-                  }
-                : null,
-            trendWidget: ActionChip(
+            trendBuilder: (_) => ActionChip(
               avatar: Icon(Icons.pie_chart, size: 16),
               onPressed: widget.onAssetsPressed,
               visualDensity: const VisualDensity(vertical: -4),
@@ -244,51 +229,45 @@ class _WalletOverviewState extends State<WalletOverview> {
               ),
             ),
           ),
-          StatisticCard(
+          AllTimeStatisticCard(
             key: const Key('overview-all-time-profit'),
-            caption: SizedBox(
-              height: _desktopCaptionHeight,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(LocaleKeys.allTimeProfit.tr()),
-              ),
-            ),
-            value: totalBalance != null
-                ? (stateWithData?.profitAmount.value)
-                : null,
-            valueText: hideBalances && totalBalance != null
-                ? '\$$maskedBalanceText'
-                : null,
+            title: LocaleKeys.allTimeProfit.tr(),
+            overview: allTimeOverview,
+            amount: (totals) => totals.profitAmount.value,
+            hideBalances: hideBalances,
             onTap: widget.onPortfolioProfitLossPressed,
-            onLongPress:
-                totalBalance != null && stateWithData != null && !hideBalances
-                ? () {
-                    final formattedValue = NumberFormat.currency(
-                      symbol: '\$',
-                    ).format(stateWithData.profitAmount.value);
-                    copyToClipBoard(context, formattedValue);
-                  }
-                : null,
-            trendWidget:
-                totalBalance != null && stateWithData != null && !hideBalances
-                ? TrendPercentageText(
-                    percentage: stateWithData.profitIncreasePercentage,
+            trendBuilder: (totals) => totals == null || hideBalances
+                ? null
+                : TrendPercentageText(
+                    percentage: totals.profitIncreasePercentage,
                     upColor: themeCustom.increaseColor,
                     downColor: themeCustom.decreaseColor,
                     // Show the total profit amount as the value
-                    value: stateWithData.profitAmount.value,
+                    value: totals.profitAmount.value,
                     valueFormatter: NumberFormat.currency(symbol: '\$').format,
-                  )
-                : null,
+                  ),
           ),
         ];
 
         if (isMobile) {
-          return StatisticsCarousel(cards: statisticCards);
+          final hasNote = AllTimeStatisticCard.noteFor(allTimeOverview) != null;
+          final textScaler = MediaQuery.textScalerOf(context);
+          return StatisticsCarousel(
+            cards: statisticCards,
+            // The page height is fixed. It holds the note under an all-time
+            // total at ordinary text sizes; larger text needs the room for
+            // its two lines added.
+            extraHeight: hasNote && textScaler.scale(1) > 1.4
+                ? textScaler.scale(40)
+                : 0,
+          );
         }
 
         return Row(
           spacing: 24,
+          // A note under an all-time total makes its card taller; the amounts
+          // stay on one line across the row.
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: statisticCards.map((card) {
             return Expanded(child: card);
           }).toList(),
@@ -301,6 +280,101 @@ class _WalletOverviewState extends State<WalletOverview> {
     return const Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [Padding(padding: EdgeInsets.all(20.0), child: UiSpinner())],
+    );
+  }
+}
+
+/// An all-time total from the portfolio overview.
+///
+/// Shows the amount once it is known, a placeholder while it loads, and an em
+/// dash when the overview has no total to give. A note under the title says
+/// when assets were left out of the amount.
+class AllTimeStatisticCard extends StatelessWidget {
+  const AllTimeStatisticCard({
+    required this.title,
+    required this.overview,
+    required this.amount,
+    required this.hideBalances,
+    this.onTap,
+    this.trendBuilder,
+    super.key,
+  });
+
+  final String title;
+  final AssetOverviewState overview;
+  final double Function(PortfolioAssetsOverviewLoadSuccess totals) amount;
+  final bool hideBalances;
+  final VoidCallback? onTap;
+
+  /// Builds the trailing widget; `totals` is null until they are shown.
+  final Widget? Function(PortfolioAssetsOverviewLoadSuccess? totals)?
+  trendBuilder;
+
+  static const noteKey = Key('overview-all-time-note');
+
+  /// Stands in for an amount that is not known; it is not a zero.
+  static const unavailableValue = '—';
+
+  /// What a card says under its title for [overview], if anything.
+  static String? noteFor(AssetOverviewState overview) {
+    if (overview is PortfolioAssetsOverviewUnavailable) {
+      return 'portfolioStatUnavailable'.tr();
+    }
+    final excludedAssets = overview is PortfolioAssetsOverviewLoadSuccess
+        ? overview.excludedAssetIds.length
+        : 0;
+    return excludedAssets > 0
+        ? 'portfolioExcludesUnpricedAssets'.plural(excludedAssets)
+        : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = overview;
+    final totals = state is PortfolioAssetsOverviewLoadSuccess ? state : null;
+    final isUnavailable = state is PortfolioAssetsOverviewUnavailable;
+    final value = totals == null ? null : amount(totals);
+    final note = noteFor(overview);
+
+    final String? valueText;
+    if (isUnavailable) {
+      valueText = unavailableValue;
+    } else if (hideBalances && value != null) {
+      valueText = '\$$maskedBalanceText';
+    } else {
+      valueText = null;
+    }
+
+    return StatisticCard(
+      caption: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: _WalletOverviewState._desktopCaptionHeight,
+            child: Align(alignment: Alignment.centerLeft, child: Text(title)),
+          ),
+          if (note != null)
+            Text(
+              note,
+              key: noteKey,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
+      // A null value is what makes StatisticCard draw its loading placeholder,
+      // so a total that is known to be unavailable needs one to show its dash.
+      value: isUnavailable ? 0 : value,
+      valueText: valueText,
+      onTap: onTap,
+      onLongPress: value != null && !hideBalances
+          ? () => copyToClipBoard(
+              context,
+              NumberFormat.currency(symbol: '\$').format(value),
+            )
+          : null,
+      trendWidget: trendBuilder?.call(totals),
     );
   }
 }
@@ -337,7 +411,14 @@ class _BalancePrivacyToggleButton extends StatelessWidget {
 class StatisticsCarousel extends StatefulWidget {
   final List<Widget> cards;
 
-  const StatisticsCarousel({super.key, required this.cards});
+  /// Added to the fixed height of a page.
+  final double extraHeight;
+
+  const StatisticsCarousel({
+    super.key,
+    required this.cards,
+    this.extraHeight = 0,
+  });
 
   @override
   State<StatisticsCarousel> createState() => _StatisticsCarouselState();
@@ -373,7 +454,7 @@ class _StatisticsCarouselState extends State<StatisticsCarousel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 160,
+          height: 160 + widget.extraHeight,
           child: PageView.builder(
             controller: _pageController,
             itemCount: widget.cards.length,

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/file_loader/diagnostic_artifacts_native.dart';
 import 'package:web_dex/shared/utils/zip.dart';
 
@@ -29,7 +30,19 @@ class FileLoaderNativeIOS implements FileLoader {
     required String fileName,
     required String data,
     LoadFileType type = LoadFileType.text,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    if (beforeWrite != null) {
+      await saveGuardedTextFile(
+        fileName: fileName,
+        data: data,
+        type: type,
+        beforeWrite: beforeWrite,
+        selectDestination: selectDestination,
+      );
+      return;
+    }
     switch (type) {
       case LoadFileType.text:
         if (path.extension(fileName).toLowerCase() == '.json') {
@@ -135,11 +148,15 @@ class FileLoaderNativeIOS implements FileLoader {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: fileType == null ? FileType.any : fileType.fileType,
-        allowedExtensions: fileType != null ? [fileType.extension] : null,
+        allowedExtensions: fileType?.importExtensions,
       );
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
+      if (fileType != null && !fileType.acceptsImport(file.name)) {
+        onError('Unsupported file type');
+        return;
+      }
       final path = file.path;
       if (path == null) return;
 

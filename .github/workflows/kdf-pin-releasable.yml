@@ -1,0 +1,30 @@
+# Keeps temporary KDF builds off release branches. Such a build (a KDF branch
+# named local/... or charl-temp/...) may be pinned on dev, as the Solana
+# combined build is until KDF merges its Solana pull request, but never merged
+# into main or a release.
+name: KDF pin can ship
+run-name: ${{ github.actor }} is checking the KDF pin
+
+on:
+  pull_request:
+    branches: [main, 'release-*', 'release/**']
+
+permissions:
+  contents: read
+
+jobs:
+  kdf_pin_releasable:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the app and SDK
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Test the pin check
+        run: .github/scripts/test_check_kdf_pin_releasable.sh
+
+      - name: Check the KDF pin can ship
+        run: .github/scripts/check_kdf_pin_releasable.sh

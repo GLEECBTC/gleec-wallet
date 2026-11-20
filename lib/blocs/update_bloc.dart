@@ -13,27 +13,64 @@ import 'package:web_dex/shared/widgets/update_popup.dart';
 
 final updateBloc = UpdateBloc();
 
+/// Shows the update popup and returns whether it is on screen.
+///
+/// [onDismiss] runs when a shown popup leaves the screen for any reason; after
+/// [onAccept] or [onCancel] when one of its buttons closed it.
+typedef UpdatePopupPresenter = bool Function(
+  UpdateVersionInfo versionInfo, {
+  required VoidCallback onAccept,
+  required VoidCallback onCancel,
+  required VoidCallback onDismiss,
+});
+
 class UpdateBloc extends BlocBase {
+  UpdateBloc({
+    AppUpdateService? service,
+    Future<String> Function()? currentVersion,
+    UpdatePopupPresenter? presentPopup,
+  }) : _service = service ?? appUpdateService,
+       _readCurrentVersion = currentVersion,
+       _presentPopup = presentPopup;
+
+  final AppUpdateService _service;
+  final Future<String> Function()? _readCurrentVersion;
+  final UpdatePopupPresenter? _presentPopup;
+
   /// How long an established "this site cannot serve that release yet" verdict
   /// is trusted before it is re-checked.
   static const Duration _gateRecheckInterval = Duration(minutes: 30);
 
   Timer? _checkerTime;
   bool _isPopupShown = false;
+  bool _initialized = false;
+  bool _disposed = false;
+  bool _checking = false;
+  final Set<String> _dismissedOptionalVersions = {};
 
   String? _gateAnnouncedVersion;
   DateTime? _gateCheckedAt;
 
   @override
   void dispose() {
+    _disposed = true;
     _checkerTime?.cancel();
   }
 
   Future<void> init() async {
-    await _checkForUpdates();
-    // init() is reachable more than once across a session; without this each
-    // call would leave another live timer behind.
-    _checkerTime?.cancel();
+    // MainLayout is remounted when the selected menu changes. Initialization
+    // and optional dismissal belong to this process, not to any route.
+    if (_initialized || _disposed) return;
+    _initialized = true;
+    try {
+      await _checkForUpdates();
+    } catch (_) {
+      // A transient platform/version or presentation failure must not leave
+      // initialization permanently marked complete without a polling timer.
+      _initialized = false;
+      rethrow;
+    }
+    if (_disposed) return;
     _checkerTime = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _checkForUpdates(),
@@ -41,15 +78,31 @@ class UpdateBloc extends BlocBase {
   }
 
   Future<void> _checkForUpdates() async {
-    final currentVersion = await _getCurrentAppVersion();
-    final versionInfo = await appUpdateService.getUpdateInfo();
-    if (versionInfo == null) return;
+    if (_disposed || _checking) return;
+    _checking = true;
+    try {
+      await _checkForUpdatesOnce();
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<void> _checkForUpdatesOnce() async {
+    final currentVersion =
+        await (_readCurrentVersion?.call() ?? _getCurrentAppVersion());
+    if (_disposed) return;
+    final versionInfo = await _service.getUpdateInfo();
+    if (_disposed || versionInfo == null) return;
 
     final bool isNewVersion = isVersionGreaterThan(
       versionInfo.version,
       currentVersion,
     );
     if (!isNewVersion || _isPopupShown) return;
+    if (versionInfo.status != UpdateStatus.required &&
+        _dismissedOptionalVersions.contains(versionInfo.version)) {
+      return;
+    }
 
     // The endpoint says what has been released. It cannot say whether this
     // client can install it, so check that separately -- and only now that a
@@ -60,7 +113,7 @@ class UpdateBloc extends BlocBase {
         versionInfo.version,
         currentVersion,
       );
-      if (!canInstall) return;
+      if (_disposed || !canInstall) return;
     } else if (versionInfo.downloadUri == null) {
       log(
         'Update ${versionInfo.version} announced with an unusable '
@@ -71,23 +124,60 @@ class UpdateBloc extends BlocBase {
       return;
     }
 
-    PopupDispatcher(
+    var answered = false;
+    void remindLater() {
+      if (versionInfo.status != UpdateStatus.required) {
+        _dismissedOptionalVersions.add(versionInfo.version);
+      }
+      // Keep polling: a newer release or required-policy escalation must
+      // still be able to notify the user during this session.
+    }
+
+    // Set only from the presenter's answer: a popup that could not be shown
+    // must not block the next check from offering the update.
+    _isPopupShown = (_presentPopup ?? _showPopup)(
+      versionInfo,
+      onAccept: () {
+        answered = true;
+        _isPopupShown = false;
+      },
+      onCancel: () {
+        answered = true;
+        _isPopupShown = false;
+        remindLater();
+      },
+      // The system back gesture closes the popup without pressing a button.
+      // That is a "remind later" for an optional update, and leaves a
+      // required one free to return on the next check.
+      onDismiss: () {
+        _isPopupShown = false;
+        if (!answered) remindLater();
+      },
+    );
+  }
+
+  bool _showPopup(
+    UpdateVersionInfo versionInfo, {
+    required VoidCallback onAccept,
+    required VoidCallback onCancel,
+    required VoidCallback onDismiss,
+  }) {
+    final popup = PopupDispatcher(
       barrierDismissible: false,
+      onDismiss: onDismiss,
       contentPadding: isMobile
           ? const EdgeInsets.all(15.0)
           : const EdgeInsets.fromLTRB(26, 15, 26, 42),
       popupContent: UpdatePopUp(
         versionInfo: versionInfo,
-        onAccept: () {
-          _isPopupShown = false;
-        },
-        onCancel: () {
-          _isPopupShown = false;
-          _checkerTime?.cancel();
-        },
+        onAccept: onAccept,
+        onCancel: onCancel,
       ),
-    ).show();
-    _isPopupShown = true;
+    );
+    // Without a scaffold context `show` returns before opening anything, and
+    // never calls `onDismiss`; `isShown` is set before its first await.
+    unawaited(popup.show());
+    return popup.isShown;
   }
 
   /// Whether reloading this page could actually install the announced release.
@@ -115,7 +205,7 @@ class UpdateBloc extends BlocBase {
       return false;
     }
 
-    final deployedVersion = await appUpdateService.fetchDeployedWebVersion();
+    final deployedVersion = await _service.fetchDeployedWebVersion();
     final canInstall = canInstallAnnouncedWebUpdate(
       announcedVersion: announcedVersion,
       currentVersion: currentVersion,

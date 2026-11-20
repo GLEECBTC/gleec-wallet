@@ -2,17 +2,22 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
+import 'package:web_dex/views/swap/common/swap_legal_notice.dart';
+import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -144,30 +149,57 @@ void main() {
   });
 
   group('the review', () {
+    final consent = find.byKey(const Key('swap-legal-consent'));
+    final footer = find.byType(SwapStickyFooter);
+    final link = find.byKey(const Key('swap-terms-link'));
+
     testWidgets('names the provider on every routed swap, with one link', (
       tester,
     ) async {
       await pumpReview(tester, quoteOf(), termsRequired: false);
 
       expect(attribution(), findsOneWidget);
-      expect(find.byKey(const Key('swap-terms-link')), findsOneWidget);
+      expect(link, findsOneWidget);
       // Accepted already: no acceptance on this one.
+      expect(consent, findsNothing);
+    });
+
+    testWidgets('accepted already, leaves only the action pinned: the '
+        'provider and the documents close the review itself', (tester) async {
+      await pumpReview(tester, quoteOf(), termsRequired: false);
+
       expect(
-        find.textContaining('By starting', findRichText: true),
+        find.descendant(of: footer, matching: attribution()),
         findsNothing,
+      );
+      expect(find.descendant(of: footer, matching: link), findsNothing);
+      expect(find.byType(SwapLegalLinks), findsOneWidget);
+      expect(
+        tester.getSize(footer).height,
+        lessThan(120),
+        reason: 'a button and its padding',
       );
     });
 
-    testWidgets('adds the acceptance to a first routed swap, still with one '
-        'link', (tester) async {
+    testWidgets('adds the acceptance to a first routed swap, beside the '
+        'button that gives it and still with one link', (tester) async {
       await pumpReview(tester, quoteOf(), termsRequired: true);
 
       expect(attribution(), findsOneWidget);
       expect(
-        find.textContaining('By starting', findRichText: true),
-        findsOneWidget,
+        tester.widget<Text>(consent).data,
+        LocaleKeys.swapLegalConsentNotice.tr(),
       );
-      expect(find.byKey(const Key('swap-terms-link')), findsOneWidget);
+      expect(link, findsOneWidget);
+      // What is accepted, and the documents, sit with the button; who the
+      // provider is closes the review above it.
+      for (final part in [consent, link]) {
+        expect(find.descendant(of: footer, matching: part), findsOneWidget);
+      }
+      expect(
+        find.descendant(of: footer, matching: attribution()),
+        findsNothing,
+      );
     });
 
     testWidgets('says nothing of a provider for an order-book swap', (
@@ -176,6 +208,7 @@ void main() {
       await pumpReview(tester, orderBook, termsRequired: false);
 
       expect(attribution(), findsNothing);
+      expect(find.byType(SwapLegalLinks), findsNothing);
     });
   });
 }

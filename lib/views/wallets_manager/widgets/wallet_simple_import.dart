@@ -8,6 +8,8 @@ import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show MnemonicFailedReason;
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show AuthException, AuthExceptionType;
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -18,17 +20,20 @@ import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
-import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
 import 'package:web_dex/views/wallets_manager/widgets/custom_seed_checkbox.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_type_dropdown.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
+
+part 'wallet_simple_import_phrase.dart';
 
 class WalletSimpleImport extends StatefulWidget {
   const WalletSimpleImport({
     required this.onImport,
     required this.onUploadFiles,
     required this.onCancel,
+    this.fileLoader,
     super.key,
   });
 
@@ -36,7 +41,6 @@ class WalletSimpleImport extends StatefulWidget {
     required String name,
     required String password,
     required WalletConfig walletConfig,
-    required bool rememberMe,
   })
   onImport;
 
@@ -45,38 +49,34 @@ class WalletSimpleImport extends StatefulWidget {
   final void Function({required String fileName, required String fileData})
   onUploadFiles;
 
+  /// Picks the encrypted wallet file. Defaults to the platform's picker.
+  final FileLoader? fileLoader;
+
   @override
   State<WalletSimpleImport> createState() => _WalletImportWrapperState();
 }
 
 enum WalletSimpleImportSteps { nameAndSeed, password }
 
-class _WalletImportWrapperState extends State<WalletSimpleImport> {
-  static const int _maxSeedSuggestions = 8;
+class _WalletImportWrapperState extends State<WalletSimpleImport>
+    with WidgetsBindingObserver, _RecoveryPhraseEntry {
   WalletSimpleImportSteps _step = WalletSimpleImportSteps.nameAndSeed;
   final TextEditingController _nameController = TextEditingController(text: '');
-  final TextEditingController _seedController = TextEditingController(text: '');
   final TextEditingController _passwordController = TextEditingController(
     text: '',
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  bool _isSeedHidden = true;
   bool _inProgress = false;
   bool _waitingForLegal = false;
-  bool _allowCustomSeed = false;
-  bool _isHdMode = true;
-  bool _rememberMe = false;
+  bool _checkingName = false;
   bool _arePasswordsValid = false;
-  List<String> _bip39Words = const [];
-  List<String> _seedWordSuggestions = const [];
-  int _activeWordStart = -1;
-  int _activeWordEnd = -1;
+  String? _nameTakenError;
+  String? _importError;
+  String _lastName = '';
 
-  bool get _isButtonEnabled {
-    if (_step == WalletSimpleImportSteps.password) {
-      return !_inProgress && _arePasswordsValid;
-    }
-    final isFormValid =
+  bool get _isStepValid {
+    if (_step == WalletSimpleImportSteps.password) return _arePasswordsValid;
+    return _nameTakenError == null &&
         _nameController.text.isNotEmpty &&
         _seedController.text.isNotEmpty &&
         context.read<WalletsRepository>().validateWalletName(
@@ -84,85 +84,92 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
             ) ==
             null &&
         _validateSeed(_seedController.text) == null;
-
-    return !_inProgress && isFormValid;
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFirstStep = _step == WalletSimpleImportSteps.nameAndSeed;
     return BlocListener<AuthBloc, AuthBlocState>(
       listener: (context, state) {
         if (!state.isLoading) {
           setState(() => _inProgress = false);
         }
-
-        if (state.isError) {
-          final theme = Theme.of(context);
-          final message =
-              state.authError?.message ?? LocaleKeys.somethingWrong.tr();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                message,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onErrorContainer,
-                ),
-              ),
-              backgroundColor: theme.colorScheme.errorContainer,
-            ),
-          );
-        }
+        if (state.isError) _showImportFailure(state.authError);
       },
       child: AutofillGroup(
         child: ScreenshotSensitive(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SelectableText(
-                _step == WalletSimpleImportSteps.nameAndSeed
-                    ? LocaleKeys.walletImportTitle.tr()
-                    : LocaleKeys.walletImportCreatePasswordTitle.tr(
-                        args: [_nameController.text.trim()],
-                      ),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 20),
-                textAlign: TextAlign.center,
+              Semantics(
+                header: true,
+                child: Text(
+                  isFirstStep
+                      ? LocaleKeys.walletImportTitle.tr()
+                      : LocaleKeys.walletImportCreatePasswordTitle.tr(
+                          args: [_nameController.text.trim()],
+                        ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontSize: 20),
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 20),
               Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     _buildFields(),
                     const SizedBox(height: 20),
-                    if (_step == WalletSimpleImportSteps.password) ...[
+                    if (_importError case final error?) ...[
+                      WalletAccessNotice(
+                        key: const Key('wallet-import-error'),
+                        text: error,
+                        tone: WalletAccessTone.error,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (!isFirstStep) ...[
                       TermsConsentText(actionLabel: LocaleKeys.import.tr()),
                       const SizedBox(height: 12),
                     ],
                     LegalConsentAction(
-                      enforce: _step == WalletSimpleImportSteps.password,
+                      enforce: !isFirstStep,
                       builder: (allowed) => UiPrimaryButton(
                         key: const Key('confirm-seed-button'),
                         text: _inProgress
                             ? '${LocaleKeys.pleaseWait.tr()}...'
+                            : isFirstStep
+                            ? LocaleKeys.continueText.tr()
                             : LocaleKeys.import.tr(),
+                        expandForText: true,
                         height: 50,
                         textStyle: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
-                        onPressed: allowed && _isButtonEnabled
+                        // Stays pressable while importing so keyboard focus
+                        // is kept; `_onImport` ignores the repeat.
+                        onPressed: allowed && (_isStepValid || _inProgress)
                             ? _onImport
                             : null,
                       ),
                     ),
+                    if (isFirstStep) ...[
+                      const SizedBox(height: 20),
+                      UiDivider(text: LocaleKeys.seedOr.tr()),
+                      const SizedBox(height: 20),
+                      _WalletFilePicker(
+                        fileLoader: widget.fileLoader,
+                        onUploadFiles: widget.onUploadFiles,
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     UiUnderlineTextButton(
                       onPressed: _onCancel,
-                      text: _step == WalletSimpleImportSteps.nameAndSeed
+                      text: isFirstStep
                           ? LocaleKeys.cancel.tr()
                           : LocaleKeys.back.tr(),
                     ),
@@ -176,11 +183,45 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     );
   }
 
+  void _showImportFailure(AuthException? error) {
+    final nameTaken = error?.type == AuthExceptionType.walletAlreadyExists;
+    setState(() {
+      if (nameTaken) {
+        _showNameTaken();
+      } else {
+        _importError = 'authImportFailed'.tr();
+      }
+    });
+  }
+
+  /// Returns to the name field: the error belongs beside what must change.
+  void _showNameTaken() {
+    _nameTakenError = LocaleKeys.walletImportNameTaken.tr(
+      args: [_nameController.text.trim()],
+    );
+    _step = WalletSimpleImportSteps.nameAndSeed;
+    _arePasswordsValid = false;
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _nameController.addListener(_onNameChanged);
     _seedController.addListener(_onSeedChanged);
     unawaited(_loadBip39Wordlist());
+  }
+
+  // Continue depends on the name too, and the name field rebuilds nothing
+  // else. Cursor moves are reported here as well; only an edit retires the
+  // messages about the previous attempt.
+  void _onNameChanged() {
+    if (_nameController.text == _lastName) return;
+    _lastName = _nameController.text;
+    setState(() {
+      _nameTakenError = null;
+      _importError = null;
+    });
   }
 
   void _onSeedChanged() {
@@ -189,103 +230,24 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     setState(() {});
   }
 
-  Future<void> _loadBip39Wordlist() async {
-    try {
-      final wordlist = await rootBundle.loadString(
-        'packages/komodo_defi_types/assets/bip-0039/english-wordlist.txt',
-      );
-      final words = wordlist
-          .split('\n')
-          .map((word) => word.trim().toLowerCase())
-          .where((word) => word.isNotEmpty)
-          .toList(growable: false);
-
-      if (!mounted) return;
-      setState(() {
-        _bip39Words = words;
-        _updateSeedWordSuggestions();
-      });
-    } catch (_) {
-      // Suggestions are a progressive enhancement; import still works without
-      // the wordlist if asset loading fails.
-    }
-  }
-
-  void _clearSeedWordSuggestions() {
-    _seedWordSuggestions = const [];
-    _activeWordStart = -1;
-    _activeWordEnd = -1;
-  }
-
-  void _updateSeedWordSuggestions() {
-    if (_allowCustomSeed || _isSeedHidden || _bip39Words.isEmpty) {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed || !mounted) return;
+    setState(() {
+      _isSeedHidden = true;
       _clearSeedWordSuggestions();
-      return;
-    }
-
-    final text = _seedController.text.toLowerCase();
-    final cursor = _seedController.selection.baseOffset;
-    if (cursor < 0 || cursor > text.length) {
-      _clearSeedWordSuggestions();
-      return;
-    }
-
-    int start = cursor;
-    while (start > 0 && text[start - 1] != ' ') {
-      start--;
-    }
-
-    int end = cursor;
-    while (end < text.length && text[end] != ' ') {
-      end++;
-    }
-
-    final prefix = text.substring(start, cursor).trim();
-    if (prefix.isEmpty || !RegExp(r'^[a-z]+$').hasMatch(prefix)) {
-      _clearSeedWordSuggestions();
-      return;
-    }
-
-    final suggestions = _bip39Words
-        .where((word) => word.startsWith(prefix))
-        .take(_maxSeedSuggestions)
-        .toList(growable: false);
-
-    if (suggestions.length == 1 && suggestions.first == prefix) {
-      _clearSeedWordSuggestions();
-      return;
-    }
-
-    _seedWordSuggestions = suggestions;
-    _activeWordStart = start;
-    _activeWordEnd = end;
-  }
-
-  void _onSeedSuggestionSelected(String suggestion) {
-    if (_activeWordStart < 0 || _activeWordEnd < _activeWordStart) return;
-
-    var nextText = _seedController.text.replaceRange(
-      _activeWordStart,
-      _activeWordEnd,
-      suggestion,
-    );
-    var nextCursor = _activeWordStart + suggestion.length;
-
-    if (nextCursor == nextText.length || nextText[nextCursor] != ' ') {
-      nextText = nextText.replaceRange(nextCursor, nextCursor, ' ');
-      nextCursor += 1;
-    }
-
-    _seedController.value = TextEditingValue(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: nextCursor),
-    );
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _nameController.removeListener(_onNameChanged);
     _nameController.dispose();
+    _seedController.removeListener(_onSeedChanged);
+    _seedController.clear();
     _seedController.dispose();
+    _passwordController.clear();
     _passwordController.dispose();
     super.dispose();
   }
@@ -326,49 +288,19 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
 
   Widget _buildPasswordStep() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text('authImportPasswordPurpose'.tr()),
+        const SizedBox(height: 16),
         CreationPasswordFields(
           passwordController: _passwordController,
+          autofocus: true,
           onValidityChanged: (isValid) {
             setState(() => _arePasswordsValid = isValid);
           },
-          onFieldSubmitted: !_isButtonEnabled
-              ? null
-              : (text) {
-                  _onImport();
-                },
-        ),
-        const SizedBox(height: 20),
-        QuickLoginSwitch(
-          value: _rememberMe,
-          onChanged: (value) {
-            setState(() => _rememberMe = value);
-          },
+          onFieldSubmitted: (_) => _onImport(),
         ),
       ],
-    );
-  }
-
-  Widget _buildImportFileButton() {
-    return UploadButton(
-      buttonText: LocaleKeys.walletCreationUploadFile.tr(),
-      uploadFile: () async {
-        await FileLoader.fromPlatform().upload(
-          onUpload: (fileName, fileData) => widget.onUploadFiles(
-            fileData: fileData ?? '',
-            fileName: fileName,
-          ),
-          onError: (String error) {
-            log(
-              error,
-              path:
-                  'wallet_simple_import => _buildImportFileButton => onErrorUploadFiles',
-              isError: true,
-            );
-          },
-          fileType: LoadFileType.text,
-        );
-      },
     );
   }
 
@@ -381,21 +313,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         _buildSeedField(),
         if (_seedWordSuggestions.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _seedWordSuggestions
-                  .map(
-                    (word) => ActionChip(
-                      label: Text(word),
-                      onPressed: () => _onSeedSuggestionSelected(word),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
+          _buildSeedSuggestions(),
         ],
         const SizedBox(height: 16),
         WalletImportTypeDropdown(
@@ -410,12 +328,16 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
             _refreshFormValidationState();
           },
         ),
-        const SizedBox(height: 20),
-        UiDivider(text: LocaleKeys.seedOr.tr()),
-        const SizedBox(height: 20),
-        _buildImportFileButton(),
-        const SizedBox(height: 15),
-        if (_shouldShowCustomSeedToggle) _buildCheckBoxCustomSeed(),
+        const SizedBox(height: 8),
+        Text(
+          'authImportDerivationHint'.tr(),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+        ),
+        if (_shouldShowCustomSeedToggle) ...[
+          const SizedBox(height: 12),
+          _buildCheckBoxCustomSeed(),
+        ],
       ],
     );
   }
@@ -427,41 +349,16 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       controller: _nameController,
       autofocus: true,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.username],
       validator: (String? name) =>
           _inProgress ? null : walletsRepository.validateWalletName(name ?? ''),
+      errorText: _nameTakenError,
+      errorMaxLines: 4,
       inputFormatters: [LengthLimitingTextInputFormatter(40)],
       hintText: LocaleKeys.walletCreationNameHint.tr(),
-    );
-  }
-
-  Widget _buildSeedField() {
-    return UiTextFormField(
-      key: const Key('import-seed-field'),
-      controller: _seedController,
-      autofocus: true,
-      validator: _validateSeed,
-      textInputAction: TextInputAction.done,
-      autocorrect: false,
-      obscureText: _isSeedHidden,
-      maxLines: _isSeedHidden ? 1 : null,
-      errorMaxLines: 4,
-      style: Theme.of(context).textTheme.bodyMedium,
-      hintText: LocaleKeys.importSeedEnterSeedPhraseHint.tr(),
-      suffixIcon: PasswordVisibilityControl(
-        onVisibilityChange: (bool isObscured) {
-          setState(() {
-            _isSeedHidden = isObscured;
-            _updateSeedWordSuggestions();
-          });
-        },
-      ),
-      onFieldSubmitted: !_isButtonEnabled
-          ? null
-          : (text) {
-              _onImport();
-            },
     );
   }
 
@@ -476,15 +373,36 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     widget.onCancel();
   }
 
+  @override
   void _onImport() async {
-    if (_inProgress || _waitingForLegal) return;
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (_inProgress || _waitingForLegal || _checkingName) return;
+    // Enter on the last field lands here too: show what still needs fixing.
+    if (!(_formKey.currentState?.validate() ?? false) || !_isStepValid) {
       return;
     }
+    final repo = context.read<WalletsRepository>();
 
     if (_step == WalletSimpleImportSteps.nameAndSeed) {
+      // Checked here, while the name field is still on screen to correct.
+      final name = _nameController.text;
+      _checkingName = true;
+      final bool taken;
+      try {
+        taken = await repo.validateWalletNameUniqueness(name) != null;
+      } finally {
+        _checkingName = false;
+      }
+      if (!mounted ||
+          name != _nameController.text ||
+          _step != WalletSimpleImportSteps.nameAndSeed) {
+        return;
+      }
       setState(() {
-        _step = WalletSimpleImportSteps.password;
+        if (taken) {
+          _showNameTaken();
+        } else {
+          _step = WalletSimpleImportSteps.password;
+        }
       });
       return;
     }
@@ -510,28 +428,20 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       seedPhrase: _seedController.text,
     );
 
-    setState(() => _inProgress = true);
+    setState(() {
+      _inProgress = true;
+      _importError = null;
+    });
 
-    // Async uniqueness check before proceeding
-    final repo = context.read<WalletsRepository>();
-    final uniquenessError = await repo.validateWalletNameUniqueness(
-      _nameController.text,
-    );
-    if (uniquenessError != null) {
+    // The name may have been taken since the first step (another tab).
+    final taken =
+        await repo.validateWalletNameUniqueness(_nameController.text) != null;
+    if (taken) {
       if (mounted) {
-        setState(() => _inProgress = false);
-        final theme = Theme.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              uniquenessError,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
-            ),
-            backgroundColor: theme.colorScheme.errorContainer,
-          ),
-        );
+        setState(() {
+          _inProgress = false;
+          _showNameTaken();
+        });
       }
       return;
     }
@@ -548,86 +458,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         name: _nameController.text.trim(),
         password: _passwordController.text,
         walletConfig: config,
-        rememberMe: _rememberMe,
       );
     });
-  }
-
-  String? _validateSeed(String? seed) {
-    if (_allowCustomSeed) {
-      return null;
-    }
-
-    final maybeFailedReason = context
-        .read<KomodoDefiSdk>()
-        .mnemonicValidator
-        .validateMnemonic(
-          seed ?? '',
-          minWordCount: 12,
-          maxWordCount: 24,
-          isHd: _isHdMode,
-          allowCustomSeed: _allowCustomSeed,
-        );
-
-    if (maybeFailedReason == null) {
-      return null;
-    }
-
-    return switch (maybeFailedReason) {
-      MnemonicFailedReason.empty =>
-        LocaleKeys.walletCreationEmptySeedError.tr(),
-      MnemonicFailedReason.customNotSupportedForHd =>
-        _isHdMode
-            ? LocaleKeys.walletCreationHdBip39SeedError.tr()
-            : LocaleKeys.walletCreationBip39SeedError.tr(),
-      MnemonicFailedReason.customNotAllowed =>
-        LocaleKeys.customSeedWarningText.tr(),
-      MnemonicFailedReason.invalidWord =>
-        LocaleKeys.mnemonicInvalidWordError.tr(),
-      MnemonicFailedReason.invalidChecksum =>
-        LocaleKeys.mnemonicInvalidChecksumError.tr(),
-      MnemonicFailedReason.invalidLength =>
-        LocaleKeys.mnemonicInvalidLengthError.tr(),
-    };
-  }
-
-  bool get _shouldShowCustomSeedToggle {
-    if (_isHdMode) return false;
-    if (_allowCustomSeed) return true; // keep visible once enabled
-
-    final seed = _seedController.text.trim();
-    if (seed.isEmpty) return false;
-
-    final validator = context.read<KomodoDefiSdk>().mnemonicValidator;
-    final isBip39 = validator.validateBip39(seed);
-    return !isBip39;
-  }
-
-  void _syncWalletTypeWithSeedCompatibility() {
-    if (_isHdMode && !_isHdCompatibleWithCurrentSeed) {
-      _isHdMode = false;
-      _allowCustomSeed = false;
-    }
-  }
-
-  bool get _isHdCompatibleWithCurrentSeed {
-    final seed = _seedController.text.trim().toLowerCase();
-    if (seed.isEmpty) return true;
-
-    final words = seed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
-    final int wordCount = words.length;
-    if (wordCount == 1) {
-      final token = words.first;
-      final bool looksLikeBip39Word =
-          RegExp(r'^[a-z]+$').hasMatch(token) && token.length <= 8;
-      return looksLikeBip39Word;
-    }
-
-    if (wordCount < 12) {
-      return true;
-    }
-
-    final validator = context.read<KomodoDefiSdk>().mnemonicValidator;
-    return validator.validateBip39(seed);
   }
 }

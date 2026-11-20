@@ -11,6 +11,42 @@ import 'swap_motion_fakes.dart';
 /// nothing else, finishes on its own, and stays still under reduced motion.
 void main() {
   group('SwapReveal', () {
+    testWidgets('finishes offscreen and does not replay when visible again', (
+      tester,
+    ) async {
+      Widget reveal(bool visible) => motionApp(
+        TickerMode(
+          enabled: visible,
+          child: const SwapReveal(child: Text('Received')),
+        ),
+      );
+      await tester.pumpWidget(reveal(true));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.hasRunningAnimations, isTrue);
+      await tester.pumpWidget(reveal(false));
+      expect(tester.hasRunningAnimations, isFalse);
+      await tester.pumpWidget(reveal(true));
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(opacityLayers(tester), isEmpty);
+    });
+
+    testWidgets('finishes when backgrounded without replaying on resume', (
+      tester,
+    ) async {
+      addTearDown(() => resumeMotionApp(tester));
+      await tester.pumpWidget(
+        motionApp(const SwapReveal(child: Text('Received'))),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      pauseMotionApp(tester);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      resumeMotionApp(tester);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(opacityLayers(tester), isEmpty);
+    });
+
     testWidgets('fades and rises in on first appearance, then paints plainly', (
       tester,
     ) async {
@@ -255,6 +291,26 @@ void main() {
       await tester.pump(SwapMotion.press);
       expect(effectTransform(tester), isNull);
       await gesture.up();
+    });
+
+    testWidgets('releases the pressed state if the app is interrupted', (
+      tester,
+    ) async {
+      addTearDown(() => resumeMotionApp(tester));
+      await tester.pumpWidget(pressable());
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(SwapPressScale)),
+      );
+      await tester.pump();
+      await tester.pump(SwapMotion.press);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(effectTransform(tester), isNull);
+      expect(tester.hasRunningAnimations, isFalse);
+      await gesture.cancel();
+      resumeMotionApp(tester);
+      await tester.pumpAndSettle();
+      expect(taps, 0);
     });
   });
 

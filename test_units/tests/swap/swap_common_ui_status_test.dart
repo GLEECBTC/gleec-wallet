@@ -203,24 +203,44 @@ void main() {
         }
       });
 
-      testWidgets('takes its own glyph and is announced as it changes', (
-        tester,
-      ) async {
-        final semantics = tester.ensureSemantics();
+      testWidgets('takes its own glyph', (tester) async {
         await pumpSwapUi(
           tester,
           const SwapHelperLine(text: 'Max applied', icon: Icons.bolt),
         );
 
         expect(find.byIcon(Icons.bolt), findsOneWidget);
-        expect(
-          tester
-              .getSemantics(find.text('Max applied'))
-              .getSemanticsData()
-              .flagsCollection
-              .isLiveRegion,
-          isTrue,
-        );
+      });
+
+      testWidgets('announces an alert as it appears, not a standing note', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        for (final (line, live) in const [
+          (SwapHelperLine(text: 'Note'), false),
+          (SwapHelperLine(text: 'Note', tone: SwapTone.warning), true),
+          (SwapHelperLine(text: 'Note', tone: SwapTone.danger), true),
+          (SwapHelperLine(text: 'Note', liveRegion: true), true),
+          (
+            SwapHelperLine(
+              text: 'Note',
+              tone: SwapTone.warning,
+              liveRegion: false,
+            ),
+            false,
+          ),
+        ]) {
+          await pumpSwapUi(tester, line);
+          expect(
+            tester
+                .getSemantics(find.text('Note'))
+                .getSemanticsData()
+                .flagsCollection
+                .isLiveRegion,
+            live,
+            reason: '${line.tone.name}, liveRegion: ${line.liveRegion}',
+          );
+        }
         semantics.dispose();
       });
     });
@@ -294,6 +314,7 @@ void main() {
             .getSemantics(find.text('You received 3,001 USDC'))
             .getSemanticsData();
         expect(data.flagsCollection.isHeader, isTrue);
+        expect(data.headingLevel, 1);
         semantics.dispose();
       });
     });

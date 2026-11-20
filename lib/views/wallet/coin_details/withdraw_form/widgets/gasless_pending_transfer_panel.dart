@@ -71,6 +71,7 @@ class GaslessPendingTransferPanel extends StatelessWidget {
           const SizedBox(height: 24),
           Semantics(
             header: true,
+            headingLevel: 1,
             label: '$title. $description',
             child: ExcludeSemantics(
               child: Text(

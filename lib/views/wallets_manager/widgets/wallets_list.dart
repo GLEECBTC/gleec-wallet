@@ -53,7 +53,10 @@ class _WalletsListState extends State<WalletsList> {
     if (filteredWallets.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 220),
+      // Scales with text so about three rows stay in view at any text size.
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.textScalerOf(context).scale(220),
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(18.0),

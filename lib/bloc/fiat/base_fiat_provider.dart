@@ -11,7 +11,33 @@ import 'package:web_dex/shared/utils/window/window.dart';
 
 const String domain = 'https://fiat-ramps.gleec.com';
 
+/// An unusable transport or provider response. Never retains raw HTML or URLs.
+class FiatProviderUnavailable implements Exception {
+  const FiatProviderUnavailable({this.statusCode});
+
+  final int? statusCode;
+
+  @override
+  String toString() => 'Fiat provider is temporarily unavailable';
+}
+
+/// A structured provider rejection, kept separate from availability failures.
+class FiatProviderRejected implements Exception {
+  const FiatProviderRejected(this.error);
+
+  final FiatBuyOrderError error;
+
+  @override
+  String toString() => 'Fiat provider rejected the request';
+}
+
 abstract class BaseFiatProvider {
+  BaseFiatProvider({http.Client? client}) : _client = client;
+
+  // Injected clients belong to the caller. Default top-level HTTP operations
+  // retain their existing per-request client lifecycle.
+  final http.Client? _client;
+
   String getProviderId();
 
   String get providerIconPath;
@@ -74,48 +100,51 @@ abstract class BaseFiatProvider {
 
     final headers = {'Content-Type': 'application/json'};
 
-    http.Response response;
+    final http.Response response;
     try {
       if (method == 'GET') {
-        response = await http.get(url, headers: headers);
+        response =
+            await (_client?.get(url, headers: headers) ??
+                    http.get(url, headers: headers))
+                .timeout(const Duration(seconds: 30));
       } else {
-        response = await http.post(
-          url,
-          headers: headers,
-          body: json.encode(body),
-        );
+        response =
+            await (_client?.post(
+                      url,
+                      headers: headers,
+                      body: json.encode(body),
+                    ) ??
+                    http.post(url, headers: headers, body: json.encode(body)))
+                .timeout(const Duration(seconds: 30));
       }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        dynamic decoded;
-        try {
-          decoded = json.decode(response.body);
-        } on FormatException {
-          throw const FormatException('Invalid fiat provider response');
-        }
-        // A proxy can return an upstream block page as a JSON string with
-        // HTTP 200. Reject it before provider parsers index it as an object.
-        if (decoded is! Map<String, dynamic>) {
-          throw const FormatException('Invalid fiat provider response');
-        }
-        return decoded;
-      } else {
-        _log.warning('Request failed with status: ${response.statusCode}');
-        dynamic decoded;
-        try {
-          decoded = json.decode(response.body);
-        } catch (_) {
-          decoded = response.body;
-        }
-        return Future.error(decoded as Object);
-      }
-    } on FormatException catch (e, s) {
-      _log.severe('Invalid fiat provider response', e, s);
-      rethrow;
-    } catch (e, s) {
-      _log.severe('Network error', e, s);
-      return Future.error('Network error: $e');
+    } on Exception {
+      _log.warning('Fiat provider transport unavailable');
+      throw const FiatProviderUnavailable();
     }
+
+    final Object? decoded;
+    try {
+      decoded = json.decode(response.body);
+    } on FormatException {
+      throw FiatProviderUnavailable(statusCode: response.statusCode);
+    }
+    if (decoded is! Map<String, dynamic>) {
+      // Some proxies return a JSON string containing an HTML block page with
+      // HTTP 200. Neither that nor raw HTML is a provider API response.
+      throw FiatProviderUnavailable(statusCode: response.statusCode);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (decoded['errors'] case final Map<String, dynamic> errors) {
+        try {
+          final error = FiatBuyOrderError.fromJson(errors);
+          if (!error.isNone) throw FiatProviderRejected(error);
+        } on TypeError {
+          throw FiatProviderUnavailable(statusCode: response.statusCode);
+        }
+      }
+      throw FiatProviderUnavailable(statusCode: response.statusCode);
+    }
+    return decoded;
   }
 
   String? getCoinChainId(CryptoCurrency currency) {

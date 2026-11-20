@@ -17,6 +17,8 @@ class UiPrimaryButton extends StatefulWidget {
     this.child,
     this.padding,
     this.borderRadius,
+    this.expandForText = false,
+    this.autofocus = false,
     super.key,
   });
 
@@ -35,6 +37,14 @@ class UiPrimaryButton extends StatefulWidget {
   final EdgeInsets? padding;
   final double? borderRadius;
 
+  /// Treat [height] as a minimum and wrap the complete label at large text sizes.
+  /// Existing callers retain their fixed-height layout unless they opt in.
+  final bool expandForText;
+
+  /// Takes keyboard focus when first shown, so Enter or Space activates it
+  /// unless a text field holds focus.
+  final bool autofocus;
+
   @override
   State<UiPrimaryButton> createState() => _UiPrimaryButtonState();
 }
@@ -47,9 +57,11 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
       isEnabled: widget.onPressed != null,
       width: widget.width,
       height: widget.height,
+      expandVertically: widget.expandForText,
       border: widget.border,
       child: ElevatedButton(
         focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
         onFocusChange: (value) {
           setState(() {
             _hasFocus = value;
@@ -73,7 +85,11 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
           style: _defaultTextStyle,
           child:
               widget.child ??
-              _ButtonContent(text: widget.text, prefix: widget.prefix),
+              _ButtonContent(
+                text: widget.text,
+                prefix: widget.prefix,
+                wrap: widget.expandForText,
+              ),
         ),
       ),
     );
@@ -85,7 +101,12 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   Color get _shadowColor {
-    return _hasFocus
+    // The glow marks keyboard focus. On a touch screen an autofocused button
+    // would otherwise glow before anyone has touched it.
+    final keyboardFocus =
+        _hasFocus &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    return keyboardFocus
         ? widget.shadowColor ?? Theme.of(context).colorScheme.primary
         : Colors.transparent;
   }
@@ -132,10 +153,15 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
 }
 
 class _ButtonContent extends StatelessWidget {
-  const _ButtonContent({required this.text, required this.prefix});
+  const _ButtonContent({
+    required this.text,
+    required this.prefix,
+    required this.wrap,
+  });
 
   final String text;
   final Widget? prefix;
+  final bool wrap;
 
   @override
   Widget build(BuildContext context) {
@@ -146,8 +172,8 @@ class _ButtonContent extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            maxLines: wrap ? null : 2,
+            overflow: wrap ? TextOverflow.visible : TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
         ),

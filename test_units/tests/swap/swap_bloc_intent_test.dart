@@ -194,11 +194,12 @@ void main() {
     });
 
     swapBlocTest('with nothing typed only the unit changes', (h) {
-      final bloc = h.open(amount: '')
-        ..add(const UnifiedSwapAmountModeToggled());
+      final bloc = h.open(amount: '');
+      expect(bloc.state.amountMode, SwapAmountMode.fiat);
+      bloc.add(const UnifiedSwapAmountModeToggled());
       h.settle();
 
-      expect(bloc.state.amountMode, SwapAmountMode.fiat);
+      expect(bloc.state.amountMode, SwapAmountMode.token);
       expect(bloc.state.inputText, isEmpty);
     });
 

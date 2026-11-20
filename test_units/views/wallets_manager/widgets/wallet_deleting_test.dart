@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
@@ -9,6 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
@@ -17,17 +16,13 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
 
-class _EnglishLoader extends AssetLoader {
-  const _EnglishLoader();
-
-  @override
-  Future<Map<String, dynamic>> load(String path, Locale locale) async =>
-      jsonDecode(File('$path/en.json').readAsStringSync())
-          as Map<String, dynamic>;
-}
+import '../../../support/legal_onboarding_harness.dart';
 
 class _Journal extends Fake implements PendingGaslessTransferRepository {
   bool unreadable = false;
@@ -112,10 +107,25 @@ void main() {
   late _Repository repository;
   late WalletDeletionManager reviews;
   var closes = 0;
+  VoidCallback? onBackUpFirst;
+
+  const confirm = Key('wallet-removal-confirm');
+  const acknowledge = Key('wallet-removal-acknowledge');
+  const safeAction = Key('wallet-removal-safe-action');
+  final transferNote = find.byKey(
+    const Key('wallet-deletion-recovery-warning'),
+  );
+
+  // The shared flow tests review a wallet whose phrase is confirmed; the
+  // unconfirmed variant has its own tests below.
+  Wallet backedUp(String name) =>
+      Wallet.fromName(name: name)
+        ..config.recoveryEvidence = RecoveryEvidence.phraseConfirmed;
 
   setUp(() {
-    first = Wallet.fromName(name: 'First wallet');
-    second = Wallet.fromName(name: 'Second wallet');
+    first = backedUp('First wallet');
+    second = backedUp('Second wallet');
+    onBackUpFirst = null;
     selected = ValueNotifier(first);
     journal = _Journal();
     repository = _Repository();
@@ -134,12 +144,11 @@ void main() {
             metadata: {walletEntryIdMetadataKey: wallet.id},
           ),
       ],
-      deleteWallet:
-          ({
-            required walletName,
-            required password,
-            required validateTarget,
-          }) async {},
+      deleteWallet: ({
+        required walletName,
+        required password,
+        required validateTarget,
+      }) async {},
       pendingTransfers: journal,
     );
     repository.prepare = (wallet) => reviews.prepare(wallet.name);
@@ -160,7 +169,7 @@ void main() {
         fallbackLocale: const Locale('en'),
         saveLocale: false,
         path: 'assets/translations',
-        assetLoader: const _EnglishLoader(),
+        assetLoader: const LegalEnglishLoader(),
         child: RepositoryProvider<WalletsRepository>.value(
           value: repository,
           child: Builder(
@@ -179,6 +188,7 @@ void main() {
                         key: const Key('deletion-panel'),
                         wallet: wallet,
                         close: () => closes++,
+                        onBackUpFirst: onBackUpFirst,
                       ),
                     ),
                   ),
@@ -198,28 +208,44 @@ void main() {
       find.byKey(const Key('delete-wallet-password')),
       'Sample-password-123!',
     );
-    await tester.tap(find.byType(UiPrimaryButton));
+    await tester.tap(find.byKey(confirm));
     await tester.pump();
   }
 
   bool enabled(WidgetTester tester) =>
-      tester.widget<UiPrimaryButton>(find.byType(UiPrimaryButton)).onPressed !=
-      null;
+      switch (tester.widget(find.byKey(confirm))) {
+        UiPrimaryButton(:final onPressed) => onPressed != null,
+        ButtonStyleButton(:final enabled) => enabled,
+        final other => throw StateError('Unexpected confirm control $other'),
+      };
+
+  testWidgets(
+    'inactive passkey wallet explains the required password unlock before deletion',
+    (tester) async {
+      repository.confirm = () async => throw const WalletAccessException(
+        WalletAccessFailure.walletMustBeUnlocked,
+      );
+      await pump(tester);
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('authUnlockWalletBeforeDeletion'.tr()), findsOneWidget);
+      expect(closes, 0);
+      expect(enabled(tester), isTrue);
+    },
+  );
 
   testWidgets('shows payment warning without private recovery internals', (
     tester,
   ) async {
     journal.rows = [_transfer()];
     await pump(tester);
-    expect(
-      find.byKey(const Key('wallet-deletion-recovery-warning')),
-      findsOneWidget,
-    );
+    expect(transferNote, findsOneWidget);
     expect(find.textContaining('7 USDT-TRC20'), findsOneWidget);
     expect(find.textContaining('TDestination'), findsOneWidget);
     expect(find.textContaining('private-provider-trace'), findsNothing);
     expect(find.textContaining('private-request-identity'), findsNothing);
     expect(find.textContaining('TPrivateSource'), findsNothing);
+    expect(find.text('authRemoveWalletPendingTransfers'.tr()), findsOneWidget);
     expect(enabled(tester), isTrue);
   });
 
@@ -228,16 +254,105 @@ void main() {
     (tester) async {
       journal.unreadable = true;
       await pump(tester);
-      expect(find.textContaining('could not check'), findsOneWidget);
       expect(
-        find.byKey(const Key('wallet-deletion-recovery-warning')),
+        find.text(LocaleKeys.walletDeletionRecoveryUnavailable.tr()),
         findsOneWidget,
       );
+      expect(transferNote, findsOneWidget);
       expect(enabled(tester), isTrue);
       await submit(tester);
       expect(closes, 1);
+      await tester.pump();
+      expect(find.text('authWalletRemoved'.tr()), findsOneWidget);
     },
   );
+
+  testWidgets('backed-up wallet needs no acknowledgement and opens on Cancel', (
+    tester,
+  ) async {
+    await pump(tester);
+    expect(find.byKey(acknowledge), findsNothing);
+    expect(find.byKey(const Key('wallet-removal-not-backed-up')), findsNothing);
+    expect(
+      find.byKey(const Key('wallet-removal-backed-up-reminder')),
+      findsOneWidget,
+    );
+    final cancel = find.byKey(const Key('wallet-removal-cancel'));
+    expect(
+      tester.widget<OutlinedButton>(cancel).focusNode!.hasPrimaryFocus,
+      isTrue,
+    );
+    final field = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const Key('delete-wallet-password')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(field.enableSuggestions, isFalse);
+    expect(field.enableIMEPersonalizedLearning, isFalse);
+    expect(field.autofillHints, contains(AutofillHints.password));
+    // With nothing pending, the transfer note stays out of the way.
+    expect(transferNote, findsNothing);
+    expect(enabled(tester), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(closes, 1);
+    expect(repository.deletedWallets, isEmpty);
+  });
+
+  group('recovery phrase not backed up', () {
+    setUp(() => selected.value = first = Wallet.fromName(name: 'First wallet'));
+
+    testWidgets('removal waits for the acknowledgement; backup leads', (
+      tester,
+    ) async {
+      var backups = 0;
+      onBackUpFirst = () => backups++;
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+      expect(
+        find.byKey(const Key('wallet-removal-not-backed-up')),
+        findsOneWidget,
+      );
+      final backUp = tester.widget<UiPrimaryButton>(find.byKey(safeAction));
+      expect(backUp.text, 'authBackUpRecoveryPhraseFirst'.tr());
+      expect(backUp.focusNode!.hasPrimaryFocus, isTrue);
+      expect(enabled(tester), isFalse);
+      await submit(tester);
+      expect(repository.deletedWallets, isEmpty);
+      expect(
+        tester.getSemantics(find.byKey(acknowledge)),
+        containsSemantics(hasCheckedState: true, isChecked: false),
+      );
+      await tester.tap(find.byKey(acknowledge));
+      await tester.pump();
+      expect(
+        tester.getSemantics(find.byKey(acknowledge)),
+        containsSemantics(hasCheckedState: true, isChecked: true),
+      );
+      expect(enabled(tester), isTrue);
+      await tester.tap(find.byKey(safeAction));
+      expect(backups, 1);
+      expect(closes, 0);
+      await submit(tester);
+      expect(repository.deletedWallets, [same(first)]);
+      expect(closes, 1);
+      semantics.dispose();
+    });
+
+    testWidgets('with no backup route, keeping the wallet is primary', (
+      tester,
+    ) async {
+      await pump(tester);
+      expect(
+        tester.widget<UiPrimaryButton>(find.byKey(safeAction)).text,
+        LocaleKeys.cancel.tr(),
+      );
+      expect(enabled(tester), isFalse);
+      await tester.tap(find.byKey(safeAction));
+      expect(closes, 1);
+      expect(repository.deletedWallets, isEmpty);
+    });
+  });
 
   testWidgets('changed warning requires a second explicit confirmation', (
     tester,
@@ -256,10 +371,21 @@ void main() {
     await submit(tester);
     expect(closes, 0);
     expect(repository.acknowledgements, [same(original)]);
-    expect(find.textContaining('confirm deletion again'), findsOneWidget);
+    expect(
+      find.text(LocaleKeys.walletDeletionReviewChanged.tr()),
+      findsOneWidget,
+    );
     expect(find.textContaining('TNewDestination'), findsOneWidget);
-    await tester.tap(find.byType(UiPrimaryButton));
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
+    // Confirmation is explicit again, including fresh password input. The
+    // previous secret is not retained while a payment warning changes.
+    await tester.tap(find.byKey(confirm));
     await tester.pump();
+    expect(repository.acknowledgements, [same(original)]);
+    await submit(tester);
     expect(repository.acknowledgements.last, same(updated));
     expect(closes, 1);
   });
@@ -272,11 +398,21 @@ void main() {
           : const WalletDeletionResult(WalletDeletionStatus.deleted);
       await pump(tester);
       await submit(tester);
-      expect(find.textContaining('still being submitted'), findsOneWidget);
+      expect(
+        find.text(LocaleKeys.walletDeletionSubmissionBusy.tr()),
+        findsOneWidget,
+      );
       expect(enabled(tester), isTrue);
       expect(closes, 0);
-      await tester.tap(find.byType(UiPrimaryButton));
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      await tester.tap(find.byKey(confirm));
       await tester.pump();
+      expect(repository.acknowledgements, hasLength(1));
+      expect(closes, 0);
+      await submit(tester);
       expect(closes, 1);
     },
   );
@@ -289,8 +425,11 @@ void main() {
     await pump(tester);
     await submit(tester);
     expect(enabled(tester), isFalse);
-    expect(find.textContaining('Return to the wallet list'), findsOneWidget);
-    expect(find.text('Try again'), findsNothing);
+    expect(
+      find.text(LocaleKeys.walletDeletionTargetChanged.tr()),
+      findsOneWidget,
+    );
+    expect(find.text(LocaleKeys.tryAgain.tr()), findsNothing);
     selected.value = second;
     await tester.pump();
     await tester.pump();
@@ -308,7 +447,13 @@ void main() {
     repository.confirm = () => pending.future;
     await pump(tester);
     await submit(tester);
-    expect(enabled(tester), isFalse);
+    // The control stays focusable while busy; progress is announced and a
+    // repeated press removes nothing twice.
+    expect(enabled(tester), isTrue);
+    expect(find.byType(WalletAccessProgress), findsOneWidget);
+    await tester.tap(find.byKey(confirm));
+    await tester.pump();
+    expect(repository.deletedWallets, [same(first)]);
     selected.value = second;
     await tester.pump();
     await tester.pump();

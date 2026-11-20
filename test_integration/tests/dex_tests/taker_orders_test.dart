@@ -6,6 +6,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/shared/widgets/copied_text.dart';
 import 'package:web_dex/views/dex/entities_list/history/history_item.dart';
+import 'package:web_dex/views/dex/entities_list/history/history_list.dart';
+import 'package:web_dex/views/dex/entity_details/swap/swap_details_page.dart';
 
 import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
@@ -36,6 +38,18 @@ Future<void> testTakerOrder(WidgetTester tester) async {
   await _selectBuyCoin(tester, buyCoin: buyCoin);
   await _createTakerOrder(tester);
   print('🔍 TAKER ORDER: Form completed and order submitted');
+  final details = find.byType(SwapDetailsPage);
+  await tester.pumpUntilFound(
+    details,
+    timeout: const Duration(seconds: 60),
+    describeTarget: 'the submitted DOC/MARTY swap details',
+  );
+  final submittedSwap = tester.widget<SwapDetailsPage>(details).swapStatus;
+  final swapUuid = submittedSwap.uuid;
+  expect(swapUuid, isNotEmpty);
+  expect(submittedSwap.isTaker, isTrue);
+  expect(submittedSwap.sellCoin, sellCoin);
+  expect(submittedSwap.buyCoin, buyCoin);
 
   // Settlement is not ours to guarantee. A DOC/MARTY swap needs one
   // confirmation on each chain, and these testnets mine on their own schedule
@@ -52,12 +66,17 @@ Future<void> testTakerOrder(WidgetTester tester) async {
   // either way, so a genuine stall is still visible.
   print('🔍 TAKER ORDER: Waiting for the swap to settle (up to 10 minutes)');
   final settled = await tester.pumpUntilFoundOrMissing(
-    find.byKey(const Key('swap-status-success')),
+    find.byWidgetPredicate(
+      (widget) =>
+          widget is SwapDetailsPage &&
+          widget.swapStatus.uuid == swapUuid &&
+          (widget.swapStatus.isSuccessful || widget.swapStatus.isFailed),
+    ),
     timeout: const Duration(minutes: 10),
   );
 
   if (!settled) {
-    _requireSwapProgressed(tester);
+    _requireSwapProgressed(tester, swapUuid: swapUuid);
     print(
       '⚠️ TAKER ORDER: the swap matched and paid but did not settle in 10m. '
       'That is the testnet confirming, not the app. Counterparty events are '
@@ -66,10 +85,10 @@ Future<void> testTakerOrder(WidgetTester tester) async {
     return;
   }
 
-  await _expectSwapSuccess(tester);
+  await _expectSwapSuccess(tester, swapUuid: swapUuid);
   print('🔍 TAKER ORDER: Swap completed successfully');
 
-  await _testSwapHistoryTable(tester);
+  await _testSwapHistoryTable(tester, swapUuid: swapUuid);
   print('🔍 TAKER ORDER: History verification completed');
 }
 
@@ -79,7 +98,11 @@ Future<void> testTakerOrder(WidgetTester tester) async {
 /// negotiated, and this wallet broadcast its fee. Everything after that waits
 /// on block confirmations. If not even this was reached, the swap never
 /// started and that is a real failure, not a slow chain.
-void _requireSwapProgressed(WidgetTester tester) {
+void _requireSwapProgressed(WidgetTester tester, {required String swapUuid}) {
+  final swap = tester
+      .widget<SwapDetailsPage>(find.byType(SwapDetailsPage))
+      .swapStatus;
+  expect(swap.uuid, swapUuid);
   const steps = [
     'TakerFeeSent',
     'MakerPaymentReceived',
@@ -88,15 +111,16 @@ void _requireSwapProgressed(WidgetTester tester) {
     'TakerPaymentSpent',
     'MakerPaymentSpent',
   ];
-  final reached = steps
-      .where((step) => tester.any(find.byKey(Key('swap-details-step-$step'))))
-      .toList();
+  // The details list renders future catalog steps too. Only actual KDF events
+  // prove that the fee was broadcast or a subsequent payment step occurred.
+  final occurred = swap.events.map((item) => item.event.type).toSet();
+  final reached = steps.where(occurred.contains).toList();
   print(
-    '🔍 TAKER ORDER: swap steps rendered: '
+    '🔍 TAKER ORDER: swap events observed: '
     '${reached.isEmpty ? 'none' : reached.join(', ')}',
   );
 
-  if (tester.any(find.byKey(const Key('swap-status-failed')))) {
+  if (swap.isFailed) {
     throw StateError('The swap reported failure: ${reached.join(', ')}');
   }
   // Specifically TakerFeeSent, not merely "some step". That one is this
@@ -107,7 +131,7 @@ void _requireSwapProgressed(WidgetTester tester) {
     throw StateError(
       'The swap never started: the taker fee was not broadcast within 10 '
       'minutes. The order was submitted but nothing matched or negotiated. '
-      'Steps rendered: ${reached.isEmpty ? 'none' : reached.join(', ')}',
+      'Events observed: ${reached.isEmpty ? 'none' : reached.join(', ')}',
     );
   }
 }
@@ -133,7 +157,8 @@ Finder _infiniteBidFinder() {
 
 Future<void> _testSwapHistoryTable(
   WidgetTester tester, {
-  Duration timeout = const Duration(milliseconds: 5000),
+  required String swapUuid,
+  Duration timeout = const Duration(seconds: 60),
 }) async {
   print('🔍 HISTORY CHECK: Starting history table verification');
 
@@ -146,16 +171,38 @@ Future<void> _testSwapHistoryTable(
   await tester.tapAndPump(historyTab);
   print('🔍 HISTORY CHECK: Opened history tab');
 
-  await tester.pump(timeout);
-  expect(
-    find.byType(HistoryItem),
-    findsOneWidget,
-    reason: 'Test error: Swap history item not found',
+  // History subscribes to a separate stream refreshed every ten seconds.
+  // Wait for this settled swap instead of sleeping five seconds and accepting
+  // whichever history row happened to arrive first.
+  final historyItem = find.descendant(
+    of: find.byType(HistoryList),
+    matching: find.byWidgetPredicate(
+      (widget) => widget is HistoryItem &&
+          widget.swap.uuid == swapUuid &&
+          widget.swap.isSuccessful,
+    ),
   );
+  await tester.pumpUntilFound(
+    historyItem,
+    timeout: timeout,
+    describeTarget: 'settled DOC/MARTY swap $swapUuid in history',
+  );
+  expect(
+    historyItem,
+    findsOneWidget,
+    reason: 'Settled swap $swapUuid must appear exactly once in history',
+  );
+  final historicalSwap = tester.widget<HistoryItem>(historyItem).swap;
+  expect(historicalSwap.isSuccessful, isTrue);
+  expect(historicalSwap.sellCoin, 'DOC');
+  expect(historicalSwap.buyCoin, 'MARTY');
   print('🔍 HISTORY CHECK: Found history item successfully');
 }
 
-Future<void> _expectSwapSuccess(WidgetTester tester) async {
+Future<void> _expectSwapSuccess(
+  WidgetTester tester, {
+  required String swapUuid,
+}) async {
   print('🔍 SWAP VERIFY: Starting swap verification process');
 
   final Finder tradingDetailsScrollable = find.byType(Scrollable);
@@ -177,6 +224,16 @@ Future<void> _expectSwapSuccess(WidgetTester tester) async {
   final Finder swapSuccess = find.byKey(const Key('swap-status-success'));
   final Finder backButton = find.byKey(const Key('return-button'));
 
+  final swap = tester
+      .widget<SwapDetailsPage>(find.byType(SwapDetailsPage))
+      .swapStatus;
+  expect(swap.uuid, swapUuid);
+  expect(swap.isFailed, isFalse);
+  expect(
+    swap.isSuccessful,
+    isTrue,
+    reason: 'The swap must have its terminal success event',
+  );
   expect(swapSuccess, findsOneWidget);
   print('🔍 SWAP VERIFY: Found success status');
 

@@ -47,7 +47,7 @@ class SwapFailureCopy {
         asset == null ? '' : SwapFormat.ticker(asset);
     return switch (failure.kind) {
       SwapQuoteFailureKind.assetInactive => SwapFailureCopy(
-        message: LocaleKeys.swapErrorInactive.tr(
+        message: LocaleKeys.swapAssetPreparationUnavailable.tr(
           args: [ticker(failure.asset ?? pay)],
         ),
         action: SwapEntryAction.activate,
@@ -94,11 +94,8 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorRateLimited.tr(),
         action: SwapEntryAction.wait,
       ),
-      SwapQuoteFailureKind.serviceError => _service(
-        failure,
-        pay,
-        networks,
-        feeHeld,
+      SwapQuoteFailureKind.serviceError => SwapFailureCopy(
+        message: LocaleKeys.swapErrorService.tr(),
       ),
       SwapQuoteFailureKind.timeout => SwapFailureCopy(
         message: LocaleKeys.swapErrorTimeout.tr(),
@@ -309,31 +306,6 @@ class SwapFailureCopy {
       message: LocaleKeys.swapErrorNoRoute.tr(),
       detail: detail,
     );
-  }
-
-  /// A token's cross-network quote fails as a service error both when the
-  /// node can't estimate its approval for want of gas and when the provider
-  /// can't be reached, so the copy suggests the check and shows what's held.
-  static SwapFailureCopy _service(
-    SwapQuoteFailure failure,
-    AssetId? pay,
-    SwapNetworks? networks,
-    String? feeHeld,
-  ) {
-    final parent = pay?.parentId;
-    if (failure.source == SwapLiquiditySource.routed &&
-        parent != null &&
-        networks != null) {
-      return SwapFailureCopy(
-        message: LocaleKeys.swapErrorServiceToken.tr(
-          args: [SwapFormat.ticker(parent), networks.networkOf(parent)],
-        ),
-        detail: feeHeld == null
-            ? null
-            : LocaleKeys.swapHelperFeeHeld.tr(args: [feeHeld]),
-      );
-    }
-    return SwapFailureCopy(message: LocaleKeys.swapErrorService.tr());
   }
 }
 

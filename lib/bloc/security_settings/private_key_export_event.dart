@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
+    show GuardedDestinationSelector;
 
 sealed class PrivateKeyExportEvent extends Equatable {
   const PrivateKeyExportEvent();
@@ -21,10 +23,17 @@ class PrivateKeyExportRequested extends PrivateKeyExportEvent {
 }
 
 class PrivateKeyExportPasswordSubmitted extends PrivateKeyExportEvent {
-  const PrivateKeyExportPasswordSubmitted(this.operationId, this.password);
+  const PrivateKeyExportPasswordSubmitted(
+    this.operationId,
+    this.password, {
+    this.ensureAuthorized,
+    this.selectDestination,
+  });
 
   final int operationId;
   final SensitiveString password;
+  final void Function()? ensureAuthorized;
+  final GuardedDestinationSelector? selectDestination;
 
   @override
   List<Object?> get props => [operationId];

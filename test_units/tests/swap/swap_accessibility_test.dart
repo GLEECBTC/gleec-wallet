@@ -21,6 +21,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -32,6 +33,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
@@ -40,6 +42,7 @@ import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -135,6 +138,7 @@ void main() {
 
   tearDown(() async {
     await swap.close();
+    await services.presentation.dispose();
     await registry.dispose();
     shell.dispose();
     Localization.load(const Locale('en'));
@@ -163,9 +167,8 @@ void main() {
             supportedLocales: context.supportedLocales,
             localizationsDelegates: context.localizationDelegates,
             builder: (context, app) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(layout.textScale)),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(layout.textScale)),
               child: app!,
             ),
             home: RepositoryProvider<SwapServices>.value(
@@ -182,7 +185,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (swap.state.checkingMax || swap.state.preparingAssets) {
+      await tester.pump(const Duration(seconds: 3));
+    } else {
+      await tester.pumpAndSettle();
+    }
   }
 
   UnifiedSwapState form({
@@ -203,7 +210,9 @@ void main() {
       receive: receive ?? usdc,
       inputText: '1',
       balance: d('2'),
-      feeBalance: feeBalance,
+      feeBalance: feeBalance ?? d('2'),
+      payAddress: 'own-pay',
+      receiveAddress: 'own-receive',
       issue: issue,
       evaluation: evaluation,
       quotes: ready
@@ -357,9 +366,9 @@ void main() {
       services.elsewhere[eth] = d('2.9');
       return form(issue: SwapFormIssue.insufficient);
     },
-    'a hardware wallet': () => form(
-      evaluation: SwapEvaluationStatus.idle,
-    ).copyWith(tradingEnabled: false, hardwareWallet: true),
+    'a hardware wallet': () =>
+        form(evaluation: SwapEvaluationStatus.idle)
+            .copyWith(tradingEnabled: false, hardwareWallet: true),
     'signed out': () =>
         form(
           issue: SwapFormIssue.signedOut,
@@ -384,12 +393,27 @@ void main() {
     group(layout.name, () {
       for (final MapEntry(key: name, value: state) in entryStates.entries) {
         testWidgets('entry: $name', (tester) async {
-          swap.emit(state());
+          final entryState = state();
+          swap.emit(entryState);
           await pump(tester, layout, const SwapEntryView());
           await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+          // The field names its unit: dollars, or the asset on its network.
+          final pay = entryState.pay!;
           expect(
             tester.getSemantics(find.byKey(const Key('swap-amount'))),
-            isSemantics(label: 'Amount to pay', isTextField: true),
+            isSemantics(
+              label: entryState.amountMode == SwapAmountMode.fiat
+                  ? 'swapAmountToPayInUsd'.tr()
+                  : 'swapAmountToPayIn'.tr(
+                      args: [
+                        SwapFormat.onNetwork(
+                          SwapFormat.ticker(pay),
+                          SwapFormat.network(pay, services.networks()),
+                        ),
+                      ],
+                    ),
+              isTextField: true,
+            ),
           );
         });
       }
@@ -419,9 +443,8 @@ void main() {
         swap.emit(form());
         await pump(tester, layout, const SwapEntryView());
         swap.emit(
-          form(
-            evaluation: SwapEvaluationStatus.idle,
-          ).copyWith(inputText: '2', checkingMax: true),
+          form(evaluation: SwapEvaluationStatus.idle)
+              .copyWith(inputText: '2', checkingMax: true),
         );
         // The spinners never settle: one pump delivers the state, one draws.
         await tester.pump();
@@ -552,7 +575,9 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
-      testWidgets('picker: while an asset activates', (tester) async {
+      testWidgets('picker: inactive assets remain immediately selectable', (
+        tester,
+      ) async {
         services = _Services(registry, {eth});
         await pump(
           tester,
@@ -566,7 +591,12 @@ void main() {
             isBlocked: (_) => false,
           ),
         );
-        final inactive = find.text('BTC').first;
+        final inactive = find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data == 'BTC' &&
+              widget.style?.fontWeight == FontWeight.w700,
+        );
         await tester.scrollUntilVisible(
           inactive,
           200,
@@ -579,9 +609,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.tap(inactive);
-        // The spinner never settles, so pump once rather than settle.
-        await tester.pump();
-        expect(find.text('Activating…'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(find.text('Activating…'), findsNothing);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 

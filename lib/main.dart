@@ -30,6 +30,7 @@ import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/mm2/mm2.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/performance_analytics/performance_analytics.dart';
 import 'package:web_dex/sdk/widgets/window_close_handler.dart';
@@ -41,6 +42,7 @@ import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
 import 'package:web_dex/services/initializer/app_error_handling.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
@@ -76,7 +78,20 @@ Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
     // Note: SDK debug logging is now controlled by the diagnostic logging toggle
     // in Settings. The flags are initialized in SettingsBloc from stored settings.
 
-    final mm2Api = Mm2Api(mm2: mm2, sdk: komodoDefiSdk);
+    final tradingPolicy = TradingAssetPolicy(
+      assetOf: (id) {
+        for (final asset in komodoDefiSdk.assets.available.values) {
+          if (asset.id.id == id) return asset;
+        }
+        return null;
+      },
+      solanaCapabilities: () => komodoDefiSdk.solanaCapabilities,
+    );
+    final mm2Api = Mm2Api(
+      mm2: mm2,
+      sdk: komodoDefiSdk,
+      tradingPolicy: tradingPolicy,
+    );
     // Sparkline is dependent on Hive initialization, so we pass it on to the
     // bootstrapper here
     final sparklineRepository = SparklineRepository.defaultInstance();
@@ -113,11 +128,17 @@ Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
       tradingStatusService: tradingStatusService,
       arrrActivationService: arrrActivationService,
     );
+    final walletAccess = WalletAccessService(
+      sdk: komodoDefiSdk,
+      storage: getStorage(),
+    );
+    await walletAccess.initialize();
     final walletsRepository = WalletsRepository(
       komodoDefiSdk,
       mm2Api,
       getStorage(),
       legacyNativeWalletMigration: legacyNativeWalletMigration,
+      walletAccess: walletAccess,
     );
 
     // Start FD monitoring on iOS (works in both Debug and Release).
@@ -145,6 +166,7 @@ Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
             RepositoryProvider.value(value: arrrActivationService),
             RepositoryProvider.value(value: coinsRepo),
             RepositoryProvider.value(value: walletsRepository),
+            RepositoryProvider.value(value: walletAccess),
             RepositoryProvider.value(value: sparklineRepository),
             RepositoryProvider.value(value: tradingStatusRepository),
             RepositoryProvider.value(value: tradingStatusService),
@@ -283,6 +305,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               walletsRepository,
               SettingsRepository(),
               tradingStatusService,
+              walletAccessService: context.read<WalletAccessService?>(),
             );
             bloc.add(const AuthLifecycleCheckRequested());
             return bloc;

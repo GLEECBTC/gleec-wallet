@@ -159,6 +159,9 @@ class LegalFormHarness {
     Size size = const Size(800, 1100),
     double textScale = 1,
     Brightness brightness = Brightness.dark,
+    double? contentWidth = 320,
+    bool scrollable = true,
+    bool disableAnimations = false,
   }) async {
     await tester.runAsync(validator.init);
     tester.view.physicalSize = size;
@@ -211,16 +214,22 @@ class LegalFormHarness {
                 supportedLocales: context.supportedLocales,
                 localizationsDelegates: context.localizationDelegates,
                 builder: (context, child) => MediaQuery(
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(textScaler: TextScaler.linear(textScale)),
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(textScale),
+                    disableAnimations: disableAnimations,
+                  ),
                   child: child!,
                 ),
                 home: Scaffold(
-                  body: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(child: SizedBox(width: 320, child: child)),
-                  ),
+                  resizeToAvoidBottomInset: scrollable,
+                  body: scrollable
+                      ? SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: SizedBox(width: contentWidth, child: child),
+                          ),
+                        )
+                      : child,
                 ),
               ),
             ),

@@ -5,7 +5,10 @@ extension _AtomicSwapOffers on AtomicSwapQuoteSource {
   /// Reads only the pair's own book: KDF follows every pair it is asked for
   /// from then on, so this is never fanned out over candidates.
   Future<SwapOrderBookOffers?> _readOffers(AssetId from, AssetId to) async {
-    if (!canTrade(from) || !canTrade(to)) return null;
+    if (!_canTradePair(from, to) ||
+        (_tradingAllowed != null && !_tradingAllowed(from, to))) {
+      return null;
+    }
     try {
       final minimum = minimumAmount(from: from);
       final book = await _trading
@@ -26,10 +29,14 @@ extension _AtomicSwapOffers on AtomicSwapQuoteSource {
     required bool anchorPays,
   }) async {
     if (!canTrade(anchor)) return null;
+    bool asked(AssetId from, AssetId to) =>
+        _canTradePair(from, to) &&
+        (_tradingAllowed == null || _tradingAllowed(from, to));
     final pairs = [
       for (final id in candidates)
         // One wallet-only coin fails KDF's whole request.
-        if (id != anchor && canTrade(id))
+        if (id != anchor &&
+            (anchorPays ? asked(anchor, id) : asked(id, anchor)))
           (
             id,
             anchorPays

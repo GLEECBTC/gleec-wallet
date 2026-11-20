@@ -47,12 +47,44 @@ runs:
 
     - name: Setup Android keystore
       id: setup_keystore
-      if: inputs.keystore-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
+      if: inputs.keystore-base64 != '' && github.event_name != 'pull_request'
       shell: bash
+      env:
+        GLEEC_SIGNING_KEYSTORE: ${{ inputs.keystore-base64 }}
+        GLEEC_SIGNING_ALIAS: ${{ inputs.key-alias }}
+        GLEEC_SIGNING_STORE_PASSWORD: ${{ inputs.store-password }}
+        GLEEC_SIGNING_KEY_PASSWORD: ${{ inputs.key-password }}
       run: |
-        echo "${{ inputs.keystore-base64 }}" | base64 --decode > android/app/upload-keystore.jks
-        rm -f android/key.properties # Remove existing file to avoid duplication on successive runs
-        echo "storeFile=upload-keystore.jks" >> android/key.properties
-        echo "keyAlias=${{ inputs.key-alias }}" >> android/key.properties
-        echo "storePassword=${{ inputs.store-password }}" >> android/key.properties
-        echo "keyPassword=${{ inputs.key-password }}" >> android/key.properties
+        umask 077
+        python3 - <<'PY'
+        import base64
+        import os
+        from pathlib import Path
+
+        def property_value(value):
+            # Java Properties.load uses Latin-1 with Java Unicode escapes.
+            units = value.encode('utf-16-be')
+            return ''.join('\\u' + units[i:i+2].hex() for i in range(0, len(units), 2))
+
+        try:
+            values = {
+                'storeFile': 'upload-keystore.jks',
+                'keyAlias': os.environ['GLEEC_SIGNING_ALIAS'],
+                'storePassword': os.environ['GLEEC_SIGNING_STORE_PASSWORD'],
+                'keyPassword': os.environ['GLEEC_SIGNING_KEY_PASSWORD'],
+            }
+            if not all(values.values()):
+                raise ValueError()
+            encoded = ''.join(os.environ['GLEEC_SIGNING_KEYSTORE'].split())
+            keystore = base64.b64decode(encoded, validate=True)
+            if not keystore:
+                raise ValueError()
+            destination = Path('android/app/upload-keystore.jks')
+            destination.write_bytes(keystore)
+            destination.chmod(0o600)
+            properties = Path('android/key.properties')
+            properties.write_text(''.join(k + '=' + property_value(v) + '\n' for k, v in values.items()), encoding='ascii')
+            properties.chmod(0o600)
+        except Exception:
+            raise SystemExit('Android release signing inputs could not be prepared.') from None
+        PY

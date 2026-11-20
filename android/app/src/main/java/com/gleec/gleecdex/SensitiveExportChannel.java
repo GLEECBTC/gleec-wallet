@@ -36,9 +36,12 @@ final class SensitiveExportChannel {
                         result.error("invalid_name", "Invalid export filename", null);
                         return;
                     }
+                    String mimeType = call.argument("mimeType");
                     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("application/json");
+                    // A type that disagrees with the name's extension makes the
+                    // document provider append its own (".txt.json").
+                    intent.setType("text/plain".equals(mimeType) ? "text/plain" : "application/json");
                     intent.putExtra(Intent.EXTRA_TITLE, name);
                     pendingSelection = result;
                     try {

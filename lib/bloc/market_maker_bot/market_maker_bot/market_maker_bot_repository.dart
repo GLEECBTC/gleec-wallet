@@ -1,3 +1,5 @@
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show RpcDispatchRejected;
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_method.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_status.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
@@ -7,11 +9,22 @@ import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/market_maker_bot_reques
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error_type.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class MarketMakerBotRepository {
-  MarketMakerBotRepository(this._mm2Api, this._settingsRepository);
+  MarketMakerBotRepository(
+    this._mm2Api,
+    this._settingsRepository, {
+    WalletOperationGate? operationGate,
+    TradingAssetPolicy? tradingPolicy,
+  }) : _tradingPolicy = tradingPolicy,
+       _operationGate = operationGate ?? WalletOperationGate.instance;
+
+  final TradingAssetPolicy? _tradingPolicy;
+
+  final WalletOperationGate _operationGate;
 
   /// The MM2 RPC API provider used to start/stop the market maker bot.
   final Mm2Api _mm2Api;
@@ -27,6 +40,7 @@ class MarketMakerBotRepository {
     int retries = 10,
     Duration delay = const Duration(milliseconds: 2000),
   }) async {
+    final permit = _operationGate.capture();
     final requestParams = await loadStoredConfig();
     final request = MarketMakerBotRequest(
       id: botId,
@@ -41,6 +55,7 @@ class MarketMakerBotRepository {
 
     await _startStopBotWithExponentialBackoff(
       request,
+      permit: permit,
       retries: retries,
       delay: delay,
     );
@@ -53,6 +68,7 @@ class MarketMakerBotRepository {
     int retries = 10,
     Duration delay = const Duration(milliseconds: 2000),
   }) async {
+    final permit = _operationGate.capture();
     try {
       final MarketMakerBotRequest request = MarketMakerBotRequest(
         id: botId,
@@ -60,6 +76,7 @@ class MarketMakerBotRepository {
       );
       await _startStopBotWithExponentialBackoff(
         request,
+        permit: permit,
         retries: retries,
         delay: delay,
       );
@@ -81,7 +98,9 @@ class MarketMakerBotRepository {
     int retries = 10,
     Duration delay = const Duration(milliseconds: 2000),
   }) async* {
+    final permit = _operationGate.capture();
     yield MarketMakerBotStatus.stopping;
+    permit.ensureCurrent();
     await stop(botId: botId, retries: retries, delay: delay);
     // This would be correct, if the bot stopped completely before responding
     // to the stop request
@@ -107,6 +126,7 @@ class MarketMakerBotRepository {
       );
       await _startStopBotWithExponentialBackoff(
         request,
+        permit: permit,
         retries: retries,
         delay: delay,
       );
@@ -122,7 +142,9 @@ class MarketMakerBotRepository {
     int retries = 10,
     Duration delay = const Duration(milliseconds: 2000),
   }) async* {
+    final permit = _operationGate.capture();
     yield MarketMakerBotStatus.stopping;
+    permit.ensureCurrent();
     await stop(botId: botId, retries: retries, delay: delay);
     // This would be correct, if the bot stopped completely before responding
     // to the stop request
@@ -132,6 +154,16 @@ class MarketMakerBotRepository {
     for (final tradePair in tradeCoinPairConfig) {
       requestParams.tradeCoinPairs?.remove(tradePair.name);
     }
+    // Cancellation remains available after policy changes; restart only the
+    // still-permitted pairs, without recreating a restricted order.
+    requestParams.tradeCoinPairs?.removeWhere(
+      (_, pair) =>
+          !(_tradingPolicy?.allowsMarketMakerPair(
+                pair.baseCoinId,
+                pair.relCoinId,
+              ) ??
+              canTradeAssetPair(pair.baseCoinId, pair.relCoinId)),
+    );
 
     if (requestParams.tradeCoinPairs?.isEmpty ?? true) {
       yield MarketMakerBotStatus.stopped;
@@ -145,6 +177,7 @@ class MarketMakerBotRepository {
       );
       await _startStopBotWithExponentialBackoff(
         request,
+        permit: permit,
         retries: retries,
         delay: delay,
       );
@@ -173,6 +206,7 @@ class MarketMakerBotRepository {
   /// Throws an [Exception] if the request fails after all retries.
   Future<void> _startStopBotWithExponentialBackoff(
     MarketMakerBotRequest request, {
+    required WalletOperationPermit permit,
     required int retries,
     required Duration delay,
   }) async {
@@ -183,10 +217,22 @@ class MarketMakerBotRepository {
     }
 
     while (retries > 0) {
+      // A lock or wallet switch also cancels retries not yet dispatched. The
+      // engine continues work it already accepted without another permit.
+      permit.ensureCurrent();
+      if (isStartRequest) {
+        for (final pair in request.params!.tradeCoinPairs!.values) {
+          _assertTradePairAllowed(pair);
+        }
+      }
       try {
         await _mm2Api.startStopMarketMakerBot(request);
         break;
       } catch (e, s) {
+        if (e is TradePreflightRejected ||
+            e is WalletOperationDenied ||
+            e is RpcDispatchRejected)
+          rethrow;
         if (retries <= 0) {
           rethrow;
         }
@@ -225,6 +271,7 @@ class MarketMakerBotRepository {
   Future<void> addTradePairToStoredSettings(
     TradeCoinPairConfig tradePair,
   ) async {
+    final permit = _operationGate.capture();
     _assertTradePairAllowed(tradePair);
     final allSettings = await _settingsRepository.loadSettings();
     final settings = allSettings.marketMakerBotSettings;
@@ -241,6 +288,7 @@ class MarketMakerBotRepository {
 
     tradePairs.add(tradePair);
     final newSettings = settings.copyWith(tradeCoinPairConfigs: tradePairs);
+    permit.ensureCurrent();
     await _settingsRepository.updateSettings(
       allSettings.copyWith(marketMakerBotSettings: newSettings),
     );
@@ -253,7 +301,18 @@ class MarketMakerBotRepository {
   }
 
   void _assertTradePairAllowed(TradeCoinPairConfig tradePair) {
-    if (!canTradeAssetPair(tradePair.baseCoinId, tradePair.relCoinId)) {
+    if (_tradingPolicy?.isSolanaPair(
+          tradePair.baseCoinId,
+          tradePair.relCoinId,
+        ) ??
+        false) {
+      throw const SolanaMarketMakerUnavailable();
+    }
+    if (!(_tradingPolicy?.allowsPair(
+          tradePair.baseCoinId,
+          tradePair.relCoinId,
+        ) ??
+        canTradeAssetPair(tradePair.baseCoinId, tradePair.relCoinId))) {
       throw ArgumentError(
         'Wallet-only assets cannot be used by the market maker bot.',
       );
@@ -268,6 +327,7 @@ class MarketMakerBotRepository {
   Future<void> removeTradePairsFromStoredSettings(
     List<TradeCoinPairConfig> tradePairsToRemove,
   ) async {
+    final permit = _operationGate.capture();
     final allSettings = await _settingsRepository.loadSettings();
     final settings = allSettings.marketMakerBotSettings;
     final tradePairs = List<TradeCoinPairConfig>.from(
@@ -278,6 +338,7 @@ class MarketMakerBotRepository {
       tradePairs.removeWhere((e) => e.name == pair.name);
     }
     final newSettings = settings.copyWith(tradeCoinPairConfigs: tradePairs);
+    permit.ensureCurrent();
     await _settingsRepository.updateSettings(
       allSettings.copyWith(marketMakerBotSettings: newSettings),
     );

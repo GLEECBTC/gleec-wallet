@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "artifact_revision": "native-v1",
+  "platform": "macos-universal2",
+  "source_commit": "f9632e0ec771668a6f21b37aede01a30110141cb",
+  "source_archive_sha256": "86c8d10d6d6c7644de6011c65f5362baabb5c441539db6fe713d7b45b448e0bf",
+  "cargo_lock_sha256": "f160ec23242893eae6f65634eb10628b760fe1027ce11d801a253d9d6d1a428a",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+  "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+  "package": "mm2_bin_lib",
+  "crate_type": "cdylib (source manifest)",
+  "extra_features": [],
+  "profile": "release",
+  "cargo_flags": [
+    "--offline",
+    "--locked",
+    "--release",
+    "--package",
+    "mm2_bin_lib",
+    "--lib"
+  ],
+  "KDF_BUILD_TAG": "f9632e0",
+  "source_files_verified_unchanged": 1203,
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "minimum_macos": {
+    "x86_64": "10.12",
+    "arm64": "11.0"
+  },
+  "install_name": "@rpath/libkdflib.dylib",
+  "postprocessing": [
+    "install_name_tool -id @rpath/libkdflib.dylib",
+    "ad-hoc codesign --timestamp=none",
+    "lipo universal combination"
+  ],
+  "library_sha256": "ea86d0c5f49b48c067e21d658c43a95fa5f0c13000266397064b13c38af58ce4",
+  "required_exports": [
+    "mm2_main",
+    "mm2_main_status",
+    "mm2_stop"
+  ],
+  "load_validation": {
+    "arm64": "passed",
+    "x86_64_rosetta": "passed",
+    "initial_engine_status": 0,
+    "engine_started": false
+  },
+  "flutter_packaging": {
+    "passed": true,
+    "flutter": "3.41.4",
+    "elapsed_seconds": 69.94,
+    "canonical_manifest_overlay": false,
+    "coordinator_sha256": "ca9fa0477176670f1d1d312028198cd458e30cf75a88a7b7c7856bc816e5dbcd",
+    "app_tree_sha256": "bbb6d2b9598b6b757b222bfa8683b552bb995556b2cce936d8511fec7cd2c79e",
+    "file_count": 914,
+    "artifact_privacy_scan": "passed",
+    "embedded_library_digest_matches": true,
+    "obsolete_executable_helper_absent": true,
+    "signature": "ad-hoc validation; no development/distribution authority or embedded entitlements",
+    "app_launched": false,
+    "hands_on_authentication_performed": false
+  },
+  "archive": {
+    "filename": "kdf-macos-universal2-f9632e0ec771668a6f21b37aede01a30110141cb-native-v1.zip",
+    "sha256": "a77a26c9814008c958b4f57d928ef59ca01b04b3d0c2710ea49ed8a707cfabd8",
+    "bytes": 116155484,
+    "files": [
+      "kdf",
+      "libkdflib.dylib"
+    ]
+  },
+  "companion_executable_archive_sha256": "6dfc9149ac7b1017e518163788fe8c8a6d45c1270aae66cc74b83f8e20d34835",
+  "reproducibility_note": "Exact source and toolchain are pinned; upstream build.rs embeds its build time, so independent builds are not claimed to be byte-identical.",
+  "native_lifecycle_validation": {
+    "recorded_at_utc": "2026-11-08T23:06:53.431852+00:00",
+    "runtime_script_sha256": "33e6999fb5c02f4d0f16354eb78ffaa15d80c1323cb9c481773f79f220c9bd28",
+    "architectures": [
+      {
+        "architecture": "arm64",
+        "interpreter": {
+          "architecture": "arm64",
+          "python_version": "3.14.7"
+        },
+        "exit_code": 0,
+        "closed_report": {
+          "funds_used": false,
+          "network_required": false,
+          "passed": true,
+          "phases": [
+            "load",
+            "read_only_start_stop",
+            "generated_wallet_creation",
+            "fresh_password_verification",
+            "wrong_password_cold_start_preserves_wallet",
+            "password_rotation_and_cold_return",
+            "credential_transport_and_storage_canaries",
+            "read_only_deletion"
+          ]
+        }
+      },
+      {
+        "architecture": "x86_64",
+        "interpreter": {
+          "architecture": "x86_64",
+          "python_version": "3.9.6"
+        },
+        "exit_code": 0,
+        "closed_report": {
+          "funds_used": false,
+          "network_required": false,
+          "passed": true,
+          "phases": [
+            "load",
+            "read_only_start_stop",
+            "generated_wallet_creation",
+            "fresh_password_verification",
+            "wrong_password_cold_start_preserves_wallet",
+            "password_rotation_and_cold_return",
+            "credential_transport_and_storage_canaries",
+            "read_only_deletion"
+          ]
+        }
+      }
+    ],
+    "canary_scope": {
+      "temporary_persisted_files": "passed",
+      "macos_process_argv": "not_executed",
+      "macos_process_environment": "not_executed",
+      "reason": "The script conditionally scans /proc/self/cmdline and /proc/self/environ; those surfaces are absent on macOS."
+    },
+    "safety": {
+      "temporary_unfunded_wallets_only": true,
+      "p2p_disabled": true,
+      "coins": [],
+      "rpc_loopback_only": true,
+      "credentials_in_command_arguments": false,
+      "raw_native_logs_discarded": true,
+      "production_wallet_profiles_used": false
+    }
+  },
+  "publication": {
+    "url": "https://devbuilds.gleec.com/main/kdf-macos-universal2-f9632e0ec771668a6f21b37aede01a30110141cb-native-v1.zip",
+    "independent_full_https_verification": true,
+    "normal_shipped_dart_prefetch": true,
+    "download_credentials_used": false,
+    "sdk_http_client_changes": false,
+    "canonical_json_sha256": "038d8e8cc047aa1177feec0ee276b97353f65f90123b69f55cd0f8f570dbb3b8"
+  },
+  "previous_published_archive": {
+    "filename": "kdf_f9632e0-mac-universal.zip",
+    "sha256": "6dfc9149ac7b1017e518163788fe8c8a6d45c1270aae66cc74b83f8e20d34835",
+    "bytes": 55991315,
+    "independent_full_https_verification_unchanged": true
+  }
+}

@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_credential_cleanup_notice.dart';
 
 /// The single first screen of wallet setup.
 ///
@@ -34,13 +37,26 @@ class WalletsManagerEntry extends StatefulWidget {
     required this.onHardwareWallet,
     required this.onWalletSelected,
     required this.onCancel,
+    this.onCreateAnother,
+    this.cancelLabel,
+    this.onUserIntent,
     super.key,
   });
 
   final void Function(WalletsManagerAction) onAction;
+
+  /// Opens the creation card for someone who already has wallets here. Create
+  /// is then a second, deliberate press beside the legal notice, so the row on
+  /// this screen neither creates a wallet nor accepts the terms.
+  ///
+  /// First-run creation, and a host that leaves this out, stay a single tap
+  /// through [onAction].
+  final VoidCallback? onCreateAnother;
   final VoidCallback onHardwareWallet;
   final void Function(Wallet, WalletsManagerExistWalletAction) onWalletSelected;
   final VoidCallback onCancel;
+  final String? cancelLabel;
+  final VoidCallback? onUserIntent;
 
   @override
   State<WalletsManagerEntry> createState() => _WalletsManagerEntryState();
@@ -48,6 +64,7 @@ class WalletsManagerEntry extends StatefulWidget {
 
 class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
   late final Stream<List<Wallet>> _walletsStream;
+  bool _creating = false;
 
   @override
   void initState() {
@@ -66,45 +83,120 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
     );
   }
 
+  Future<void> _onAction(
+    WalletsManagerAction action, {
+    required bool reviewsCreation,
+  }) async {
+    widget.onUserIntent?.call();
+    if (action != WalletsManagerAction.create) {
+      widget.onAction(action);
+      return;
+    }
+    final createAnother = widget.onCreateAnother;
+    if (reviewsCreation && createAnother != null) {
+      createAnother();
+      return;
+    }
+    if (_creating) return;
+    _creating = true;
+    final agreement = await awaitLegalAgreement(context);
+    if (!mounted) return;
+    if (agreement == null) {
+      _creating = false;
+      return;
+    }
+    context.read<LegalAgreementBloc>().add(
+      LegalAgreementSubmitted('wallet-creation', snapshot: agreement.snapshot),
+    );
+    widget.onAction(action);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Wallet>>(
-      initialData:
-          context.read<WalletsRepository>().wallets ?? const <Wallet>[],
-      stream: _walletsStream,
-      builder: (context, snapshot) {
-        final wallets = snapshot.data ?? const <Wallet>[];
-        final hasWallets = wallets.isNotEmpty;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _OnboardingHeader(hasWallets: hasWallets),
-            const SizedBox(height: 24),
-            if (hasWallets) ...[
-              WalletsList(
-                walletType: WalletType.iguana,
-                wallets: wallets,
-                onWalletClick: widget.onWalletSelected,
+    final theme = Theme.of(context);
+    // The legacy body styles apply opacity even to enabled action titles.
+    // Onboarding uses the existing opaque surface roles so Import stays visibly
+    // available and supporting instructions remain readable in both themes.
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          bodyLarge: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+          bodySmall: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      child: StreamBuilder<List<Wallet>>(
+        initialData:
+            context.read<WalletsRepository>().wallets ?? const <Wallet>[],
+        stream: _walletsStream,
+        builder: (context, snapshot) {
+          final wallets = snapshot.data ?? const <Wallet>[];
+          final hasWallets = wallets.isNotEmpty;
+          final reviewsCreation = hasWallets && widget.onCreateAnother != null;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const WalletCredentialCleanupNotice(),
+              _OnboardingHeader(hasWallets: hasWallets),
+              if (!hasWallets) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'authCreationProtectionNotice'.tr(),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (hasWallets) ...[
+                WalletsList(
+                  walletType: WalletType.iguana,
+                  wallets: wallets,
+                  onWalletClick: (wallet, action) {
+                    widget.onUserIntent?.call();
+                    widget.onWalletSelected(wallet, action);
+                  },
+                ),
+                const SizedBox(height: 16),
+                const UiDivider(),
+                const SizedBox(height: 8),
+              ],
+              LegalConsentAction(
+                // Opening the creation card accepts nothing; the card gates
+                // and records acceptance beside its own Create action.
+                enforce: !reviewsCreation,
+                builder: (allowed) => _OnboardingActions(
+                  // Left pressable while the legal lookup settles so the
+                  // focused button is not disabled; `_onAction` drops repeats.
+                  canCreate: allowed,
+                  hasWallets: hasWallets,
+                  consent: reviewsCreation
+                      ? null
+                      : _CreateConsent(centered: !hasWallets),
+                  onAction: (action) =>
+                      _onAction(action, reviewsCreation: reviewsCreation),
+                  onHardwareWallet: () {
+                    widget.onUserIntent?.call();
+                    widget.onHardwareWallet();
+                  },
+                ),
               ),
-              const SizedBox(height: 16),
-              const UiDivider(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              UiUnderlineTextButton(
+                key: const Key('onboarding-cancel-button'),
+                text: widget.cancelLabel ?? LocaleKeys.cancel.tr(),
+                onPressed: () {
+                  widget.onUserIntent?.call();
+                  widget.onCancel();
+                },
+              ),
             ],
-            _OnboardingActions(
-              hasWallets: hasWallets,
-              onAction: widget.onAction,
-              onHardwareWallet: widget.onHardwareWallet,
-            ),
-            const SizedBox(height: 12),
-            UiUnderlineTextButton(
-              key: const Key('onboarding-cancel-button'),
-              text: LocaleKeys.cancel.tr(),
-              onPressed: widget.onCancel,
-            ),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -128,16 +220,20 @@ class _OnboardingHeader extends StatelessWidget {
     return GestureDetector(
       key: const Key('wallet-type-list-item-iguana'),
       behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
       onTap: () {},
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            hasWallets
-                ? LocaleKeys.onboardingReturningTitle.tr()
-                : LocaleKeys.onboardingTitle.tr(),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
+          Semantics(
+            header: true,
+            child: Text(
+              hasWallets
+                  ? LocaleKeys.onboardingReturningTitle.tr()
+                  : LocaleKeys.onboardingTitle.tr(),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -153,16 +249,63 @@ class _OnboardingHeader extends StatelessWidget {
   }
 }
 
+/// The legal sentence for Create, in supporting size.
+class _CreateConsent extends StatelessWidget {
+  const _CreateConsent({required this.centered});
+
+  final bool centered;
+
+  // `TermsConsentText` sets its sentence at this size and has no size
+  // parameter, so the supporting size is reached through the text scaler.
+  static const double _noticeFontSize = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final consent = TermsConsentText(
+      actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
+    );
+    // Only the routine sentence is supporting text. News the user must act on
+    // (changed or unavailable agreements) keeps its full size.
+    final routine = context.select<LegalAgreementBloc, bool>(
+      (bloc) =>
+          !bloc.state.hasFailure &&
+          bloc.state.status != LegalAgreementStatus.updated,
+    );
+    if (!routine) return consent;
+    final supportingSize =
+        Theme.of(context).textTheme.bodySmall?.fontSize ?? 12;
+    final scaler = MediaQuery.textScalerOf(context);
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: TextScaler.linear(
+          scaler.scale(supportingSize) / _noticeFontSize,
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        textAlign: centered ? TextAlign.center : null,
+        child: consent,
+      ),
+    );
+  }
+}
+
 class _OnboardingActions extends StatelessWidget {
   const _OnboardingActions({
     required this.hasWallets,
+    required this.canCreate,
     required this.onAction,
     required this.onHardwareWallet,
+    this.consent,
   });
 
   final bool hasWallets;
   final void Function(WalletsManagerAction) onAction;
   final VoidCallback onHardwareWallet;
+  final bool canCreate;
+
+  /// Sits directly under Create, the only action here that accepts the terms.
+  /// Null when Create only opens the creation card.
+  final Widget? consent;
 
   @override
   Widget build(BuildContext context) {
@@ -170,22 +313,28 @@ class _OnboardingActions extends StatelessWidget {
     // Hardware wallets have never been offered on native mobile.
     final showHardware = !PlatformTuner.isNativeMobile;
 
-    final importRow = UiListActionRow(
-      rowKey: const Key('import-wallet-button'),
-      title: LocaleKeys.onboardingImportTitle.tr(),
-      // The load-bearing string on this screen. "I already have a wallet" asks
-      // the user to classify themselves; naming the artifact in their hand asks
-      // them only to recognise it.
-      subtitle: LocaleKeys.onboardingImportSubtitle.tr(),
-      backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: () => onAction(WalletsManagerAction.import),
+    final importRow = Semantics(
+      button: true,
+      child: UiListActionRow(
+        rowKey: const Key('import-wallet-button'),
+        title: LocaleKeys.onboardingImportTitle.tr(),
+        // The load-bearing string on this screen. "I already have a wallet" asks
+        // the user to classify themselves; naming the artifact in their hand asks
+        // them only to recognise it.
+        subtitle: LocaleKeys.onboardingImportSubtitle.tr(),
+        backgroundColor: hasWallets ? theme.cardColor : null,
+        onTap: () => onAction(WalletsManagerAction.import),
+      ),
     );
 
-    final hardwareRow = UiListActionRow(
-      rowKey: const Key('connect-hardware-wallet-button'),
-      title: LocaleKeys.onboardingHardwareTitle.tr(),
-      backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: onHardwareWallet,
+    final hardwareRow = Semantics(
+      button: true,
+      child: UiListActionRow(
+        rowKey: const Key('connect-hardware-wallet-button'),
+        title: LocaleKeys.onboardingHardwareTitle.tr(),
+        backgroundColor: hasWallets ? theme.cardColor : null,
+        onTap: onHardwareWallet,
+      ),
     );
 
     // With wallets already on the device the list is the dominant element, so
@@ -194,12 +343,25 @@ class _OnboardingActions extends StatelessWidget {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          UiListActionRow(
-            rowKey: const Key('create-wallet-button'),
-            title: LocaleKeys.onboardingCreateWallet.tr(),
-            backgroundColor: theme.cardColor,
-            onTap: () => onAction(WalletsManagerAction.create),
+          Semantics(
+            button: true,
+            enabled: canCreate,
+            child: UiListActionRow(
+              rowKey: const Key('create-wallet-button'),
+              title: LocaleKeys.onboardingCreateWallet.tr(),
+              backgroundColor: theme.cardColor,
+              onTap: canCreate
+                  ? () => onAction(WalletsManagerAction.create)
+                  : null,
+            ),
           ),
+          if (consent case final consent?) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: consent,
+            ),
+          ],
           const SizedBox(height: 8),
           importRow,
           if (showHardware) ...[const SizedBox(height: 8), hardwareRow],
@@ -212,11 +374,18 @@ class _OnboardingActions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         UiPrimaryButton(
+          expandForText: true,
           key: const Key('create-wallet-button'),
           height: 56,
           text: LocaleKeys.onboardingCreateWallet.tr(),
-          onPressed: () => onAction(WalletsManagerAction.create),
+          onPressed: canCreate
+              ? () => onAction(WalletsManagerAction.create)
+              : null,
         ),
+        if (consent case final consent?) ...[
+          const SizedBox(height: 12),
+          consent,
+        ],
         const SizedBox(height: 16),
         const UiDivider(),
         const SizedBox(height: 4),

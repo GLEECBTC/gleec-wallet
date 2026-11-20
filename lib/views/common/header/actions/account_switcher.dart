@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_wrapper.dart';
@@ -80,7 +81,7 @@ class _AccountSwitcher extends StatelessWidget {
               return Container(
                 constraints: const BoxConstraints(maxWidth: maxWidth),
                 child: Text(
-                  state.currentUser?.walletId.name ?? '',
+                  state.currentUser?.wallet.displayName ?? '',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

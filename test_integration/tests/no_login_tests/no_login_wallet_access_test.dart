@@ -6,23 +6,27 @@ import 'package:integration_test/integration_test.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/model/settings_menu_value.dart';
+import 'package:web_dex/views/wallet/wallet_page/common/grouped_asset_ticker_item.dart';
 
 import '../../common/goto.dart' as goto;
 import '../../helpers/accept_alpha_warning.dart';
 
 Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
-  final Finder walletsManagerWrapper =
-      find.byKey(const Key('wallets-manager-wrapper'));
+  final Finder walletsManagerWrapper = find.byKey(
+    const Key('wallets-manager-wrapper'),
+  );
 
   // App bar
   print('TEST ACCESS FROM APP BAR');
   final Finder connectWalletButton = isMobile
       ? find.byKey(const Key('connect-wallet-dex'))
       : find.byKey(const Key('connect-wallet-header'));
-  final Finder appBarTotalBalance =
-      find.byKey(const Key('app-bar-total-balance'));
-  final Finder appBarAccountButton =
-      find.byKey(const Key('app-bar-account-button'));
+  final Finder appBarTotalBalance = find.byKey(
+    const Key('app-bar-total-balance'),
+  );
+  final Finder appBarAccountButton = find.byKey(
+    const Key('app-bar-account-button'),
+  );
 
   expect(connectWalletButton, findsOneWidget);
   await _openWalletManagerPopupByKey(connectWalletButton, tester);
@@ -36,16 +40,22 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   // Wallet page
   print('TEST ACCESS FROM WALLET PAGE');
   final Finder walletMenuButton = find.byKey(const Key('main-menu-wallet'));
-  final Finder coinsWithBalanceCheckbox =
-      find.byKey(const Key('coins-with-balance-checkbox'));
+  final Finder coinsWithBalanceCheckbox = find.byKey(
+    const Key('coins-with-balance-checkbox'),
+  );
   final Finder addAssetsButton = find.byKey(const Key('add-assets-button'));
-  final Finder removeAssetsButton =
-      find.byKey(const Key('remove-assets-button'));
-  final Finder walletPageScrollView =
-      find.byKey(const Key('wallet-page-scroll-view'));
-  // Logged out, the assets tab renders AssetsList in its grouped view, which
-  // keys each row by bare ticker.
-  final Finder coinListItemKmd = find.byKey(const Key('KMD'));
+  final Finder removeAssetsButton = find.byKey(
+    const Key('remove-assets-button'),
+  );
+  final Finder walletPageScrollView = find.byKey(
+    const Key('wallet-page-scroll-view'),
+  );
+  // The grouped row and its icon resolver both use the ticker as a local key.
+  // Select the row explicitly, so scrolling and tapping target one widget.
+  final Finder coinListItemKmd = find.byWidgetPredicate(
+    (widget) =>
+        widget is GroupedAssetTickerItem && widget.key == const Key('KMD'),
+  );
 
   await tester.tap(walletMenuButton);
   await tester.pumpAndSettle();
@@ -67,10 +77,12 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
 
   // Dex page
   print('TEST ACCESS FROM DEX PAGE');
-  final Finder connectWalletMakerForm =
-      find.byKey(const Key('connect-wallet-maker-form'));
-  final Finder connectWalletTakerForm =
-      find.byKey(const Key('connect-wallet-taker-form'));
+  final Finder connectWalletMakerForm = find.byKey(
+    const Key('connect-wallet-maker-form'),
+  );
+  final Finder connectWalletTakerForm = find.byKey(
+    const Key('connect-wallet-taker-form'),
+  );
   final Finder dexMenuButton = find.byKey(const Key('main-menu-dex'));
   final Finder makeOrderTab = find.byKey(const Key('make-order-tab'));
   final Finder takeOrderTab = find.byKey(const Key('take-order-tab'));
@@ -112,19 +124,31 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
 }
 
 Future<void> _openWalletManagerPopupByKey(
-    Finder finder, WidgetTester tester) async {
+  Finder finder,
+  WidgetTester tester,
+) async {
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
 
 Future<void> _closeWalletManagerPopup(WidgetTester tester) async {
-  await tester.tapAt(const Offset(10.0, 10.0));
+  // Wallet setup deliberately ignores barrier taps. Leave through its explicit
+  // cancel action rather than assuming a screen coordinate dismisses it.
+  final cancel = find.descendant(
+    of: find.byKey(const Key('wallets-manager-wrapper')),
+    matching: find.byKey(const Key('onboarding-cancel-button')),
+  );
+  expect(cancel, findsOneWidget);
+  await tester.ensureVisible(cancel);
+  await tester.tap(cancel);
   await tester.pumpAndSettle();
 }
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Run wallets create tests:', (WidgetTester tester) async {
+  testWidgets('Signed-out wallet entry points remain accessible', (
+    WidgetTester tester,
+  ) async {
     tester.testTextInput.register();
     await app.main();
     await tester.pumpAndSettle();
