@@ -12,6 +12,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/utils/balances_formatter.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item_size.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -25,10 +26,10 @@ import 'package:web_dex/analytics/events/market_bot_events.dart';
 
 class MarketMakerBotConfirmationForm extends StatefulWidget {
   const MarketMakerBotConfirmationForm({
-    Key? key,
+    super.key,
     required this.onCreateOrder,
     required this.onCancel,
-  }) : super(key: key);
+  });
 
   final VoidCallback onCancel;
   final VoidCallback onCreateOrder;
@@ -65,7 +66,12 @@ class _MarketMakerBotConfirmationFormState
             return const SizedBox();
           }
 
+          final solanaAutomation = [
+            state.buyCoin.value!,
+            state.sellCoin.value!,
+          ].any((coin) => isSolanaTradingAsset(coin.id));
           final hasError =
+              solanaAutomation ||
               state.tradePreImageError != null ||
               state.status == MarketMakerTradeFormStatus.error;
 
@@ -133,11 +139,13 @@ class _MarketMakerBotConfirmationFormState
                 TotalFees(preimage: state.tradePreImage),
                 const SizedBox(height: 24),
                 SwapErrorMessage(
-                  errorMessage: state.rawErrorMessage ??
-                      state.tradePreImageError?.text(
-                        state.sellCoin.value,
-                        state.buyCoin.value,
-                      ),
+                  errorMessage: solanaAutomation
+                      ? 'solanaMarketMakerUnavailable'.tr()
+                      : state.rawErrorMessage ??
+                            state.tradePreImageError?.text(
+                              state.sellCoin.value,
+                              state.buyCoin.value,
+                            ),
                   context: context,
                 ),
                 Flexible(

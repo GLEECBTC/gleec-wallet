@@ -31,6 +31,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs camera access to scan QR codes</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to unlock your wallet and protect access to your recovery phrase.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to import QR codes</string>
 	<key>UIApplicationSceneManifest</key>

@@ -14,6 +14,7 @@ class Order {
     this.address,
     this.uuid,
     this.pubkey,
+    this.isMine,
     this.minVolume,
     this.minVolumeRel,
   });
@@ -30,6 +31,7 @@ class Order {
       address: json['address'],
       uuid: json['uuid'],
       pubkey: json['pubkey'],
+      isMine: json['is_mine'] as bool?,
       price: fract2rat(json['price_fraction']) ?? Rational.parse(json['price']),
       maxVolume:
           fract2rat(json['base_max_volume_fraction']) ??
@@ -73,6 +75,7 @@ class Order {
       address: info.address?.addressData,
       uuid: info.uuid,
       pubkey: info.pubkey,
+      isMine: info.isMine,
       minVolume: minVolume,
       minVolumeRel: minVolumeRel,
     );
@@ -86,6 +89,7 @@ class Order {
   final String? address;
   final String? uuid;
   final String? pubkey;
+  final bool? isMine;
   final Rational? minVolume;
   final Rational? minVolumeRel;
 

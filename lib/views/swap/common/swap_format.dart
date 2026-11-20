@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_tickers.dart';
 
 /// Which way a displayed figure may be rounded.
@@ -91,6 +92,47 @@ abstract final class SwapFormat {
     String ticker, {
     SwapRounding rounding = SwapRounding.nearest,
   }) => '${amount(value, rounding: rounding)} $ticker';
+
+  /// [fees] in their own tokens, summed per token and rounded up as costs
+  /// are: "0.0004 ETH + 0.1 GLEEC". Null when there are none.
+  static String? feeTokens(Iterable<SwapFeeComponent> fees) {
+    final byToken = <String, Decimal>{};
+    for (final fee in fees) {
+      final label = fee.tokenLabel;
+      byToken[label] = (byToken[label] ?? Decimal.zero) + fee.amount;
+    }
+    if (byToken.isEmpty) return null;
+    return byToken.entries
+        .map((e) => tokens(e.value, e.key, rounding: SwapRounding.up))
+        .join(' + ');
+  }
+
+  /// Stands in for a figure that is not known: never a zero.
+  static const unknown = '—';
+
+  /// What [fees] come to: [usd] when every one of them is priced, else the
+  /// fees in their own tokens, which are known where their dollar value is
+  /// not. [unknown] unless the fees themselves are [known].
+  static String cost(
+    Decimal? usd,
+    Iterable<SwapFeeComponent> fees, {
+    bool known = true,
+  }) {
+    if (!known) return unknown;
+    if (usd != null) return SwapFormat.usd(usd, rounding: SwapRounding.up);
+    return feeTokens(fees) ?? unknown;
+  }
+
+  /// Everything [quote] costs, as [cost] writes it.
+  static String totalCost(SwapQuote quote) => cost(
+    quote.pricing.isComplete ? quote.pricing.totalCostUsd : null,
+    quote.fees,
+    known: quote.feesKnown,
+  );
+
+  /// A token amount on its network: "100 USDC on Ethereum".
+  static String onNetwork(String amount, String network) =>
+      LocaleKeys.swapAssetOnNetwork.tr(args: [amount, network]);
 
   /// A US-dollar value: "$1,204.33", or "< $0.01" for dust.
   static String usd(

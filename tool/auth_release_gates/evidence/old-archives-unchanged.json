@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://devbuilds.gleec.com/main/kdf_f9632e0-mac-universal.zip",
+    "filename": "kdf_f9632e0-mac-universal.zip",
+    "sha256": "6dfc9149ac7b1017e518163788fe8c8a6d45c1270aae66cc74b83f8e20d34835",
+    "bytes": 55991315,
+    "status": 200,
+    "unchanged": true
+  },
+  {
+    "url": "https://devbuilds.gleec.com/main/kdf_f9632e0-linux-x86-64.zip",
+    "filename": "kdf_f9632e0-linux-x86-64.zip",
+    "sha256": "dac943647d2f307204a6a01a6a5c34e33c00e8695b88e1ceaf2a7893eba50ff2",
+    "bytes": 29708903,
+    "status": 200,
+    "unchanged": true
+  }
+]

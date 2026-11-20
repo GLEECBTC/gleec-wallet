@@ -6,11 +6,16 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/password_dialog_content.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
+// Wide enough for the title on one line; the dialog still narrows to fit a
+// small screen.
+const double _authorizationDialogWidth = 320;
+
 // Shows wallet password dialog and
 // returns password value or null (if wrong or cancelled)
 Future<String?> walletPasswordDialog(
   BuildContext context, {
   Wallet? wallet,
+  bool passwordOnly = false,
 }) async {
   final currentWallet = context.read<AuthBloc>().state.currentUser?.wallet;
   wallet ??= currentWallet;
@@ -25,15 +30,19 @@ Future<String?> walletPasswordDialog(
 
   popupManager = PopupDispatcher(
     context: context,
+    width: _authorizationDialogWidth,
+    onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContent(
-      wallet: wallet,
-      onSuccess: (String pass) {
-        password = pass;
-        close();
-      },
-      onCancel: close,
-    )),
+        wallet: wallet,
+        passwordOnly: passwordOnly,
+        onSuccess: (String pass) {
+          password = pass;
+          close();
+        },
+        onCancel: close,
+      ),
+    ),
   );
 
   isOpen = true;
@@ -74,20 +83,23 @@ Future<bool> walletPasswordDialogWithLoading(
 
   popupManager = PopupDispatcher(
     context: context,
+    width: _authorizationDialogWidth,
+    onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContentWithLoading(
-      wallet: wallet,
-      onPasswordValidated: onPasswordValidated,
-      onComplete: (bool success) {
-        operationSuccessful = success;
-        close();
-      },
-      onCancel: close,
-      loadingTitle: loadingTitle,
-      loadingMessage: loadingMessage,
-      operationFailedMessage: operationFailedMessage,
-      passwordFieldKey: passwordFieldKey,
-    )),
+        wallet: wallet,
+        onPasswordValidated: onPasswordValidated,
+        onComplete: (bool success) {
+          operationSuccessful = success;
+          close();
+        },
+        onCancel: close,
+        loadingTitle: loadingTitle,
+        loadingMessage: loadingMessage,
+        operationFailedMessage: operationFailedMessage,
+        passwordFieldKey: passwordFieldKey,
+      ),
+    ),
   );
 
   isOpen = true;

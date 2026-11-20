@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "source": "Coordinating Solana task final CI report",
+  "scope": "Solana wallet native preparation and application packaging; not complete onboarding UI or physical-device certification",
+  "walletHead": "c9f14d34dc793dd7680da72088ed06aea340b8ad",
+  "sdkCommit": "34faf005b2e092419d0cb12b84f21b02a6c7f0d6",
+  "kdfSourcePrefix": "f963",
+  "catalogPrefix": "cc8249",
+  "desktop": {
+    "run": 42542882336,
+    "conclusion": "success",
+    "jobs": {
+      "linux": 128921491632,
+      "windows": 128921491855,
+      "macos": 128921491918
+    }
+  },
+  "mobile": {
+    "run": 42542882385,
+    "conclusion": "success",
+    "jobs": {
+      "android": 128921491655,
+      "ios": 128921491913
+    }
+  },
+  "artifactAndProvenanceBindingReported": "c9f14d34dc793dd7680da72088ed06aea340b8ad",
+  "sdkMergePinGate": "remains enforced",
+  "browserAndCoverageStatusAtReport": "still running",
+  "physicalDeviceChecks": "pending",
+  "finalCoordinatingReport": {
+    "walletPr": 3611,
+    "walletHead": "c9f14d34dc793dd7680da72088ed06aea340b8ad",
+    "unitAndCoverage": {
+      "run": 42542882368,
+      "passed": 4102,
+      "skipped": 4,
+      "lineCoveragePercent": 47.7,
+      "scope": "Isolated Solana branch; distinct from onboarding checkout 4411-test result"
+    },
+    "browser": {
+      "run": 42542882346,
+      "chrome": "success",
+      "safari": "success",
+      "passingSuiteSummariesPerBrowser": 5,
+      "counterpartyCleanup": "success",
+      "remainingLimits": [
+        "two existing fiat-provider deferrals",
+        "bounded DEX settlement checks"
+      ]
+    },
+    "sdk": {
+      "pr": 444,
+      "head": "34faf005b2e092419d0cb12b84f21b02a6c7f0d6",
+      "status": "all checks green",
+      "packageSuites": 16,
+      "wasm": "success",
+      "previews": "both success"
+    },
+    "coins": {
+      "pr": 2103,
+      "headPrefix": "58534ebf",
+      "status": "green",
+      "testsPassed": 40
+    },
+    "intentionalMergeGate": {
+      "run": 42542882353,
+      "status": "red",
+      "reason": "SDK/auth prerequisites must merge, followed by wallet repin",
+      "bypassed": false
+    },
+    "prState": "all three draft",
+    "mergesPerformed": false,
+    "physicalDeviceAcceptance": "pending",
+    "historicalLogCleanupApproval": "pending",
+    "authenticationScope": "No authentication package changes relative to the separate cf69 prerequisite",
+    "externalEvidencePath": ".solana/pr-preparation/evidence/review-native-adoption-validation.json"
+  }
+}

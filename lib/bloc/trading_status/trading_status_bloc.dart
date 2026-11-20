@@ -12,12 +12,15 @@ part 'trading_status_event.dart';
 part 'trading_status_state.dart';
 
 class TradingStatusBloc extends Bloc<TradingStatusEvent, TradingStatusState> {
-  TradingStatusBloc(this._service) : super(TradingStatusInitial()) {
+  TradingStatusBloc(this._service, {TradingAssetPolicy? tradingPolicy})
+    : _tradingPolicy = tradingPolicy,
+      super(TradingStatusInitial()) {
     on<TradingStatusCheckRequested>(_onCheckRequested);
     on<TradingStatusWatchStarted>(_onWatchStarted);
   }
 
   final TradingStatusService _service;
+  final TradingAssetPolicy? _tradingPolicy;
 
   Future<void> _onCheckRequested(
     TradingStatusCheckRequested event,
@@ -28,6 +31,7 @@ class TradingStatusBloc extends Bloc<TradingStatusEvent, TradingStatusState> {
       final status = await _service.refreshStatus();
       emit(
         TradingStatusLoadSuccess(
+          tradingPolicy: _tradingPolicy,
           disallowedAssets: status.disallowedAssets,
           disallowedFeatures: status.disallowedFeatures,
         ),
@@ -51,6 +55,7 @@ class TradingStatusBloc extends Bloc<TradingStatusEvent, TradingStatusState> {
         ActivationPolicyStatus.loading => TradingStatusLoadInProgress(),
         ActivationPolicyStatus.unavailable => TradingStatusLoadFailure(),
         ActivationPolicyStatus.ready => TradingStatusLoadSuccess(
+          tradingPolicy: _tradingPolicy,
           disallowedAssets: status.disallowedAssets,
           disallowedFeatures: status.disallowedFeatures,
         ),

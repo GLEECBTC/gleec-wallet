@@ -30,7 +30,13 @@ import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class DexRepository {
-  DexRepository(this._mm2Api);
+  DexRepository(this._mm2Api, {TradingAssetPolicy? tradingPolicy})
+    : _tradingPolicy = tradingPolicy;
+
+  final TradingAssetPolicy? _tradingPolicy;
+
+  bool _allowsPair(String base, String rel) =>
+      _tradingPolicy?.allowsPair(base, rel) ?? canTradeAssetPair(base, rel);
 
   final Mm2Api _mm2Api;
   final _rpcCache = _RpcRequestCache();
@@ -40,7 +46,7 @@ class DexRepository {
   static const Duration _minVolumeCacheTtl = Duration(seconds: 10);
 
   Future<SellResponse> sell(SellRequest request) async {
-    if (!canTradeAssetPair(request.base, request.rel)) {
+    if (!_allowsPair(request.base, request.rel)) {
       return SellResponse(
         error: TextError(
           error: 'Wallet-only assets cannot be submitted to the DEX.',
@@ -60,7 +66,7 @@ class DexRepository {
   /// KDF's own answer comes back as an error, and a request that got none
   /// throws, since the order may have been placed.
   Future<SellResponse> sellOrThrow(SellRequest request) async {
-    if (!canTradeAssetPair(request.base, request.rel)) {
+    if (!_allowsPair(request.base, request.rel)) {
       return SellResponse(
         error: TextError(
           error: 'Wallet-only assets cannot be submitted to the DEX.',
@@ -86,7 +92,7 @@ class DexRepository {
     Rational? volume,
     bool max = false,
   ]) async {
-    if (!canTradeAssetPair(base, rel)) {
+    if (!_allowsPair(base, rel)) {
       final blockedCoin = isWalletOnlyTradingAssetId(base) ? base : rel;
       return DataFromService(
         error: TradePreimageCoinIsWalletOnlyError(

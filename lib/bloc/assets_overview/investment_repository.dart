@@ -1,14 +1,31 @@
-import 'package:logging/logging.dart';
+import 'package:equatable/equatable.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/fiat_value.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/models/profit_loss.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/portfolio_profit_loss.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
 import 'package:web_dex/model/coin.dart';
+
+/// What a set of coins cost, with the profit/loss it was derived from.
+///
+/// Both come from one load, so the investment and the profit compared with it
+/// describe the same coins: [PortfolioProfitLoss.unavailable] is in neither.
+class PortfolioInvestment extends Equatable {
+  const PortfolioInvestment({required this.profitLoss, required this.total});
+
+  final PortfolioProfitLoss profitLoss;
+
+  /// The cost of the valued coins' purchases.
+  final FiatValue total;
+
+  @override
+  List<Object?> get props => [profitLoss, total];
+}
 
 class InvestmentRepository {
   InvestmentRepository({required ProfitLossRepository profitLossRepository})
     : _profitLossRepository = profitLossRepository;
 
   final ProfitLossRepository _profitLossRepository;
-  final Logger _log = Logger('InvestmentRepository');
 
   // TODO: Create a balance repository to fetch the current balance for a coin
   // and also calculate its fiat value
@@ -17,48 +34,33 @@ class InvestmentRepository {
   /// [walletId] is the wallet ID associated with the profit/loss data.
   /// [coins] is the list of coins to calculate the investment for.
   ///
-  /// Returns the [FiatValue] of the total investment.
-  Future<FiatValue> calculateTotalInvestment(
+  /// A coin whose profit/loss cannot be computed is left out of the total
+  /// and listed as unavailable; it is not counted as an investment of zero.
+  Future<PortfolioInvestment> calculateTotalInvestment(
     String walletId,
     List<Coin> coins,
   ) async {
-    final fetchCoinProfitFutures = coins.map<Future<FiatValue>>((coin) async {
-      // Catch errors that occur for single coins and exclude them from the
-      // total so that transaction fetching errors for a single coin do not
-      // affect the total investment calculation.
-      try {
-        final profitLoss = await _profitLossRepository.getProfitLoss(
-          coin.id,
-          'USDT',
-          walletId,
-        );
-
-        if (profitLoss.isEmpty) {
-          return FiatValue.usd(0);
-        }
-
-        final purchases = profitLoss.where((item) => item.myBalanceChange > 0);
-        final totalPurchased = FiatValue.usd(
-          purchases.fold(
-            0.0,
-            (sum, item) => sum + (item.myBalanceChange * item.fiatPrice.value),
-          ),
-        );
-
-        return totalPurchased;
-      } catch (e, s) {
-        _log.shout('Failed to calculate total investment', e, s);
-        return FiatValue.usd(0);
-      }
-    });
-
-    final coinInvestments = await Future.wait(fetchCoinProfitFutures);
-
-    final totalInvestment = coinInvestments.fold(
-      0.0,
-      (sum, item) => sum + item.value,
+    final profitLoss = await _profitLossRepository.getPortfolioProfitLoss(
+      coins.map((coin) => coin.id),
+      'USDT',
+      walletId,
     );
+    return PortfolioInvestment(
+      profitLoss: profitLoss,
+      total: investmentOf(profitLoss.valued.values),
+    );
+  }
 
-    return FiatValue.usd(totalInvestment);
+  /// The fiat cost of every purchase in [coinProfitLosses].
+  FiatValue investmentOf(Iterable<List<ProfitLoss>> coinProfitLosses) {
+    var total = 0.0;
+    for (final profitLosses in coinProfitLosses) {
+      for (final item in profitLosses) {
+        if (item.myBalanceChange > 0) {
+          total += item.myBalanceChange * item.fiatPrice.value;
+        }
+      }
+    }
+    return FiatValue.usd(total);
   }
 }

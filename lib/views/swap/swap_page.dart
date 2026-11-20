@@ -52,44 +52,67 @@ class SwapPage extends StatelessWidget {
     double maxWidth, {
     required bool wide,
   }) {
-    switch (state.view) {
-      case UnifiedSwapView.form:
-        return const SwapEntryView();
-      case UnifiedSwapView.review:
-        if (!wide) return const SwapReviewView();
-        final width = (maxWidth * 0.42).clamp(280.0, SwapGeometry.panelWidth);
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Expanded(child: _SideForm()),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 20, 16, 20),
-              child: SizedBox(
-                width: width,
-                child: const SwapReveal(
-                  offset: Offset(24, 0),
-                  child: _ReviewPanel(),
-                ),
+    final review = state.view == UnifiedSwapView.review;
+    final id = state.activeExecutionId;
+    final progress = state.view == UnifiedSwapView.progress && id != null;
+    final showForm = !progress && (!review || wide);
+    final panelWidth = (maxWidth * 0.42).clamp(280.0, SwapGeometry.panelWidth);
+    // Keep the same form element alive behind review and progress. Its input,
+    // scroll position and focus node survive going back without a second form.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Offstage(
+          offstage: !showForm,
+          child: TickerMode(
+            enabled: showForm,
+            child: ExcludeFocus(
+              excluding: !showForm,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _SideForm(
+                      inReview: review,
+                      child: SwapEntryView(panelOpen: review && wide),
+                    ),
+                  ),
+                  if (review && wide)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 20, 16, 20),
+                      child: SizedBox(
+                        width: panelWidth,
+                        child: const SwapReveal(
+                          offset: Offset(24, 0),
+                          duration: SwapMotion.screen,
+                          child: _ReviewPanel(),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-          ],
-        );
-      case UnifiedSwapView.progress:
-        final id = state.activeExecutionId;
-        if (id == null) return const SwapEntryView();
-        return SwapExecutionView(
-          key: ValueKey('progress-$id'),
-          id: id,
-          context: SwapExecutionContext.flow,
-        );
-    }
+          ),
+        ),
+        if (review && !wide) const SwapReviewView(),
+        if (progress)
+          SwapExecutionView(
+            key: ValueKey('progress-$id'),
+            id: id,
+            context: SwapExecutionContext.flow,
+          ),
+      ],
+    );
   }
 }
 
 /// The form beside a review. While the reviewed swap's start is unanswered
 /// or lost, the review is the only way on, so the form is set aside.
 class _SideForm extends StatelessWidget {
-  const _SideForm();
+  const _SideForm({required this.child, required this.inReview});
+
+  final Widget child;
+  final bool inReview;
 
   @override
   Widget build(BuildContext context) {
@@ -100,16 +123,16 @@ class _SideForm extends StatelessWidget {
       },
     );
     return IgnorePointer(
-      ignoring: inDoubt,
+      ignoring: inReview && inDoubt,
       child: ExcludeFocus(
-        excluding: inDoubt,
+        excluding: inReview && inDoubt,
         child: ExcludeSemantics(
-          excluding: inDoubt,
+          excluding: inReview && inDoubt,
           child: AnimatedOpacity(
             duration: SwapMotion.of(context, SwapMotion.colour),
             curve: SwapMotion.standard,
-            opacity: inDoubt ? 0.55 : 1,
-            child: const SwapEntryView(panelOpen: true),
+            opacity: inReview && inDoubt ? 0.55 : 1,
+            child: child,
           ),
         ),
       ),

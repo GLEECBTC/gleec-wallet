@@ -188,6 +188,12 @@ void _sheetCases(
       tester.getBottomLeft(use).dy,
       lessThanOrEqualTo(layout.size.height - keyboard),
     );
+    // Typing scrolls the field into view, partly clipping the preset row.
+    // Bring that row fully into view before measuring its touch targets.
+    await tester.ensureVisible(
+      find.ancestor(of: find.text('0.5%'), matching: find.byType(InkWell)),
+    );
+    await tester.pumpAndSettle();
     await expectSwapAccessible(tester, largeText: layout.textScale > 1);
   });
 }

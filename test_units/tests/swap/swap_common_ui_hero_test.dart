@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -110,8 +111,52 @@ void main() {
     });
 
     group('pair line', () {
-      test('shows what is sold and what is expected', () {
-        expect(copyOf(snap()).pairLine, '1 ETH → 3,000 USDC');
+      test('shows what is sold and, as an estimate, what is expected', () {
+        expect(copyOf(snap()).pairLine, '1 ETH → ≈ 3,000 USDC');
+      });
+
+      test('names the network on both sides when the tickers match', () {
+        final arbitrum = assetOf(
+          'ETH-ARB20',
+          subClass: CoinSubClass.arbitrum,
+          chainId: 42161,
+        );
+        final usdcArbitrum = assetOf(
+          'USDC-ARB20',
+          parent: arbitrum,
+          subClass: CoinSubClass.arbitrum,
+          chainId: 42161,
+        );
+        SwapExecutionCopy across(SwapExecutionSnapshot snapshot) =>
+            SwapExecutionCopy(
+              snapshot,
+              SwapNetworks([eth, usdc, arbitrum, usdcArbitrum]),
+            );
+        final running = snap(
+          from: usdc,
+          fromTicker: 'USDC',
+          to: usdcArbitrum,
+          sell: '100',
+          expected: '99.8',
+          stages: const [],
+        );
+        expect(
+          across(running).pairLine,
+          '100 USDC on Ethereum → ≈ 99.8 USDC on Arbitrum',
+        );
+        expect(
+          across(
+            snap(
+              from: usdc,
+              fromTicker: 'USDC',
+              to: usdcArbitrum,
+              sell: '100',
+              stages: const [],
+              outcome: completed(amount: '99.7'),
+            ),
+          ).pairLine,
+          '100 USDC on Ethereum → 99.7 USDC on Arbitrum',
+        );
       });
 
       test('shows what arrived once finished, rounded down', () {
@@ -122,7 +167,7 @@ void main() {
       test('falls back to the minimum, then to the tickers', () {
         expect(
           copyOf(snap(expected: null, minimum: '2985.129')).pairLine,
-          '1 ETH → 2,985.12 USDC',
+          '1 ETH → ≈ 2,985.12 USDC',
         );
         expect(
           copyOf(snap(sell: null, expected: null, minimum: null)).pairLine,
@@ -198,7 +243,7 @@ void main() {
           const SwapHeroCopy(
             title: 'Finding a counterparty',
             body:
-                'Waiting for a peer to take this exchange. Nothing has left '
+                'Waiting for a peer to take this swap. Nothing has left '
                 'your wallet.',
             icon: Icons.people_alt_outlined,
           ),

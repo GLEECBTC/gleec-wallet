@@ -67,6 +67,15 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
   Future<void> _initializeWithRetry(AnalyticsSettings settings) async {
     if (_isUnavailableForBuild) return;
 
+    // FlutterFire web injects inline modules and imports executable Firebase
+    // scripts from gstatic. The wallet origin's CSP intentionally permits only
+    // self-hosted code: third-party code would share access to browser wallets.
+    // Native Firebase and the separate data-only Matomo provider are unchanged.
+    if (kIsWeb) {
+      await _disableForBuild();
+      return;
+    }
+
     try {
       if (kDebugMode) {
         log(

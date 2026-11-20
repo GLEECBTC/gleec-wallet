@@ -7,21 +7,22 @@ import 'package:flutter/services.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_amount_controls.dart';
 part 'swap_receive_card.dart';
 
-/// The frame both amount cards share: a label row, the amount beside the
-/// asset pill, and an address footer when there is one to show.
+/// A stable card with a full-width asset identity above the amount.
+/// Addresses belong to review; giving them a footer here crowded the keyboard.
 class _AmountCardFrame extends StatelessWidget {
   const _AmountCardFrame({
     required this.label,
     required this.amount,
     required this.assetPill,
-    required this.footer,
     this.topTrailing,
     this.hasError = false,
     this.focused = false,
@@ -30,7 +31,6 @@ class _AmountCardFrame extends StatelessWidget {
   final String label;
   final Widget amount;
   final Widget assetPill;
-  final Widget? footer;
   final Widget? topTrailing;
   final bool hasError;
   final bool focused;
@@ -38,42 +38,27 @@ class _AmountCardFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final footer = this.footer;
-    // A phone gives the amounts the room a wider screen gives the padding.
     final compact = SwapGeometry.isCompact(context);
-    final inset = compact ? 14.0 : 18.0;
-    final gap = compact ? 12.0 : 16.0;
-    final borderColor = hasError
-        ? palette.danger
-        : focused
-        ? palette.brand
-        : palette.controlBorder;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final inset = compact ? 12.0 : 18.0;
+    final gap = keyboard ? 4.0 : 8.0;
     return Semantics(
       container: true,
       label: label,
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: SwapMotion.of(context, SwapMotion.selection),
         decoration: BoxDecoration(
           color: palette.surfaceRaised,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor),
-          boxShadow: focused && !hasError
-              ? [
-                  BoxShadow(
-                    color: palette.brand.withValues(alpha: 0.28),
-                    spreadRadius: 3,
-                  ),
-                ]
-              : null,
+          border: Border.all(
+            color: hasError
+                ? palette.danger
+                : focused
+                ? palette.brand
+                : palette.controlBorder,
+          ),
         ),
-        padding: EdgeInsets.fromLTRB(
-          inset,
-          inset,
-          inset,
-          footer == null ? inset : 4,
-        ),
+        padding: EdgeInsets.all(inset),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -88,43 +73,20 @@ class _AmountCardFrame extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (topTrailing != null) Flexible(child: topTrailing!),
+                if (topTrailing != null)
+                  Flexible(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      heightFactor: 1,
+                      child: topTrailing!,
+                    ),
+                  ),
               ],
             ),
             SizedBox(height: gap),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final scale = MediaQuery.textScalerOf(context).scale(1);
-                final half = constraints.maxWidth * 0.5;
-                final pill = 190 * scale;
-                // Under larger text, stack rather than cut the pill short.
-                if (constraints.maxWidth / scale < 240 ||
-                    (scale > 1 && half < pill)) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [amount, const SizedBox(height: 14), assetPill],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(child: amount),
-                    const SizedBox(width: 14),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: half < pill ? half : pill,
-                      ),
-                      child: assetPill,
-                    ),
-                  ],
-                );
-              },
-            ),
-            if (footer != null) ...[
-              SizedBox(height: gap),
-              Divider(height: 1, thickness: 1, color: palette.border),
-              footer,
-            ],
+            assetPill,
+            SizedBox(height: gap),
+            amount,
           ],
         ),
       ),
@@ -143,6 +105,7 @@ class SwapPayCard extends StatefulWidget {
     required this.onModeToggled,
     required this.onMax,
     required this.onPickAsset,
+    this.onSubmitted,
     super.key,
   });
 
@@ -161,6 +124,9 @@ class SwapPayCard extends StatefulWidget {
   final VoidCallback onModeToggled;
   final VoidCallback onMax;
   final VoidCallback onPickAsset;
+
+  /// Enter in the amount field: the keyboard's way to the form's action.
+  final VoidCallback? onSubmitted;
 
   @override
   State<SwapPayCard> createState() => _SwapPayCardState();
@@ -216,20 +182,19 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final fiat = state.amountMode == SwapAmountMode.fiat;
     final ticker = pay == null ? '' : SwapFormat.ticker(pay);
     final balance = state.balance;
-    final address = state.selectedQuote?.fromAddress ?? state.payAddress;
-    // A swap that may be running keeps its amount: nothing typed here would
-    // be taken until its answer is seen.
     final locked = state.startInDoubt;
 
     // While Max asks, the whole balance shown may still change.
     final amountStyle = state.checkingMax
         ? SwapText.amount(context).copyWith(color: palette.textSecondary)
         : SwapText.amount(context);
+    final hintStyle = amountStyle.copyWith(color: palette.textTertiary);
     final field = TextField(
       key: const Key('swap-amount'),
       controller: _controller,
       focusNode: _focus,
       onChanged: widget.onAmountChanged,
+      onSubmitted: (_) => widget.onSubmitted?.call(),
       // A phone's decimal pad has no key to put it away: a tap anywhere else
       // does, as dragging the form does.
       onTapOutside: (_) => _focus.unfocus(),
@@ -255,12 +220,25 @@ class _SwapPayCardState extends State<SwapPayCard> {
         errorBorder: InputBorder.none,
         filled: false,
         hintText: '0',
-        hintStyle: amountStyle.copyWith(color: palette.textTertiary),
-        prefixText: fiat ? r'$' : null,
-        prefixStyle: amountStyle,
+        hintStyle: hintStyle,
         semanticCounterText: '',
       ),
     );
+    // The sign stands beside the field rather than in it: a prefix hides
+    // while the field is empty yet keeps its room, which sets the "0" adrift.
+    final amountField = fiat
+        ? Row(
+            children: [
+              ExcludeSemantics(
+                child: Text(
+                  r'$',
+                  style: state.inputText.isEmpty ? hintStyle : amountStyle,
+                ),
+              ),
+              Expanded(child: field),
+            ],
+          )
+        : field;
 
     final amount = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,12 +246,22 @@ class _SwapPayCardState extends State<SwapPayCard> {
       children: [
         MergeSemantics(
           child: Semantics(
-            label: LocaleKeys.swapAmountToPay.tr(),
-            child: field,
+            label: _fieldLabel(ticker, fiat),
+            child: amountField,
           ),
         ),
         const SizedBox(height: 6),
-        _secondaryLine(context, ticker),
+        Row(
+          children: [
+            Expanded(child: _secondaryLine(context, ticker)),
+            if (pay != null && balance != null)
+              SwapLinkButton(
+                label: LocaleKeys.max.tr(),
+                onPressed: locked ? null : widget.onMax,
+                busy: state.checkingMax,
+              ),
+          ],
+        ),
       ],
     );
 
@@ -293,9 +281,8 @@ class _SwapPayCardState extends State<SwapPayCard> {
                   ),
                 ],
               ),
-              style: SwapText.small(
-                context,
-              ).copyWith(color: palette.textSecondary),
+              style: SwapText.small(context)
+                  .copyWith(color: palette.textSecondary),
               textAlign: TextAlign.right,
             ),
       amount: amount,
@@ -305,31 +292,17 @@ class _SwapPayCardState extends State<SwapPayCard> {
         onTap: widget.onPickAsset,
         semanticLabel: LocaleKeys.swapYouPay.tr(),
       ),
-      // Signed in, an asset's address is on its way: its row keeps the card
-      // from growing when it lands. Signed out, there is nothing to hold.
-      footer:
-          address == null && balance == null && (pay == null || !state.signedIn)
-          ? null
-          : Row(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _AddressFooterButton(
-                      prefix: (a) => LocaleKeys.swapFromAddress.tr(args: [a]),
-                      address: address,
-                      asset: pay,
-                    ),
-                  ),
-                ),
-                if (pay != null && balance != null)
-                  SwapLinkButton(
-                    label: LocaleKeys.max.tr(),
-                    onPressed: locked ? null : widget.onMax,
-                    busy: state.checkingMax,
-                  ),
-              ],
-            ),
+    );
+  }
+
+  /// What the field takes, with its unit: a bare number says neither
+  /// dollars nor which asset on which network.
+  String _fieldLabel(String ticker, bool fiat) {
+    if (widget.state.pay == null) return LocaleKeys.swapAmountToPay.tr();
+    if (fiat) return 'swapAmountToPayInUsd'.tr();
+    final network = widget.network;
+    return 'swapAmountToPayIn'.tr(
+      args: [network == null ? ticker : SwapFormat.onNetwork(ticker, network)],
     );
   }
 
@@ -339,26 +312,44 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final palette = SwapPalette.of(context);
     final toggle = state.startInDoubt ? null : widget.onModeToggled;
     if (state.pay == null) {
-      return Text(r'$0.00', style: SwapText.small(context));
-    }
-    if (price == null) {
-      return Text(
-        LocaleKeys.swapPriceUnavailable.tr(),
-        style: SwapText.small(context),
-      );
+      return Text(SwapFormat.unknown, style: SwapText.small(context));
     }
     final fiat = state.amountMode == SwapAmountMode.fiat;
-    final tokenAmount = widget.tokenAmount ?? Decimal.zero;
+    if (price == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            LocaleKeys.swapPriceUnavailable.tr(),
+            style: SwapText.small(context),
+          ),
+          if (fiat)
+            SwapLinkButton(
+              label: LocaleKeys.swapEnterInToken.tr(args: [ticker]),
+              onPressed: widget.onModeToggled,
+            ),
+        ],
+      );
+    }
+    // Nothing typed, or an amount not converted yet, is unknown, not zero.
+    final tokenAmount = widget.tokenAmount;
     final text = fiat
         ? LocaleKeys.swapApproxToken.tr(
-            args: [SwapFormat.amount(tokenAmount), ticker],
+            args: [
+              tokenAmount == null
+                  ? SwapFormat.unknown
+                  : SwapFormat.amount(tokenAmount),
+              ticker,
+            ],
           )
+        : tokenAmount == null
+        ? SwapFormat.unknown
         : SwapFormat.usd(tokenAmount * price);
     final label = fiat
         ? LocaleKeys.swapEnterInToken.tr(args: [ticker])
         : LocaleKeys.swapEnterInUsd.tr();
     return SwapButtonSemantics(
-      label: '$text. $label',
+      label: tokenAmount == null ? label : '$text. $label',
       onTap: toggle,
       child: Tooltip(
         message: label,
@@ -385,6 +376,20 @@ class _SwapPayCardState extends State<SwapPayCard> {
     );
   }
 }
+
+/// Whether an estimate for the amount typed is on its way, rather than not
+/// asked for or failed.
+bool swapAwaitingEstimate(UnifiedSwapState state) =>
+    state.inputText.trim().isNotEmpty &&
+    state.hasPair &&
+    (state.preparingAssets ||
+        state.checkingMax ||
+        state.evaluation == SwapEvaluationStatus.checking ||
+        (state.evaluation == SwapEvaluationStatus.idle &&
+            state.preparationFailedAsset == null &&
+            state.failure == null &&
+            state.tradingEnabled &&
+            (state.issue?.stillPriced ?? true)));
 
 /// The price impact from which the form warns: 5%.
 final swapHighImpact = Decimal.parse('0.05');

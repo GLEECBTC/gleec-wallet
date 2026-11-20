@@ -292,6 +292,7 @@ class SwapQuote extends Equatable {
     this.feesKnown = true,
     this.refundReserve,
     this.requiredGasBalance,
+    this.requiredFeeBalances = const {},
     this.maxRetainedBalance,
     this.diagnostic,
     this.payload,
@@ -376,6 +377,23 @@ class SwapQuote extends Equatable {
   /// cap. It stands in for the estimated network fees in a balance check,
   /// never added to them. Null when the engine reports none.
   final Decimal? requiredGasBalance;
+
+  /// KDF total_fees.required_balance by currency: conservative fees that must
+  /// already be held, excluding trade principal and fees taken from volume.
+  /// These replace smaller fee estimates; they are never added twice.
+  final Map<AssetId, Decimal> requiredFeeBalances;
+
+  Set<AssetId> get fundingAssets => {
+    from,
+    for (final fee in fees)
+      if (!fee.deductedFromReceive &&
+          fee.asset != null &&
+          fee.amount > Decimal.zero)
+        fee.asset!,
+    for (final entry in requiredFeeBalances.entries)
+      if (entry.value > Decimal.zero) entry.key,
+    if (requiredGasBalance != null) from.parentId ?? from,
+  };
 
   /// For a native Max quote, the source balance retained for gas headroom
   /// and any fees on top. It is not an estimated charge or KDF requirement.
@@ -464,18 +482,32 @@ class SwapQuote extends Equatable {
   /// [sellAmount]: [costOnTopIn], with [requiredGasBalance] in place of the
   /// estimated network fees when [asset] is the network coin paying them.
   Decimal fundingOnTopIn(AssetId asset) {
-    final total = costOnTopIn(asset);
+    var total = costOnTopIn(asset);
     final required = requiredGasBalance;
-    if (required == null || asset != (from.parentId ?? from)) return total;
-    final gas = feesOnTopIn(asset)
-        .where(
-          (fee) =>
-              fee.kind == SwapFeeKind.network ||
-              fee.kind == SwapFeeKind.approvalNetwork,
-        )
-        .fold(Decimal.zero, (sum, fee) => sum + fee.amount);
-    return total - gas + (required > gas ? required : gas);
+    if (required != null && asset == (from.parentId ?? from)) {
+      final gas = feesOnTopIn(asset)
+          .where(
+            (fee) =>
+                fee.kind == SwapFeeKind.network ||
+                fee.kind == SwapFeeKind.approvalNetwork,
+          )
+          .fold(Decimal.zero, (sum, fee) => sum + fee.amount);
+      total = total - gas + (required > gas ? required : gas);
+    }
+    final conservative = requiredFeeBalances[asset];
+    return conservative != null && conservative > total ? conservative : total;
   }
+
+  /// Whether [other] is this very offer on the same terms: everything but
+  /// the US-dollar figures, which a later price read fills in without
+  /// changing what would be swapped.
+  bool isSameOfferAs(SwapQuote other) =>
+      identical(payload, other.payload) && _unpriced == other._unpriced;
+
+  SwapQuote get _unpriced => withPricing(
+    const SwapQuotePricing(),
+    fees: [for (final fee in fees) fee.withUsd(null)],
+  );
 
   /// A copy with [pricing] and fee USD values replaced.
   SwapQuote withPricing(
@@ -504,6 +536,7 @@ class SwapQuote extends Equatable {
     feesKnown: feesKnown,
     refundReserve: refundReserve,
     requiredGasBalance: requiredGasBalance,
+    requiredFeeBalances: requiredFeeBalances,
     maxRetainedBalance: maxRetainedBalance,
     diagnostic: diagnostic,
     payload: payload,
@@ -533,6 +566,7 @@ class SwapQuote extends Equatable {
     feesKnown,
     refundReserve,
     requiredGasBalance,
+    requiredFeeBalances,
     maxRetainedBalance,
     diagnostic,
   ];

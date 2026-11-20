@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://devbuilds.gleec.com/main/kdf-macos-universal2-f9632e0ec771668a6f21b37aede01a30110141cb-native-v1.zip",
+    "sha256": "a77a26c9814008c958b4f57d928ef59ca01b04b3d0c2710ea49ed8a707cfabd8",
+    "bytes": 116155484,
+    "independentHttpsVerified": true
+  },
+  {
+    "url": "https://devbuilds.gleec.com/main/kdf_f9632e0ec771668a6f21b37aede01a30110141cb-linux-x86-64-native-v1.zip",
+    "sha256": "beb961fe98dbb3d0b1542fb530c749317ecd573b57f94d63b720f4908841d899",
+    "bytes": 61332510,
+    "independentHttpsVerified": true
+  }
+]
