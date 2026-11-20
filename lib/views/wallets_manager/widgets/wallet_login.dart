@@ -25,6 +25,8 @@ import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart'
 
 export 'package:web_dex/views/common/wallet_password_dialog/password_text_field.dart';
 
+part 'wallet_login_faces.dart';
+
 class WalletLogIn extends StatefulWidget {
   const WalletLogIn({
     required this.wallet,
@@ -66,6 +68,10 @@ class _WalletLogInState extends State<WalletLogIn> {
   Future<WalletAccessStatus?>? _accessStatus;
   bool _manualPassword = false;
   bool _automaticAttempted = false;
+  bool _managedAttempt = false;
+
+  /// Some stored unlocks only show they no longer work when read.
+  bool _unlockLost = false;
 
   /// The error on screen when the user changed method; it described the other
   /// method's attempt.
@@ -89,7 +95,10 @@ class _WalletLogInState extends State<WalletLogIn> {
         Future<WalletAccessStatus?>.value();
   }
 
-  Future<void> _submitManaged({bool automatic = false}) async {
+  Future<void> _submitManaged({
+    bool automatic = false,
+    bool generatedPassword = false,
+  }) async {
     if (!automatic) _automaticAttempted = true;
     if (_waitingForLegal || context.read<AuthBloc>().state.isLoading) return;
     _waitingForLegal = true;
@@ -103,8 +112,13 @@ class _WalletLogInState extends State<WalletLogIn> {
         LegalAgreementSubmitted('wallet-login', snapshot: agreement.snapshot),
       );
     }
+    _managedAttempt = true;
     context.read<AuthBloc>().add(
-      AuthManagedSignInRequested(wallet: widget.wallet, automatic: automatic),
+      AuthManagedSignInRequested(
+        wallet: widget.wallet,
+        automatic: automatic,
+        generatedPassword: generatedPassword,
+      ),
     );
   }
 
@@ -146,6 +160,7 @@ class _WalletLogInState extends State<WalletLogIn> {
 
   void _submitLogin() async {
     if (_waitingForLegal) return;
+    _managedAttempt = false;
     _waitingForLegal = true;
     final agreement = await awaitLegalAgreement(context);
     _waitingForLegal = false;
@@ -202,9 +217,19 @@ class _WalletLogInState extends State<WalletLogIn> {
             current.authError != null &&
             !identical(previous.authError, current.authError),
         // Submitting takes focus off the field; a failed attempt hands it back.
-        listener: (_, _) {
+        listener: (_, state) {
           if (_passwordFocus.context?.mounted ?? false) {
             _passwordFocus.requestFocus();
+          }
+          if (_managedAttempt) {
+            _managedAttempt = false;
+            if (managedUnlockGone(state.authError)) {
+              // The face that explains the loss replaces the failure's message.
+              setState(() {
+                _unlockLost = true;
+                _dismissedError = state.authError;
+              });
+            }
           }
         },
         builder: (context, state) {
@@ -220,22 +245,32 @@ class _WalletLogInState extends State<WalletLogIn> {
             future: _accessStatus,
             builder: (context, snapshot) {
               final status = snapshot.data;
-              final managed = status?.hasManagedCredential == true;
+              final unlockLost =
+                  status?.lostProtection != null ||
+                  (_unlockLost && status != null);
+              final managed =
+                  status?.hasManagedCredential == true && !unlockLost;
               if (managed && !_manualPassword) {
+                final generated = status!.generatedPassword;
                 if (widget.initialQuickLogin &&
                     !_automaticAttempted &&
                     legalStatus == LegalAgreementStatus.current) {
                   _automaticAttempted = true;
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) _submitManaged(automatic: true);
+                    if (mounted) {
+                      _submitManaged(
+                        automatic: true,
+                        generatedPassword: generated,
+                      );
+                    }
                   });
                 }
                 return _ManagedWalletUnlock(
                   walletDisplayName: widget.wallet.displayName,
-                  status: status!,
+                  status: status,
                   loading: state.isLoading,
                   errorMessage: errorMessage,
-                  onUnlock: () => _submitManaged(),
+                  onUnlock: () => _submitManaged(generatedPassword: generated),
                   onPassword: () => _showPasswordFace(true),
                   exits: _exits(state.isLoading),
                 );
@@ -248,7 +283,26 @@ class _WalletLogInState extends State<WalletLogIn> {
                   ),
                 );
               }
-              final guidance = WalletPasswordGuidance.of(snapshot);
+              final recover = widget.onRecover;
+              if (unlockLost &&
+                  status!.generatedPassword &&
+                  !_manualPassword &&
+                  recover != null) {
+                return _UnlockLostRecovery(
+                  walletDisplayName: widget.wallet.displayName,
+                  passwordMayBeSaved: _passwordMayBeSaved(
+                    status.passwordManager,
+                  ),
+                  onRecover: recover,
+                  onPassword: () => _showPasswordFace(true),
+                  exits: _exits(state.isLoading, showRecover: false),
+                );
+              }
+              final guidance = WalletPasswordGuidance(
+                unlockUnavailable: snapshot.hasError,
+                generatedPassword: status?.generatedPassword ?? false,
+                unlockLost: unlockLost,
+              );
               // Without another way in, a user who never chose this password
               // needs the recovery phrase more than a list of exits.
               final recoverFirst =
@@ -409,87 +463,4 @@ class _SignInExits extends StatelessWidget {
       ),
     ],
   );
-}
-
-class _ManagedWalletUnlock extends StatelessWidget {
-  const _ManagedWalletUnlock({
-    required this.walletDisplayName,
-    required this.status,
-    required this.loading,
-    required this.errorMessage,
-    required this.onUnlock,
-    required this.onPassword,
-    required this.exits,
-  });
-  final String walletDisplayName;
-  final WalletAccessStatus status;
-  final bool loading;
-  final String? errorMessage;
-  final VoidCallback onUnlock;
-  final VoidCallback onPassword;
-  final Widget exits;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final method = walletUnlockMethodLabel(status);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ExcludeSemantics(
-          child: IconTheme.merge(
-            data: IconThemeData(size: 36, color: theme.colorScheme.primary),
-            child: status.protection == CredentialProtection.passkey
-                ? const WalletPasskeyIcon(size: 36)
-                : Icon(
-                    status.requiresAuthentication
-                        ? Icons.lock_outline
-                        : Icons.account_balance_wallet_outlined,
-                  ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _SignInTitle(
-          walletDisplayName: walletDisplayName,
-          locked: status.requiresAuthentication,
-        ),
-        if (!status.requiresAuthentication) ...[
-          const SizedBox(height: 8),
-          Text(
-            'authUnprotectedLocalDescription'.tr(),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-        ],
-        if (errorMessage != null) ...[
-          const SizedBox(height: 16),
-          WalletAccessNotice(text: errorMessage!, tone: WalletAccessTone.error),
-        ],
-        const SizedBox(height: 24),
-        TermsConsentText(actionLabel: method),
-        const SizedBox(height: 12),
-        LegalConsentAction(
-          builder: (allowed) => WalletAccessPrimaryButton(
-            buttonKey: const Key('managed-wallet-unlock'),
-            autofocus: true,
-            text: method,
-            busy: loading,
-            onPressed: allowed ? onUnlock : null,
-          ),
-        ),
-        const SizedBox(height: 8),
-        WalletAccessSecondaryButton(
-          text: 'authUsePassword'.tr(),
-          onPressed: loading ? null : onPassword,
-        ),
-        const SizedBox(height: 16),
-        exits,
-      ],
-    );
-  }
 }
