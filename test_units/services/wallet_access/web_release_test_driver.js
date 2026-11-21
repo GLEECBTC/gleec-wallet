@@ -97,18 +97,38 @@ class LocalBrowser {
     // Chrome chooses a free port and reports it in this disposable profile.
     const activePortFile = path.join(this.profile, 'DevToolsActivePort');
     if (this.debugPort === 0) fs.rmSync(activePortFile, {force:true});
-    this.process = spawn(binary, ['--headless=new', '--no-first-run', '--no-default-browser-check',
+    const flags = ['--headless=new', '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-component-update', '--disable-sync',
-      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`, 'about:blank'],
-    { stdio:'ignore' });
+      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`];
+    // Match Flutter's web driver for the local fixture on the hosted Linux runner.
+    if (process.platform === 'linux' && process.env.GLEEC_TEST_CHROME_NO_SANDBOX === 'true' &&
+        !process.env.GLEEC_TEST_HOSTED_URL) {
+      flags.push('--no-sandbox');
+    }
+    this.process = spawn(binary, [...flags, 'about:blank'], {stdio:['ignore', 'ignore', 'pipe']});
     let launchError;
     this.process.once('error', error => { launchError = error; });
     let version;
+    let startupStderr = '';
+    this.process.stderr.on('data', chunk => {
+      if (!version) startupStderr = (startupStderr + chunk).slice(-4096);
+    });
+    this.process.stderr.unref?.();
+    const startupFailure = message => {
+      const causes = [
+        [/No usable sandbox|Failed to move to new namespace|SUID sandbox helper/i, 'sandbox initialization'],
+        [/error while loading shared libraries|cannot open shared object file/i, 'missing shared library'],
+        [/Address already in use|bind\(\) failed/i, 'debug port binding'],
+        [/crashpad_handler.*(?:Permission denied|requires --database)/i, 'crash reporter initialization'],
+      ];
+      const cause = causes.find(([pattern]) => pattern.test(startupStderr))?.[1];
+      return new Error(cause ? `${message}. Chrome reported ${cause}.` : message);
+    };
     const deadline = performance.now() + 30000;
     for (let port = this.debugPort; performance.now() < deadline; await delay(100)) {
-      if (launchError) throw new Error(`Could not start isolated Chrome (${launchError.code ?? launchError.name})`);
+      if (launchError) throw startupFailure(`Could not start isolated Chrome (${launchError.code ?? launchError.name})`);
       const exit = this.process.exitCode ?? this.process.signalCode;
-      if (exit != null) throw new Error(`Isolated Chrome exited during startup (${exit})`);
+      if (exit != null) throw startupFailure(`Isolated Chrome exited during startup (${exit})`);
 
       try {
         if (port === 0) {
@@ -129,7 +149,7 @@ class LocalBrowser {
         // Chrome may still be writing the marker or opening its endpoint.
       }
     }
-    assert.ok(version, 'Isolated Chrome did not expose a local debugging endpoint within 30 seconds');
+    if (!version) throw startupFailure('Isolated Chrome did not expose a local debugging endpoint within 30 seconds');
     this.version = version.Browser;
     this.socket = new WebSocket(version.webSocketDebuggerUrl);
     this.socket.addEventListener('message', ({data}) => {

@@ -168,6 +168,7 @@ jobs:
         env:
           GLEEC_TEST_LIFECYCLE: "true"
           GLEEC_TEST_CHROME: ${{ steps.auth_chrome.outputs.chrome-path }}
+          GLEEC_TEST_CHROME_NO_SANDBOX: "true"
         run: python3 tool/run_auth_browser_acceptance.py
 
       - name: Retain public browser acceptance results
