@@ -242,6 +242,21 @@ runs:
 
         flutter pub get --enforce-lockfile
 
+        # Native configure runs before Flutter asset transformers. On a clean
+        # runner, fetch and verify the selected pinned library first so CMake /
+        # CocoaPods can enforce their existing artifact guards.
+        native_kdf_target=""
+        case "$BUILD_CMD" in
+          "flutter build windows"*) native_kdf_target=windows ;;
+          "flutter build macos"*) native_kdf_target=macos ;;
+          "flutter build linux"*) native_kdf_target=linux ;;
+          "flutter build ios"*|"flutter build ipa"*) native_kdf_target=ios ;;
+          "flutter build apk"*|"flutter build appbundle"*) native_kdf_target=android ;;
+        esac
+        if [ -n "$native_kdf_target" ]; then
+          dart run tool/prefetch_native_kdf.dart "$native_kdf_target"
+        fi
+
         for attempt in 1 2 3; do
           echo "Asset generation attempt $attempt of 3"
 
