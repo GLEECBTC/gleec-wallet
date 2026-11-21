@@ -190,6 +190,10 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
       return 'Native';
     case CoinType.smartChain:
       return 'Smart Chain';
+    case CoinType.solana:
+      return 'Solana';
+    case CoinType.solanaToken:
+      return 'SPL';
     case CoinType.sia:
       return 'Sia';
     case CoinType.ftm20:
@@ -231,8 +235,10 @@ bool isParentCoin(CoinType type, String symbol) {
   switch (type) {
     case CoinType.trx:
       return symbol == 'TRX';
+    case CoinType.solanaToken:
     case CoinType.trc20:
       return false;
+    case CoinType.solana:
     case CoinType.utxo:
     case CoinType.tendermint:
       return true;

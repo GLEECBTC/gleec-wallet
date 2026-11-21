@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Setup GH Actions
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
@@ -63,6 +63,13 @@ jobs:
             --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
             --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_BASE_URL" \
             --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$TRON_GASLESS_SERVICE_PROVIDER"
+
+      - name: Test app workspace packages
+        timeout-minutes: 5
+        run: >-
+          flutter test --no-pub
+          packages/komodo_ui_kit/test
+          packages/komodo_persistence_layer/test
 
       - name: Generate unit test coverage report
         id: unit_test_coverage

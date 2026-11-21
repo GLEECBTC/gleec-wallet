@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # Updates land on dev; release branches receive them through carries.
+    target-branch: dev
+    # "/" covers .github/workflows only. Composite actions are scanned only
+    # when their directories are listed, so list each one.
+    directories:
+      - /
+      - /.github/actions/build-provenance
+      - /.github/actions/code-coverage
+      - /.github/actions/firebase-hosting-deploy
+      - /.github/actions/flutter-deps
+      - /.github/actions/generate-assets
+      - /.github/actions/lifi-profile
+      - /.github/actions/releases/setup-android
+      - /.github/actions/releases/setup-ios
+      - /.github/actions/releases/setup-linux
+      - /.github/actions/releases/setup-macos
+      - /.github/actions/releases/setup-windows
+      - /.github/actions/validate-build
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']

@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Setup GH Actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
@@ -64,6 +64,17 @@ jobs:
       - name: Test the GasFree preview provenance gate
         timeout-minutes: 5
         run: .github/scripts/test_verify_gasfree_preview_provenance.sh
+
+      - name: Retain resolved SDK validation dependencies
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sdk-validation-dependencies-${{ github.sha }}
+          path: |
+            sdk/pubspec.lock
+            pubspec.lock
+            sdk/packages/komodo_defi_framework/app_build/build_config.json
+          retention-days: 30
 
       # komodo_defi_local_auth is deliberately NOT gated yet.
       #

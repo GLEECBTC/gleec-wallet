@@ -1180,6 +1180,7 @@
   "privateKeyExportSessionChanged": "The wallet changed. Open private key export again to continue.",
   "privateKeyExportCoverageNotice": "This file contains only the assets and key ranges shown below. Keep your recovery phrase: this export may not cover every account, change address, or future address.",
   "privateKeyExportLegacyCoverage": "Legacy wallet key for this asset.",
+  "privateKeyExportActiveWalletCoverage": "Active wallet's single Solana address",
   "privateKeyExportAccountCoverage": "HD shielded account {account}; one account key.",
   "privateKeyExportHdCoverage": "HD account {account}, {chain} addresses {start}–{end} (inclusive).",
   "privateKeyExportReceiving": "receiving",

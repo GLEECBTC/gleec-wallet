@@ -2,6 +2,11 @@
 
 Before proceeding, make sure that you have set up a working environment for your host platform according to the [guide](PROJECT_SETUP.md#host-platform-setup).
 
+Use Flutter **3.50.0 / Dart 3.14.0**, pinned in `.fvmrc`. Run `fvm install`
+and use `fvm flutter` for the commands below, or prepend `.fvm/flutter_sdk/bin`
+to your session's `PATH`. The SDK submodule uses the same pin. See
+[Flutter version management](FLUTTER_VERSION.md).
+
 There are two main commands, `flutter run` to run the app or `flutter build` to build for the specified platform.
 
 When using `flutter run` you can specify the mode in which the app will run. By default, it uses the debug mode.
@@ -58,7 +63,7 @@ to no integrator. Wallet defaults, confirmed for this integration, are:
 | Build define | Default |
 |---|---|
 | `LIFI_INTEGRATOR_ENABLED` | `true` |
-| `LIFI_INTEGRATOR_NAME` | `gleec-dex-staging` |
+| `LIFI_INTEGRATOR_NAME` | `gleec-dex-production` |
 | `LIFI_INTEGRATOR_FEE_BPS` | `178` |
 | `LIFI_FEE_BPS` | `22` |
 
@@ -73,6 +78,9 @@ restarts. KDF requests the fee and validates the provider's allocation. Neither
 Flutter nor the proxy calculates or injects a commission; the proxy holds the API
 key. The combined included fee is displayed once, already reflected in the quote.
 These 178 + 22 bps are deployment policy, not two independently measured payouts.
+
+For the public production profile, CI validation and artifact verification,
+see [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md).
 
 The coin feed remains pinned. SDK normalization supplies missing native-platform
 fee models for Base (`op_stack`), Mantle (`mantle`), Monad (`monad`) and Avalanche

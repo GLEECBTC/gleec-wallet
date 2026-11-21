@@ -15,11 +15,11 @@ runs:
   steps:
     - name: Setup Visual Studio
       id: setup_msbuild
-      uses: microsoft/setup-msbuild@v1.3
+      uses: microsoft/setup-msbuild@ede762b26a2de8d110bb5a3db4d7e0e080c0e917 # v1.3
 
     - name: Install Windows SDK
       id: install_sdk
-      uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
+      uses: GuillaumeFalourd/setup-windows10-sdk-action@9979bedbf6ae74f038cc338622ba015942ed2408 # v2
       with:
         sdk-version: 26100
 

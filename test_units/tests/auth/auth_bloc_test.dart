@@ -822,6 +822,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     ),
     Mnemonic? mnemonic,
     Map<String, dynamic> initialMetadata = const {},
+    String? provisioningId,
   }) async {
     if (getUsersError != null) throw getUsersError!;
     if (userToReturn?.walletId.name == walletName) {

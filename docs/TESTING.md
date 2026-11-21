@@ -32,6 +32,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | Suite | Where | Command | CI workflow | Gates? |
 |---|---|---|---|---|
 | Unit + widget | `test_units/` | `flutter test test_units/main.dart` **+ 4 defines** | `unit-tests-on-pr.yml` | Yes |
+| App workspace packages | `packages/komodo_ui_kit/test`, `packages/komodo_persistence_layer/test` | `flutter test --no-pub packages/komodo_ui_kit/test packages/komodo_persistence_layer/test` | `unit-tests-on-pr.yml` | Yes |
 | Integration / GUI | `test_integration/` | `dart run_integration_tests.dart` | `ui-tests-on-pr.yml` | Yes |
 | KDF harness — replay | `sdk/packages/komodo_defi_harness` | `flutter test --exclude-tags bench` | `kdf-harness-on-pr.yml` | Yes |
 | KDF harness — bench | same | `flutter test --tags bench` + `compare_bench.dart` | `kdf-harness-on-pr.yml` | Yes, at 30% regression |
@@ -69,9 +70,13 @@ how the app reads it.
 
 ### The aggregator trap
 
-CI runs *only* `test_units/main.dart`. **A test file not reachable from it never runs,
-anywhere, and nothing reports that.** Adding a test means adding an import there. Two
-files are orphaned today — see §9.
+The app unit/widget step runs *only* `test_units/main.dart`. **A new file under
+`test_units/` that is not reachable from it does not run in CI.** Add an import
+there when adding a test. Two files are orphaned today — see §9.
+
+The same workflow separately runs the two app-owned workspace package test
+directories. This includes the persistence close/reopen regression and the UI
+scrollbar focus regression; SDK package suites remain separate.
 
 ### Coverage
 
@@ -122,6 +127,21 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
 - **Revert your tree afterwards.** `flutter test` rewrites `pubspec.lock`,
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
+
+### LI.FI production CI gate
+
+Run `bash .github/scripts/test_lifi_profiles.sh` after resolving the locked Wallet
+dependencies. The existing required `validate_code_guidelines` job runs this on
+every PR. It runs the public configuration/command regressions and compiles the
+Dart policy tests for the compiled default and explicit production profile, checking the expected identity,
+178/22 bps, the proxy and serialized KDF startup fields. Staging requests must fail before Flutter starts. No API key, server or
+funded wallet is required. The SDK reference YAML must match its canonical JSON;
+release event, artifact naming and pinned-action checks are included. The Dart
+tests are also imported by `test_units/main.dart`.
+
+The separate `lifi_profile_validation` workflow is a quick Python-only check,
+not the required merge gate. See [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md)
+for the public artifact records and verification tools.
 
 ### LI.FI read-only native smoke
 

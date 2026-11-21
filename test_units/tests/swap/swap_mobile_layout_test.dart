@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -155,6 +156,7 @@ void _formCases() {
           final data = node.getSemanticsData();
           return data.label == 'Swap' &&
               data.flagsCollection.isHeader &&
+              data.headingLevel == 1 &&
               data.flagsCollection.namesRoute;
         }),
         findsOneWidget,
@@ -225,6 +227,7 @@ void _formCases() {
         find.semantics.byPredicate(
           (node) =>
               node.getSemanticsData().label == 'Swap' &&
+              node.getSemanticsData().headingLevel == 1 &&
               node.getSemanticsData().flagsCollection.isHeader,
         ),
         findsOneWidget,

@@ -38,7 +38,7 @@ extension WidgetTesterPumpExtension on WidgetTester {
     }
 
     throw TimeoutException(
-      'Timed out after ${timeout.inMinutes}m waiting for '
+      'Timed out after ${timeout.inSeconds}s waiting for '
       '${describeTarget ?? finder.toString()}',
     );
   }
