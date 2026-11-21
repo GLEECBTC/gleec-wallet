@@ -40,6 +40,7 @@ import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -163,9 +164,8 @@ void main() {
             supportedLocales: context.supportedLocales,
             localizationsDelegates: context.localizationDelegates,
             builder: (context, app) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(layout.textScale)),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(layout.textScale)),
               child: app!,
             ),
             home: RepositoryProvider<SwapServices>.value(
@@ -357,9 +357,9 @@ void main() {
       services.elsewhere[eth] = d('2.9');
       return form(issue: SwapFormIssue.insufficient);
     },
-    'a hardware wallet': () => form(
-      evaluation: SwapEvaluationStatus.idle,
-    ).copyWith(tradingEnabled: false, hardwareWallet: true),
+    'a hardware wallet': () =>
+        form(evaluation: SwapEvaluationStatus.idle)
+            .copyWith(tradingEnabled: false, hardwareWallet: true),
     'signed out': () =>
         form(
           issue: SwapFormIssue.signedOut,
@@ -384,12 +384,20 @@ void main() {
     group(layout.name, () {
       for (final MapEntry(key: name, value: state) in entryStates.entries) {
         testWidgets('entry: $name', (tester) async {
-          swap.emit(state());
+          final entryState = state();
+          swap.emit(entryState);
           await pump(tester, layout, const SwapEntryView());
           await expectSwapAccessible(tester, largeText: layout.textScale > 1);
           expect(
             tester.getSemantics(find.byKey(const Key('swap-amount'))),
-            isSemantics(label: 'Amount to pay', isTextField: true),
+            isSemantics(
+              // InputDecorator includes the visible currency affix in the
+              // merged field label. Keep the fiat unit audible as well.
+              label: entryState.amountMode == SwapAmountMode.fiat
+                  ? 'Amount to pay\n\$'
+                  : 'Amount to pay',
+              isTextField: true,
+            ),
           );
         });
       }
@@ -419,9 +427,8 @@ void main() {
         swap.emit(form());
         await pump(tester, layout, const SwapEntryView());
         swap.emit(
-          form(
-            evaluation: SwapEvaluationStatus.idle,
-          ).copyWith(inputText: '2', checkingMax: true),
+          form(evaluation: SwapEvaluationStatus.idle)
+              .copyWith(inputText: '2', checkingMax: true),
         );
         // The spinners never settle: one pump delivers the state, one draws.
         await tester.pump();

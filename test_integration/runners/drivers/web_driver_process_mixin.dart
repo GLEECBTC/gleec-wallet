@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,11 +13,7 @@ mixin WebDriverProcessMixin {
 
   bool get isRunning => _processId != null;
 
-  Future<void> startDriver(
-    String executableName,
-    List<String> args, {
-    ProcessStartMode mode = ProcessStartMode.detachedWithStdio,
-  }) async {
+  Future<void> startDriver(String executableName, List<String> args) async {
     if (await isPortInUse(port)) {
       print('Port $port is already in use. Please stop the running $driverName'
           ' or use a different port.');
@@ -38,22 +35,45 @@ mixin WebDriverProcessMixin {
 
     final driverPath = WebBrowserDriver.findDriverExecutable(executableName);
     print('Running: $driverPath ${args.join(' ')}');
-    final process = await Process.start(driverPath, args, mode: mode);
+    final process = await Process.start(driverPath, args);
     _processId = process.pid;
 
     _captureStream(process.stdout, 'stdout').ignore();
     _captureStream(process.stderr, 'stderr').ignore();
+    int? exitCode;
+    unawaited(
+      process.exitCode.then((code) {
+        exitCode = code;
+      }),
+    );
 
-    await Future<void>.delayed(const Duration(seconds: 2));
-    // check if process is still running and did not exit with an exit code
-    final isProcessRunning = await _isProcessRunning(_processId ?? -1, port);
-    if (!isProcessRunning) {
-      _processId = null;
-      throw Exception(
-          'Failed to start $driverName. Process $_processId not running');
+    const startupTimeout = Duration(seconds: 15);
+    final startup = Stopwatch()..start();
+    while (exitCode == null && startup.elapsed < startupTimeout) {
+      if (await _isDriverListening(port) && exitCode == null) {
+        print('$driverName started on port $port (PID: ${process.pid})');
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
 
-    print('$driverName started on port $port (PID: $_processId)');
+    final startupExitCode = exitCode;
+    if (startupExitCode != null) {
+      _processId = null;
+      throw ProcessException(
+        driverPath,
+        args,
+        '$driverName (PID ${process.pid}) exited before opening port $port',
+        startupExitCode,
+      );
+    }
+    await stopDriver();
+    throw ProcessException(
+      driverPath,
+      args,
+      '$driverName (PID ${process.pid}) did not open port $port '
+      'within ${startupTimeout.inSeconds} seconds',
+    );
   }
 
   Future<void> stopDriver() async {
@@ -99,50 +119,15 @@ mixin WebDriverProcessMixin {
   }
 }
 
-Future<bool> _isProcessRunning(int pid, int port) async {
-  if (pid <= 0) {
-    return false;
-  }
-
-  bool isRunning = true;
-  if (Platform.isWindows) {
-    isRunning = await _isWindowsProcessRunning(pid);
-  } else {
-    isRunning = await _isUnixProcessRunning(pid);
-  }
-
-  if (!isRunning) {
-    return false;
-  }
-
+Future<bool> _isDriverListening(int port) async {
   try {
-    final socket = await Socket.connect('127.0.0.1', port);
-    await socket.close();
+    final socket = await Socket.connect(
+      InternetAddress.loopbackIPv4,
+      port,
+      timeout: const Duration(seconds: 1),
+    );
+    socket.destroy();
   } on SocketException catch (_) {
-    return false;
-  }
-
-  return true;
-}
-
-Future<bool> _isUnixProcessRunning(int pid) async {
-  final result = await Process.run(
-    'ps',
-    ['-p', pid.toString()],
-  );
-  if (result.exitCode != 0) {
-    return false;
-  }
-
-  return true;
-}
-
-Future<bool> _isWindowsProcessRunning(int pid) async {
-  final result = await Process.run(
-    'tasklist',
-    ['/FI', 'PID eq $pid'],
-  );
-  if (result.exitCode != 0) {
     return false;
   }
 

@@ -51,18 +51,12 @@ class NftReceiveCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.max,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                LocaleKeys.network.tr(),
-                style: textTheme.bodyS,
-              ),
+              Text(LocaleKeys.network.tr(), style: textTheme.bodyS),
               if (chain != null) BlockchainBadge(blockchain: chain),
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            LocaleKeys.scanToGetAddress.tr(),
-            style: textTheme.bodyS,
-          ),
+          Text(LocaleKeys.scanToGetAddress.tr(), style: textTheme.bodyS),
           const SizedBox(height: 16),
           if (address != null)
             Column(
@@ -79,10 +73,12 @@ class NftReceiveCard extends StatelessWidget {
                     selector: (state) => state.themeMode,
                     builder: (context, state) {
                       final isDarkTheme = state == ThemeMode.dark;
-                      final Color foregroundColor =
-                          isDarkTheme ? Colors.white : Colors.black;
-                      final Color backgroundColor =
-                          isDarkTheme ? colorScheme.surfContLow : Colors.white;
+                      final Color foregroundColor = isDarkTheme
+                          ? Colors.white
+                          : Colors.black;
+                      final Color backgroundColor = isDarkTheme
+                          ? colorScheme.surfContLow
+                          : Colors.white;
 
                       return QRCodeAddress(
                         currentAddress: address.address,
@@ -110,14 +106,14 @@ class NftReceiveCard extends StatelessWidget {
                 ),
                 if (!address.isActiveForSwap) ...[
                   const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: colorScheme.orange.withOpacity(0.15),
-                    ),
+                  Material(
+                    borderRadius: BorderRadius.circular(12),
+                    color: colorScheme.orange.withValues(alpha: 0.15),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       leading: Icon(
                         Icons.warning_amber_rounded,
                         color: colorScheme.orange,

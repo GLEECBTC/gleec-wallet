@@ -23,10 +23,18 @@ void main() {
 
     group('token icon', () {
       testWidgets('a wallet asset shows its logo, silently', (tester) async {
-        final semantics = tester.ensureSemantics();
+        const boundary = Key('token-icon-semantics');
         await pumpSwapUi(
           tester,
-          Center(child: SwapTokenIcon(asset: eth, size: 40)),
+          Center(
+            child: Semantics(
+              key: boundary,
+              container: true,
+              explicitChildNodes: true,
+              label: 'Icon region',
+              child: SwapTokenIcon(asset: eth, size: 40),
+            ),
+          ),
           settle: false,
         );
 
@@ -35,16 +43,12 @@ void main() {
           const Size.square(40),
         );
         expect(tester.widget<AssetLogo>(find.byType(AssetLogo)).size, 40);
-        // The loaded image can add its own exclusion wrapper. Check the
-        // announced result so asset-cache state cannot change this contract.
-        expect(
-          tester
-              .getSemantics(find.byType(SwapTokenIcon))
-              .getSemanticsData()
-              .label,
-          isEmpty,
-        );
-        semantics.dispose();
+        // Assert what a screen reader receives, independently of exclusions
+        // nested inside AssetLogo or Flutter's image implementation.
+        final semantics = tester.getSemantics(find.byKey(boundary));
+        expect(semantics.getSemanticsData().label, 'Icon region');
+        expect(semantics.getSemanticsData().flagsCollection.isImage, isFalse);
+        expect(semantics.childrenCount, 0);
       });
 
       testWidgets('an unknown asset shows its ticker, at most three letters', (

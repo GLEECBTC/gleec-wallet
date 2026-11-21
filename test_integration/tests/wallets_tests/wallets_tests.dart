@@ -15,6 +15,7 @@ import 'test_withdraw.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  reportFrameworkFailures(binding);
 
   walletsWidgetTests(binding);
 }

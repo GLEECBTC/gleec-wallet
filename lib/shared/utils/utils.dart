@@ -235,9 +235,9 @@ String getAddressExplorerUrl(Coin coin, String address) {
   final String explorerAddressUrl = coin.explorerAddressUrl;
   if (explorerUrl.isEmpty || explorerAddressUrl.isEmpty) return '';
 
-  return ExplorerUrlPattern(
-        baseUrl: Uri.tryParse(explorerUrl),
-      ).buildUrl(explorerAddressUrl, {'ADDRESS': address})?.toString() ??
+  return ExplorerUrlPattern(baseUrl: Uri.tryParse(explorerUrl))
+          .buildUrl(explorerAddressUrl, {'ADDRESS': address})
+          ?.toString() ??
       '';
 }
 

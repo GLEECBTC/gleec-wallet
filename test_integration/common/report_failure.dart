@@ -1,3 +1,4 @@
+import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 /// Runs [body] and records the real error on the binding before rethrowing.
@@ -25,4 +26,18 @@ Future<void> reportingFailure(
     };
     rethrow;
   }
+}
+
+/// Records failures reported by the Flutter binding outside an awaited stage.
+/// Call this while registering the suite, after initializing the binding.
+void reportFrameworkFailures(IntegrationTestWidgetsFlutterBinding binding) {
+  final previous = reportTestException;
+  reportTestException = (details, description) {
+    final data = binding.reportData ??= <String, dynamic>{};
+    data.putIfAbsent(
+      'failure_framework',
+      () => '$description: ${details.exceptionAsString()}\n\n${details.stack}',
+    );
+    previous(details, description);
+  };
 }

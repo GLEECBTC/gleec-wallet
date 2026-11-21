@@ -26,11 +26,12 @@ void main() {
     bool splMax = false,
     bool token2022 = false,
     String origin = 'http://localhost:8787',
+    String engineCommit = engine,
   }) => SolanaBuildConfig(
     enabled: true,
     splMaxEnabled: splMax,
     token2022Enabled: token2022,
-    engineCommit: engine,
+    engineCommit: engineCommit,
     coinsCommit: coins,
     catalogSha256: digest,
     storageNamespace: 'solana-preview-${digest.substring(0, 12)}',
@@ -72,8 +73,21 @@ void main() {
     });
 
     test('known engine withdrawal defects cannot be overridden by flags', () {
-      expect(candidate(splMax: true).validate, throwsStateError);
-      expect(candidate(token2022: true).validate, throwsStateError);
+      expect(SolanaBuildConfig.enginesWithOpenWithdrawalDefects, {
+        engine,
+        '46769c4df3b043669eee59508bf1af017157dcdd',
+      });
+      for (final commit in SolanaBuildConfig.enginesWithOpenWithdrawalDefects) {
+        expect(
+          candidate(splMax: true, engineCommit: commit).validate,
+          throwsStateError,
+        );
+        expect(
+          candidate(token2022: true, engineCommit: commit).validate,
+          throwsStateError,
+        );
+        expect(candidate(engineCommit: commit).validate, returnsNormally);
+      }
     });
 
     test('browser candidate refuses missing or different preview origins', () {

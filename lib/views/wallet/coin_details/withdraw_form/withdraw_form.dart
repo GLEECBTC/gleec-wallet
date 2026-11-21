@@ -2529,6 +2529,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
               const SizedBox(height: 16),
               Semantics(
                 header: true,
+                headingLevel: 1,
                 liveRegion: true,
                 child: Text(
                   LocaleKeys.successPageHeadline.tr(),
