@@ -148,6 +148,13 @@ void main() {
 
     expect(find.text('Not available with GLEEC'), findsOneWidget);
     expect(
+      tester
+          .getSemantics(find.text('Not available with GLEEC'))
+          .getSemanticsData()
+          .headingLevel,
+      2,
+    );
+    expect(
       find.text(
         "GLEEC trades only on the order book, where these assets aren't "
         'listed.',

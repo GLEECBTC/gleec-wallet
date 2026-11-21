@@ -107,6 +107,12 @@ jobs:
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           TRON_GASLESS_REQUIRED_NETWORK: "tron"
 
+      - name: Verify Android native runtime coverage
+        if: ${{ matrix.platform == 'Android' }}
+        run: |
+          python3 -m unittest discover -s android -p 'test_verify_apk.py'
+          python3 android/verify_apk.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: Compute short commit SHA
         id: vars
         shell: bash

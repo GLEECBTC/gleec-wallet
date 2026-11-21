@@ -64,6 +64,13 @@ jobs:
             --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_BASE_URL" \
             --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$TRON_GASLESS_SERVICE_PROVIDER"
 
+      - name: Test app workspace packages
+        timeout-minutes: 5
+        run: >-
+          flutter test --no-pub
+          packages/komodo_ui_kit/test
+          packages/komodo_persistence_layer/test
+
       - name: Generate unit test coverage report
         id: unit_test_coverage
         timeout-minutes: 15

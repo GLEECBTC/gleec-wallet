@@ -20,6 +20,12 @@ runs:
         want=$(python3 -c 'import json;print(json.load(open(".fvmrc"))["flutter"])')
         echo ".fvmrc pins Flutter $want"
 
+        sdk_version=$(python3 -c 'import json;print(json.load(open("sdk/.fvmrc"))["flutter"])')
+        if [ "$sdk_version" != "$want" ]; then
+          echo "::error file=sdk/.fvmrc::SDK pins Flutter $sdk_version but app pins $want"
+          exit 1
+        fi
+
         status=0
         # Every `flutter-version:` across the workflows, not just this action -
         # any one of them installing a different version reintroduces the drift.
@@ -51,7 +57,7 @@ runs:
       uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
         # NB! Must match `.fvmrc` - the step above enforces it.
-        flutter-version: "3.41.4"
+        flutter-version: "3.50.0"
         channel: "stable"
 
     - name: Prepare build directory

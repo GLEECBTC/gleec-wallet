@@ -9,6 +9,7 @@ import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
 import 'tests/swap/solana_atomic_lifecycle_test.dart'
     as solana_atomic_lifecycle_test;
 import 'package:flutter_test/flutter_test.dart';
+
 import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
 import 'services/file_loader/guarded_file_saver_test.dart'
@@ -62,6 +63,12 @@ import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
 // reachable from here never runs - these 18 were silently skipped.
 import 'bloc/cex_market_data/common/update_frequency_backoff_strategy_test.dart'
     as update_frequency_backoff_strategy_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_calculator_test.dart'
+    as profit_loss_calculator_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_repository_test.dart'
+    as profit_loss_repository_test;
+import 'bloc/assets_overview/asset_overview_bloc_test.dart'
+    as asset_overview_bloc_test;
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
@@ -83,6 +90,7 @@ import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/fiat/fiat_provider_failure_test.dart'
     as fiat_provider_failure_test;
 import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
 import 'tests/mm2/sdk_build_manifest_test.dart' as sdk_build_manifest_test;
 import 'tests/ci/lifi_workflow_contract_test.dart'
     as lifi_workflow_contract_test;
@@ -98,6 +106,8 @@ import 'tests/views/dex/simple/form/tables/coins_table_item_key_test.dart'
     as coins_table_item_key_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
+import 'tests/views/dex/swap_terminal_status_test.dart'
+    as swap_terminal_status_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
     as gasless_pending_transfer_panel_test;
 import 'tests/wallet/coin_details/gasless_recovery_banner_scope_test.dart'
@@ -681,6 +691,9 @@ void main() {
   // Previously unreachable suites. Each declares its own groups inside its
   // `main()`, so calling it here is equivalent to running the file directly.
   update_frequency_backoff_strategy_test.main();
+  profit_loss_calculator_test.main();
+  profit_loss_repository_test.main();
+  asset_overview_bloc_test.main();
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
@@ -743,6 +756,7 @@ void main() {
   swap_routed_funding_test.main();
   swap_release_integration_test.main();
   lifi_integrator_policy_test.main();
+  prefetch_native_kdf_test.main();
   sdk_build_manifest_test.main();
   lifi_workflow_contract_test.main();
   swap_routed_payout_test.main();
@@ -886,6 +900,7 @@ void main() {
   swap_sign_in_surface_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
+  swap_terminal_status_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
   gasless_recovery_banner_scope_test.main();

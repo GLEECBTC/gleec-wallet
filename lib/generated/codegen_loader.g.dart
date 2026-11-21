@@ -1336,6 +1336,8 @@ abstract class LocaleKeys {
       'privateKeyExportCoverageNotice';
   static const privateKeyExportLegacyCoverage =
       'privateKeyExportLegacyCoverage';
+  static const privateKeyExportActiveWalletCoverage =
+      'privateKeyExportActiveWalletCoverage';
   static const privateKeyExportAccountCoverage =
       'privateKeyExportAccountCoverage';
   static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
@@ -1952,8 +1954,6 @@ abstract class LocaleKeys {
   static const withdrawSolanaAccountDeposit = 'withdrawSolanaAccountDeposit';
   static const withdrawSolanaAccountDepositDescription =
       'withdrawSolanaAccountDepositDescription';
-  static const privateKeyExportActiveWalletCoverage =
-      'privateKeyExportActiveWalletCoverage';
   static const swapReviewRequiredFunding = 'swapReviewRequiredFunding';
   static const swapReviewRequiredFundingExplanation =
       'swapReviewRequiredFundingExplanation';

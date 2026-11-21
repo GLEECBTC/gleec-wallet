@@ -16,6 +16,7 @@ on:
         ci/*,
       ]
     paths:
+      - ".fvmrc"
       - ".docker/**"
       - "docs/LIFI_*BUILD_DEFINES.json"
       - "tool/lifi_build_config.py"
@@ -34,6 +35,9 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Test Docker build wrapper
+        run: python3 .docker/test_build.py
 
       - name: Select public LI.FI profile
         id: lifi_profile
@@ -57,7 +61,7 @@ jobs:
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
         run: |
           chmod +x .docker/build.sh
-          sh .docker/build.sh linux release
+          bash .docker/build.sh linux release
 
       - name: Compute short commit SHA
         id: vars

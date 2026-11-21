@@ -1,6 +1,5 @@
-FROM komodo/android-sdk:35 AS final
+FROM komodo/android-sdk:36 AS final
 
-ENV FLUTTER_VERSION="3.41.4"
 ENV HOME="/home/komodo"
 ENV USER="komodo"
 ENV PATH=$PATH:$HOME/flutter/bin
@@ -9,9 +8,12 @@ USER $USER
 
 WORKDIR /app
 
-RUN curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz && \
-    tar -xvf flutter_linux_${FLUTTER_VERSION}-stable.tar.xz -C ${HOME} && \
-    rm flutter_linux_${FLUTTER_VERSION}-stable.tar.xz && \
-    flutter config --no-analytics  && \
+# Share the exact app/CI pin; a new .fvmrc invalidates this image layer.
+COPY --chown=komodo:komodo .fvmrc /tmp/flutter-version.json
+RUN FLUTTER_VERSION=$(jq -er '.flutter | select(type == "string") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' /tmp/flutter-version.json) && \
+    curl --fail --location --output flutter.tar.xz "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" && \
+    tar -xf flutter.tar.xz -C "${HOME}" && \
+    rm flutter.tar.xz /tmp/flutter-version.json && \
+    flutter config --no-analytics && \
     yes "y" | flutter doctor --android-licenses && \
     flutter doctor

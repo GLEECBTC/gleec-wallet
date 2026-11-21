@@ -971,6 +971,9 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       cancelPendingActivation();
     } on ActivationPolicyException {
       cancelPendingActivation();
+    } on Exception catch (error, stackTrace) {
+      // The repository publishes suspended assets when activation fails.
+      _log.warning('Coin activation did not complete', error, stackTrace);
     } finally {
       if (isInitialLogin) {
         frameSpanEnd(_activationStormSpan);

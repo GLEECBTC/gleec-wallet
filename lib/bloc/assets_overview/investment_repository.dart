@@ -1,4 +1,6 @@
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:logging/logging.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_calculator.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/fiat_value.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
 import 'package:web_dex/model/coin.dart';
@@ -47,6 +49,10 @@ class InvestmentRepository {
 
         return totalPurchased;
       } catch (e, s) {
+        if (e is ProfitLossPriceUnavailable ||
+            e is AuthSessionChangedException) {
+          rethrow;
+        }
         _log.shout('Failed to calculate total investment', e, s);
         return FiatValue.usd(0);
       }
