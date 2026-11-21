@@ -12,7 +12,7 @@ const { createHash } = require('node:crypto');
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 class LocalBrowser {
-  constructor(root, { port = 18768, debugPort = 9223 } = {}) {
+  constructor(root, { port = 18768, debugPort = 0 } = {}) {
     this.root = root;
     this.port = port;
     this.debugPort = debugPort;
@@ -94,17 +94,42 @@ class LocalBrowser {
     const binary = process.env.GLEEC_TEST_CHROME ?? (process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome');
     assert.ok(fs.existsSync(binary), 'Set GLEEC_TEST_CHROME to an installed Chrome executable');
+    // Chrome chooses a free port and reports it in this disposable profile.
+    const activePortFile = path.join(this.profile, 'DevToolsActivePort');
+    if (this.debugPort === 0) fs.rmSync(activePortFile, {force:true});
     this.process = spawn(binary, ['--headless=new', '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-component-update', '--disable-sync',
       `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`, 'about:blank'],
     { stdio:'ignore' });
+    let launchError;
+    this.process.once('error', error => { launchError = error; });
     let version;
-    for (let count=0;count<100;count++) {
-      if (this.process.exitCode != null) throw new Error('Isolated Chrome exited during startup');
-      try { version=await (await fetch(`http://127.0.0.1:${this.debugPort}/json/version`)).json(); break; }
-      catch (_) { await delay(100); }
+    const deadline = performance.now() + 30000;
+    for (let port = this.debugPort; performance.now() < deadline; await delay(100)) {
+      if (launchError) throw new Error(`Could not start isolated Chrome (${launchError.code ?? launchError.name})`);
+      const exit = this.process.exitCode ?? this.process.signalCode;
+      if (exit != null) throw new Error(`Isolated Chrome exited during startup (${exit})`);
+
+      try {
+        if (port === 0) {
+          const value = Number(fs.readFileSync(activePortFile, 'utf8').split('\n')[0]);
+          if (!Number.isInteger(value) || value < 1 || value > 65535) continue;
+          port = value;
+        }
+        const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (!response.ok) continue;
+        const candidate = await response.json();
+        if (typeof candidate?.webSocketDebuggerUrl === 'string') {
+          version = candidate;
+          break;
+        }
+      } catch (_) {
+        // Chrome may still be writing the marker or opening its endpoint.
+      }
     }
-    assert.ok(version, 'Isolated Chrome must expose its local debugging endpoint');
+    assert.ok(version, 'Isolated Chrome did not expose a local debugging endpoint within 30 seconds');
     this.version = version.Browser;
     this.socket = new WebSocket(version.webSocketDebuggerUrl);
     this.socket.addEventListener('message', ({data}) => {
