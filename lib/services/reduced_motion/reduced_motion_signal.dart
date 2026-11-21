@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:web_dex/shared/utils/window/window.dart' as window;
 
+import 'desktop_reduced_motion_stub.dart'
+    if (dart.library.ffi) 'desktop_reduced_motion_native.dart';
+
 /// The system "reduce motion" setting on the platforms whose Flutter engine
 /// does not report it: web, macOS and Windows.
 ///
@@ -14,6 +17,7 @@ class ReducedMotionSignal extends ValueNotifier<bool> {
     MethodChannel channel = const MethodChannel('gleec/reduced-motion'),
     bool isWeb = kIsWeb,
     TargetPlatform? platform,
+    bool? Function() desktopQuery = readDesktopReducedMotion,
     bool Function() webQuery = window.prefersReducedMotion,
     void Function() Function(void Function(bool reduce)) watchWeb =
         window.watchReducedMotion,
@@ -28,7 +32,12 @@ class ReducedMotionSignal extends ValueNotifier<bool> {
     if (target == TargetPlatform.macOS || target == TargetPlatform.windows) {
       _listening = true;
       _channel.setMethodCallHandler(_onCall);
-      unawaited(_read());
+      final initialValue = desktopQuery();
+      if (initialValue == null) {
+        unawaited(_read());
+      } else {
+        value = initialValue;
+      }
     }
   }
 
@@ -36,12 +45,14 @@ class ReducedMotionSignal extends ValueNotifier<bool> {
   void Function()? _stopWatchingWeb;
   bool _listening = false;
   bool _disposed = false;
+  bool _receivedChange = false;
 
   // Never awaited on the way to the first frame, so a runner without the
   // channel only costs the setting, not startup.
   Future<void> _read() async {
     try {
-      _set(await _channel.invokeMethod<bool>('get') ?? false);
+      final initialValue = await _channel.invokeMethod<bool>('get');
+      if (!_receivedChange && initialValue != null) _set(initialValue);
     } on MissingPluginException {
       // A runner built before the channel existed.
     } on PlatformException {
@@ -51,6 +62,7 @@ class ReducedMotionSignal extends ValueNotifier<bool> {
 
   Future<void> _onCall(MethodCall call) async {
     if (call.method == 'changed' && call.arguments is bool) {
+      _receivedChange = true;
       _set(call.arguments as bool);
     }
   }
