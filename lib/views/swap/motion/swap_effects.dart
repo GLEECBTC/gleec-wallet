@@ -171,30 +171,17 @@ class _EffectPlayerState extends State<_EffectPlayer>
   Animation<double> _progress = kAlwaysCompleteAnimation;
   CurvedAnimation? _curve;
   bool _started = false;
-  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, value: 1);
-    _lifecycle = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state != AppLifecycleState.resumed) _controller.value = 1;
-      },
-    );
-  }
-
-  bool get _canPlay {
-    final state = WidgetsBinding.instance.lifecycleState;
-    return SwapMotion.enabled(context) &&
-        TickerMode.valuesOf(context).enabled &&
-        (state == null || state == AppLifecycleState.resumed);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_canPlay) {
+    if (!SwapMotion.enabled(context)) {
       _controller.value = 1;
     } else if (!_started && widget.onMount && widget.animate) {
       _play();
@@ -205,12 +192,8 @@ class _EffectPlayerState extends State<_EffectPlayer>
   @override
   void didUpdateWidget(_EffectPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.animate) {
-      _controller.value = 1;
-      return;
-    }
     if (widget.trigger == oldWidget.trigger) return;
-    if (widget.animate && _canPlay) {
+    if (widget.animate && SwapMotion.enabled(context)) {
       _play();
     } else {
       _controller.value = 1;
@@ -234,7 +217,6 @@ class _EffectPlayerState extends State<_EffectPlayer>
 
   @override
   void dispose() {
-    _lifecycle.dispose();
     _curve?.dispose();
     _controller.dispose();
     super.dispose();
@@ -281,31 +263,7 @@ class _SwapPressScaleState extends State<SwapPressScale>
     curve: SwapMotion.standard,
   );
   late final Animation<double> _progress = ReverseAnimation(_curve);
-  late final AppLifecycleListener _lifecycle;
   Offset? _down;
-
-  @override
-  void initState() {
-    super.initState();
-    _lifecycle = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state != AppLifecycleState.resumed) _reset();
-      },
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!SwapMotion.enabled(context) || !TickerMode.valuesOf(context).enabled) {
-      _reset();
-    }
-  }
-
-  void _reset() {
-    _down = null;
-    _controller.value = 0;
-  }
 
   void _press(PointerDownEvent event) {
     if (!widget.enabled || !SwapMotion.enabled(context)) return;
@@ -333,7 +291,6 @@ class _SwapPressScaleState extends State<SwapPressScale>
 
   @override
   void dispose() {
-    _lifecycle.dispose();
     _curve.dispose();
     _controller.dispose();
     super.dispose();

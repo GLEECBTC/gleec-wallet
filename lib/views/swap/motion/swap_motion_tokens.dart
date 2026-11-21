@@ -16,16 +16,9 @@ abstract final class SwapMotion {
   static const pop = Duration(milliseconds: 240);
   static const settle = Duration(milliseconds: 360);
   static const reveal = Duration(milliseconds: 300);
-  static const screen = Duration(milliseconds: 240);
+  static const screen = Duration(milliseconds: 300);
   static const grow = Duration(milliseconds: 280);
   static const stagger = Duration(milliseconds: 60);
-  static const selection = Duration(milliseconds: 160);
-  static const quote = Duration(milliseconds: 160);
-  static const pair = Duration(milliseconds: 180);
-  static const details = Duration(milliseconds: 200);
-  static const completion = Duration(milliseconds: 320);
-  static const feedback = Duration(milliseconds: 200);
-  static const sheet = Duration(milliseconds: 220);
 
   /// A timeline step changing, the connector below it filling, and how much
   /// the next step's change overlaps it. However many steps change at once,

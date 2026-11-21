@@ -16,10 +16,6 @@ const _canary = 'synthetic-linux-secret-canary';
 class _SecretService extends FlutterSecureStorage {
   final records = <String, String>{};
   bool unavailable = false;
-
-  /// Whether the session bus lists a provider while calls to it fail, as with
-  /// a locked keyring whose unlock prompt was dismissed.
-  bool installed = false;
   bool failWrite = false;
   bool failDelete = false;
   bool retainAfterDelete = false;
@@ -108,7 +104,6 @@ void main() {
       NativeCredentialBackend fresh() => NativeCredentialBackend(
         linuxStorage: provider,
         supportDirectory: () async => root,
-        linuxSecretServicePresent: () async => provider.installed,
       );
       Future<void> staleLocal({String? contents}) async {
         await local().parent.create(recursive: true);
@@ -164,56 +159,6 @@ void main() {
           final info = (await backend.metadata(_key))!;
           expect(info.protection, CredentialProtection.appLocal);
           expect(info.enrolled, isFalse);
-        },
-      );
-
-      test(
-        'unanswering provider fails a new write and stores nothing locally',
-        () async {
-          provider
-            ..unavailable = true
-            ..installed = true;
-          expect(
-            (await backend.capabilities()).protection,
-            CredentialProtection.osAccountProtected,
-          );
-          await expectLater(
-            backend.write(_key, _canary, requireAuthentication: false),
-            throwsA(
-              isA<WalletAccessException>().having(
-                (error) => error.failure,
-                'failure',
-                WalletAccessFailure.unavailable,
-              ),
-            ),
-          );
-          expect(await local().parent.exists(), isFalse);
-          expect(await backend.metadata(_key), isNull);
-          expect(provider.records, isEmpty);
-          // Once the keyring answers, the same key is stored in it.
-          provider.unavailable = false;
-          await backend.capabilities();
-          await backend.write(_key, _canary, requireAuthentication: false);
-          expect(await local().exists(), isFalse);
-          expect(await marker().exists(), isTrue);
-          expect(await backend.read(_key, reason: 'test'), _canary);
-        },
-      );
-
-      test(
-        'unanswering provider keeps an existing app-local key on its tier',
-        () async {
-          provider.unavailable = true;
-          await backend.write(_key, 'initial', requireAuthentication: false);
-          provider.installed = true;
-          backend = fresh();
-          await backend.write(_key, 'updated', requireAuthentication: false);
-          expect(await backend.read(_key, reason: 'test'), 'updated');
-          expect(
-            (await backend.metadata(_key))!.protection,
-            CredentialProtection.appLocal,
-          );
-          expect(await marker().exists(), isFalse);
         },
       );
 

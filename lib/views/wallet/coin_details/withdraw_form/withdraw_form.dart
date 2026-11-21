@@ -2986,29 +2986,7 @@ class WithdrawFormFailedSection extends StatelessWidget {
             if (state.solanaSubmissionUnknownTxHash
                 case final String signature) ...[
               const SizedBox(height: 16),
-              Center(
-                child: CopiedText(
-                  key: const Key('withdraw-solana-unknown-signature'),
-                  copiedValue: signature,
-                  isTruncated: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-              if (state.asset.protocol.explorerTxUrl(signature)
-                  case final Uri explorerUrl) ...[
-                const SizedBox(height: 8),
-                Center(
-                  child: TextButton.icon(
-                    key: const Key('withdraw-solana-unknown-explorer'),
-                    onPressed: () => openUrl(explorerUrl),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(LocaleKeys.viewOnExplorer.tr()),
-                  ),
-                ),
-              ],
+              SelectableText(signature),
             ],
             const SizedBox(height: 16),
             Padding(

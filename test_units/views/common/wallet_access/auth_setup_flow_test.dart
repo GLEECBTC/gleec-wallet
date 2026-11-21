@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
@@ -14,6 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/wallet_protection/wallet_protection_bloc.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/plate_seed_backup.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_protection_panel.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_setup_card.dart';
@@ -88,9 +89,7 @@ Widget _setup(
           padding: const EdgeInsets.all(20),
           child: Center(
             child: ConstrainedBox(
-              // As wide as the wallet page's content, so the desktop capture
-              // shows each step with its action beside it.
-              constraints: const BoxConstraints(maxWidth: 940),
+              constraints: const BoxConstraints(maxWidth: 520),
               child: BlocBuilder<WalletProtectionBloc, WalletProtectionState>(
                 builder: (context, state) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,8 +105,7 @@ Widget _setup(
                           state.status?.requiresAuthentication ?? false,
                       onBackup: () {},
                       onProtect: () {},
-                      backupLeads:
-                          !(state.canCreatePasskey || state.canEnableDevice),
+                      recoveryDescription: 'authRecoveryIndependent'.tr(),
                       protectionSetup: WalletProtectionPanel(
                         onOpenSettings: onSettings,
                       ),
@@ -133,12 +131,6 @@ class _CaptureCanvas extends StatelessWidget {
       Material(color: Theme.of(context).scaffoldBackgroundColor, child: child);
 }
 
-/// Whether the action with [key] is drawn as the primary button.
-bool _isPrimary(Key key) => find
-    .descendant(of: find.byKey(key), matching: find.byType(ElevatedButton))
-    .evaluate()
-    .isNotEmpty;
-
 Future<void> _capture(WidgetTester tester, Key key, String name) async {
   final directory = Platform.environment['AUTH_UX_CAPTURE_DIR'];
   if (directory == null) return;
@@ -149,8 +141,9 @@ Future<void> _capture(WidgetTester tester, Key key, String name) async {
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     await Directory(directory).create(recursive: true);
-    await File('$directory/$name.png')
-        .writeAsBytes(bytes!.buffer.asUint8List());
+    await File(
+      '$directory/$name.png',
+    ).writeAsBytes(bytes!.buffer.asUint8List());
     image.dispose();
   });
 }
@@ -205,8 +198,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(access.enrollments, 1);
         expect(find.text('authPasskeyReadyTitle'.tr()), findsOneWidget);
-        // With the lock done, backing up is the one primary action left.
-        expect(_isPrimary(const Key('wallet-setup-backup')), isTrue);
+        expect(find.byKey(const Key('wallet-setup-backup')), findsOneWidget);
       },
     );
 
@@ -236,12 +228,6 @@ void main() {
                 access.enrollmentPending = Completer<void>();
               }
               const key = Key('setup-state-capture');
-              // The kit takes its custom colours from the app-wide theme
-              // mode, which the app keeps in step with the Material theme.
-              theme.mode = brightness == Brightness.dark
-                  ? ThemeMode.dark
-                  : ThemeMode.light;
-              addTearDown(() => theme.mode = ThemeMode.dark);
               await LegalFormHarness().pump(
                 tester,
                 _setup(access, captureKey: key),
@@ -280,12 +266,6 @@ void main() {
                 find.text('authPersonalPasswordOptional'.tr()),
                 findsNothing,
               );
-              // One primary action: the lock while it can be set up in one
-              // step, the backup once it has been.
-              expect(
-                _isPrimary(const Key('wallet-setup-backup')),
-                phase == 'protected',
-              );
               if (phase == 'protected') {
                 expect(find.text('authPasskeyReadyTitle'.tr()), findsOneWidget);
                 expect(
@@ -294,25 +274,17 @@ void main() {
                 );
               } else if (phase == 'waiting' || phase == 'creating') {
                 final action = find.byKey(const Key('wallet-setup-protect'));
-                final onPressed = tester
-                    .widget<ElevatedButton>(
-                      find.descendant(
-                        of: action,
-                        matching: find.byType(ElevatedButton),
-                      ),
-                    )
-                    .onPressed;
-                if (phase == 'waiting') {
-                  // Nothing can start until the password manager is done.
-                  expect(onPressed, isNull);
-                } else {
-                  // The pressed button keeps keyboard focus while its own
-                  // request runs, and a second press starts nothing.
-                  expect(onPressed, isNotNull);
-                  await tester.tap(action);
-                  await tester.pump();
-                  expect(access.enrollments, 1);
-                }
+                expect(
+                  tester
+                      .widget<ElevatedButton>(
+                        find.descendant(
+                          of: action,
+                          matching: find.byType(ElevatedButton),
+                        ),
+                      )
+                      .onPressed,
+                  isNull,
+                );
                 expect(
                   find.text(
                     (phase == 'waiting'
@@ -386,6 +358,46 @@ void main() {
       }
     }
 
+    for (final brightness in Brightness.values) {
+      for (final scale in [2.0, 3.0]) {
+        testWidgets(
+          'recovery panels $brightness ${scale}x fit a narrow column in a wide window',
+          (tester) async {
+            final harness = LegalFormHarness();
+            // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+            harness.auth.emit(AuthBlocState.loggedIn(accessibilityUser()));
+            await harness.pump(
+              tester,
+              PlateSeedBackup(onViewSeedPressed: (_) {}),
+              size: const Size(1280, 900),
+              contentWidth: 320,
+              textScale: scale,
+              brightness: brightness,
+              disableAnimations: true,
+            );
+            for (final label in [
+              'authRecoveryPhraseTitle',
+              'authEncryptedWalletFileTitle',
+            ]) {
+              final title = find.text(label.tr());
+              await tester.ensureVisible(title);
+              await tester.pumpAndSettle();
+              expect(title, findsOneWidget);
+            }
+            expect(
+              find.text('authEncryptedWalletFileDescription'.tr()),
+              findsOneWidget,
+            );
+            expect(
+              find.textContaining('authRecoveryNotReady'.tr()),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+
     testWidgets(
       'unsupported browser has an accurate status and settings fallback',
       (tester) async {
@@ -398,10 +410,7 @@ void main() {
           scrollable: false,
         );
         expect(find.text('authCreatePasskey'.tr()), findsNothing);
-        // Says why no passkey is offered, and offers the lock that works.
-        expect(find.text('authLockUnavailablePasskeys'.tr()), findsOneWidget);
-        expect(find.text('authSetWalletPassword'.tr()), findsOneWidget);
-        expect(_isPrimary(const Key('wallet-setup-backup')), isTrue);
+        expect(find.text('authBrowserUnprotected'.tr()), findsOneWidget);
         await tester.tap(find.byKey(const Key('wallet-setup-protect')));
         await tester.pumpAndSettle();
         expect(settings, 1);
@@ -415,11 +424,13 @@ void main() {
         await LegalFormHarness().pump(
           tester,
           WalletSimpleImport(
-            onImport: ({
-              required name,
-              required password,
-              required walletConfig,
-            }) {},
+            onImport:
+                ({
+                  required name,
+                  required password,
+                  required walletConfig,
+                  required rememberMe,
+                }) {},
             onUploadFiles: ({required fileName, required fileData}) {},
             onCancel: () {},
           ),

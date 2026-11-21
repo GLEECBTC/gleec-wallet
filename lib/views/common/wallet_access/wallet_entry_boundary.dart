@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/shared/widgets/remember_wallet_service.dart';
-import 'package:web_dex/views/common/wallet_password_dialog/wallet_access_actions.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
@@ -83,18 +82,15 @@ class _WalletEntryBoundaryState extends State<WalletEntryBoundary> {
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                // Sized to its label; the kit button would fill the row.
-                child: IntrinsicWidth(
-                  child: WalletAccessSecondaryButton(
-                    key: const Key('open-wallet-setup'),
-                    prefix: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                      size: 20,
-                    ),
-                    text: 'authOpenWalletSetup'.tr(),
-                    onPressed: () => _browse(false),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextButton.icon(
+                  key: const Key('open-wallet-setup'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
                   ),
+                  onPressed: () => _browse(false),
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: Text('authOpenWalletSetup'.tr()),
                 ),
               ),
             ),
@@ -102,31 +98,16 @@ class _WalletEntryBoundaryState extends State<WalletEntryBoundary> {
           ],
         );
       }
-      const padding = EdgeInsets.symmetric(horizontal: 24, vertical: 32);
-      // Centred while it fits; top-aligned and scrollable once it does not.
-      return LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: padding,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.hasBoundedHeight
-                  ? (constraints.maxHeight - padding.vertical).clamp(
-                      0,
-                      double.infinity,
-                    )
-                  : 0,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: WalletsManagerWrapper(
-                  eventType: WalletsManagerEventType.wallet,
-                  onUserIntent:
-                      RememberWalletService.cancelPendingAutomaticEntry,
-                  entryCancelLabel: 'authExplorePrices'.tr(),
-                  onCancel: () => _browse(true),
-                ),
-              ),
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: WalletsManagerWrapper(
+              eventType: WalletsManagerEventType.wallet,
+              onUserIntent: RememberWalletService.cancelPendingAutomaticEntry,
+              entryCancelLabel: 'authExplorePrices'.tr(),
+              onCancel: () => _browse(true),
             ),
           ),
         ),

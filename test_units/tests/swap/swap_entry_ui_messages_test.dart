@@ -2,19 +2,16 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
-import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -88,7 +85,7 @@ void main() {
         ).copyWith(fundingBalances: {eth: d('2'), btc: null}),
       );
       expect(lines(tester), [
-        'swapFundingBalanceUnavailable'.tr(args: ['BTC']),
+        'The BTC balance could not be checked. Try again before reviewing this swap.',
       ]);
       expect(swap.state.canReview, isFalse);
       await tester.tap(find.text('Try again'));
@@ -259,31 +256,8 @@ void main() {
       SwapMaxAmount max, {
       AssetId? pay,
       AssetId? receive,
-    }) {
-      final from = pay ?? eth;
-      final to = receive ?? usdc;
-      final feeAsset = max.feeAsset ?? from.parentId ?? from;
-      final quote = quoteOf(
-        from: from,
-        to: to,
-        sell: max.amount.toString(),
-        fees: [
-          SwapFeeComponent(
-            kind: SwapFeeKind.network,
-            amount: max.reservedForFees,
-            deductedFromReceive: false,
-            asset: feeAsset,
-          ),
-        ],
-      );
-      return swapPricedForm(ranked: [quote]).copyWith(
-        pay: from,
-        receive: to,
-        inputText: max.amount.toString(),
-        balance: max.amount + max.reservedForFees,
-        maxApplied: max,
-      );
-    }
+    }) =>
+        swapPricedForm().copyWith(pay: pay, receive: receive, maxApplied: max);
 
     testWidgets('a native coin says what it kept back for fees', (
       tester,
@@ -569,15 +543,6 @@ void main() {
       settle: false,
     );
 
-    // Said in the option's own strip, where its coming and going moves
-    // nothing, rather than as a line of its own.
-    expect(lines(tester), isEmpty);
-    expect(
-      find.descendant(
-        of: find.byType(SwapQuoteStrip),
-        matching: find.text(LocaleKeys.swapHelperChecking.tr()),
-      ),
-      findsOneWidget,
-    );
+    expect(lines(tester), ['Checking swap options…']);
   });
 }

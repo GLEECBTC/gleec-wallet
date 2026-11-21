@@ -1,7 +1,5 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 import 'dart:async';
-
-import 'package:easy_localization/easy_localization.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,12 +7,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_bloc_fakes.dart';
@@ -209,17 +205,17 @@ void main() {
           );
           final button = find.byKey(const Key('swap-start'));
           final pending = status == LegalDocumentStatus.loading;
-          expect(swapButtonEnabled(tester, find.text('Confirm swap')), pending);
+          expect(swapButtonEnabled(tester, find.text('Start swap')), pending);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             pending ? findsNothing : findsOneWidget,
           );
           expect(
-            find.byTooltip(LocaleKeys.legalDocumentsUnavailable.tr()),
+            find.byTooltip(
+              'The legal documentation could not be retrieved. Please consult Gleec’s online legal documentation before proceeding.',
+            ),
             pending ? findsNothing : findsOneWidget,
           );
-          // The action that commits is armed a moment after it appears.
-          await tester.pump(swapCommitArmingDelay);
           await tester.tap(button);
           expect(
             bloc.events,
@@ -240,7 +236,7 @@ void main() {
               ),
             ),
           );
-          expect(swapButtonEnabled(tester, find.text('Confirm swap')), isTrue);
+          expect(swapButtonEnabled(tester, find.text('Start swap')), isTrue);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             findsNothing,

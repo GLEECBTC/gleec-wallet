@@ -4,10 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
-import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
-import 'package:web_dex/shared/swap/swap_quote.dart';
-import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
 import 'swap_bloc_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -182,120 +179,6 @@ void main() {
       expect(bloc.state.inputText, isEmpty);
       expect(bloc.state.selectedQuote, isNull);
       expect(bloc.state.canReview, isFalse);
-    });
-  });
-
-  group('a start the app lock refuses before anything is sent', () {
-    /// The app lock, open for the harness's wallet until a test blocks it.
-    WalletOperationGate lockOf(SwapBlocHarness h) =>
-        h.operationGate = WalletOperationGate()
-          ..attachWallet('wallet', sessionIdentity: h, allowOperations: true);
-
-    /// The review of [source]'s only offer, with its fakes.
-    (UnifiedSwapBloc, FakeQuoteSource, GatedExecutor) reviewOf(
-      SwapBlocHarness h,
-      SwapLiquiditySource source,
-    ) {
-      if (source == SwapLiquiditySource.routed) {
-        return (h.inReview(), h.routed, h.routedExecutor);
-      }
-      h.routed
-        ..respond = null
-        ..results = [rejected(SwapQuoteFailureKind.noRoute)];
-      h.atomic.respond = (request) => [
-        SwapQuoteAvailable(
-          quoteOf(
-            id: 'book',
-            source: SwapLiquiditySource.atomic,
-            routeKind: SwapRouteKind.direct,
-            order: null,
-            sell: '${request.amount}',
-            quotedAt: h.now(),
-          ),
-        ),
-      ];
-      return (h.inReview(), h.atomic, h.atomicExecutor);
-    }
-
-    for (final (source, name) in [
-      (SwapLiquiditySource.routed, 'a routed'),
-      (SwapLiquiditySource.atomic, 'an order-book'),
-    ]) {
-      swapBlocTest('while $name start is re-priced', (h) {
-        final lock = lockOf(h);
-        final (bloc, quotes, executor) = reviewOf(h, source);
-        quotes.requoteGate = Completer<void>();
-        bloc.add(const UnifiedSwapStartRequested());
-        h.settle();
-        expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
-
-        lock.block();
-        quotes.requoteGate!.complete();
-        h.settle();
-
-        expect(executor.started, isEmpty);
-        expect(bloc.state.review!.status, SwapReviewStatus.rejected);
-        expect(bloc.state.startInDoubt, isFalse);
-      });
-
-      swapBlocTest('as $name start reaches the engine', (h) {
-        final lock = lockOf(h);
-        final (bloc, _, executor) = reviewOf(h, source);
-        final gate = executor.dispatchGate = Completer<void>();
-        bloc.add(const UnifiedSwapStartRequested());
-        h.settle();
-
-        lock.block();
-        gate.complete();
-        h.settle();
-
-        expect(executor.started, isEmpty);
-        expect(bloc.state.review!.status, SwapReviewStatus.rejected);
-        expect(bloc.state.startInDoubt, isFalse);
-      });
-    }
-
-    swapBlocTest('is tried again only once unlocked, and by a new Start', (h) {
-      final lock = lockOf(h);
-      final (bloc, quotes, executor) = reviewOf(h, SwapLiquiditySource.routed);
-      quotes.requoteGate = Completer<void>();
-      bloc.add(const UnifiedSwapStartRequested());
-      h.settle();
-      lock.block();
-      quotes.requoteGate!.complete();
-      h.settle();
-      quotes.requoteGate = null;
-
-      bloc.add(const UnifiedSwapStartRequested());
-      h.settle();
-      expect(bloc.state.review!.status, SwapReviewStatus.rejected);
-
-      lock.allow(walletEntryId: 'wallet');
-      bloc.add(const UnifiedSwapStartRequested());
-      h.settle();
-      expect(bloc.state.review!.status, SwapReviewStatus.ready);
-      expect(executor.started, isEmpty);
-
-      bloc.add(const UnifiedSwapStartRequested());
-      h.settle();
-      expect(executor.started, hasLength(1));
-      expect(bloc.state.view, UnifiedSwapView.progress);
-    });
-
-    swapBlocTest('leaves Review to be asked for again once unlocked', (h) {
-      final lock = lockOf(h);
-      final bloc = h.open();
-      lock.block();
-
-      bloc.add(const UnifiedSwapReviewOpened());
-      h.settle();
-      expect(bloc.state.view, UnifiedSwapView.form);
-      expect(bloc.state.canReview, isTrue);
-
-      lock.allow(walletEntryId: 'wallet');
-      bloc.add(const UnifiedSwapReviewOpened());
-      h.settle();
-      expect(bloc.state.view, UnifiedSwapView.review);
     });
   });
 

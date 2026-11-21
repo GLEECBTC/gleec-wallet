@@ -18,8 +18,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
@@ -37,7 +35,6 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -101,7 +98,6 @@ void main() {
 
   tearDown(() async {
     await swap.close();
-    await services.presentation.dispose();
     await registry.dispose();
     shell.dispose();
     Localization.load(const Locale('en'));
@@ -171,8 +167,6 @@ void main() {
       receive: usdc,
       inputText: input,
       balance: d('2'),
-      payAddress: 'own-pay',
-      receiveAddress: 'own-receive',
       issue: issue,
       evaluation: evaluation,
       quotes: ready
@@ -258,8 +252,7 @@ void main() {
       await pump(tester, const SwapEntryView());
 
       expect(primaryLabel(tester), 'Refresh quote');
-      // Under the estimate that no longer holds, and on the option itself.
-      expect(find.text('Quote expired'), findsNWidgets(2));
+      expect(find.text('Quote expired'), findsOneWidget);
     });
 
     testWidgets('trading unavailable here blocks the swap', (tester) async {
@@ -339,10 +332,7 @@ void main() {
       await pump(tester, const SwapReviewView());
 
       expect(find.text("You'll receive at least"), findsOneWidget);
-      expect(
-        find.text(LocaleKeys.swapStartApprove.tr(args: ['1,250 USDC'])),
-        findsOneWidget,
-      );
+      expect(find.text('Approve exactly 1,250 USDC & start'), findsOneWidget);
       expect(find.text('Exact approval only'), findsOneWidget);
     });
 
@@ -397,20 +387,11 @@ void main() {
       );
       await pump(tester, const SwapReviewView());
 
-      // The changed figure, old then new, above the button that accepts it.
       expect(
-        tester
-            .widgetList<Text>(
-              find.descendant(
-                of: find.byKey(const Key('swap-review-change-minimum')),
-                matching: find.byType(Text),
-              ),
-            )
-            .map((text) => text.data)
-            .skip(1),
-        ['2,985 USDC', '2,900 USDC'],
+        find.text('Minimum changed from 2,985 USDC to 2,900 USDC.'),
+        findsOneWidget,
       );
-      expect(find.text(LocaleKeys.swapAcceptUpdated.tr()), findsOneWidget);
+      expect(find.text('Accept updated quote'), findsOneWidget);
     });
 
     for (final (kind, title, action) in [
@@ -536,12 +517,6 @@ class _FakeServices implements SwapServices {
 
   @override
   final SwapExecutionRegistry registry;
-
-  @override
-  late final SwapPresentationSession presentation = SwapPresentationSession(
-    registry: registry,
-    refreshBalances: (_) async => true,
-  );
 
   @override
   final Set<String> viewing = {};

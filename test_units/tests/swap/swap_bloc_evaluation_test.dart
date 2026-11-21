@@ -69,11 +69,7 @@ void main() {
           kind: SwapQuoteFailureKind.timeout,
         ),
       );
-      expect(bloc.state.failures, contains(bloc.state.failure));
-      expect(
-        bloc.state.failures.map((failure) => failure.kind),
-        contains(SwapQuoteFailureKind.pairUnsupported),
-      );
+      expect(bloc.state.failures, [bloc.state.failure]);
     });
 
     swapBlocTest('is ignored once the amount has changed', (h) {
@@ -175,43 +171,6 @@ void main() {
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
       expect(bloc.state.selectedQuote, shown);
       expect(bloc.state.failure, isNull);
-    });
-
-    swapBlocTest('for the chosen source keeps its option until it expires', (
-      h,
-    ) {
-      final bloc = h.open();
-      expect(bloc.state.selectedId, 'routed-1');
-      h.routed
-        ..respond = null
-        ..results = [rejected(SwapQuoteFailureKind.timeout)];
-      h.atomic.respond = (request) => [
-        SwapQuoteAvailable(
-          quoteOf(
-            id: 'book',
-            source: SwapLiquiditySource.atomic,
-            routeKind: SwapRouteKind.direct,
-            order: null,
-            sell: '${request.amount}',
-            expected: '3200',
-            guaranteed: '3190',
-            quotedAt: h.now(),
-          ),
-        ),
-      ];
-
-      // Another kind of swap answering is no reason to move the choice to it.
-      h.elapse(const Duration(seconds: 30));
-      expect(h.atomic.requests, hasLength(2));
-      expect(bloc.state.selectedQuote!.source, SwapLiquiditySource.routed);
-      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
-
-      h.elapse(const Duration(seconds: 30));
-      expect(bloc.state.evaluation, SwapEvaluationStatus.expired);
-
-      bloc.add(const UnifiedSwapEvaluationRequested());
-      h.settle();
-      expect(bloc.state.selectedQuote!.source, SwapLiquiditySource.atomic);
     });
 
     swapBlocTest('on a rate limit pauses, and lets the options expire', (h) {

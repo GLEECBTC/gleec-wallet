@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
-import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_password_dialog.dart';
 
@@ -32,7 +31,7 @@ Future<String?> promptForPlaintextMnemonic(BuildContext context) async {
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (!context.mounted ||
           !sdk.auth.isSessionContextCurrent(session) ||
-          (lifecycle != null && lifecycleLeavesApp(lifecycle))) {
+          (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
         throw const WalletAccessException(WalletAccessFailure.staleOperation);
       }
       ensureAccess();

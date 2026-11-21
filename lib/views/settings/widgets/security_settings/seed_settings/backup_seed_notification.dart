@@ -2,12 +2,11 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/views/settings/widgets/security_settings/security_settings_entry.dart';
+import 'package:web_dex/router/state/routing_state.dart';
 
 class BackupSeedNotification extends StatefulWidget {
   const BackupSeedNotification({
@@ -40,85 +39,78 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
     final String description =
         widget.description ?? LocaleKeys.backupSeedNotificationDescription.tr();
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: recoveryPhraseFlowOnScreen,
-      builder: (context, backingUp, _) {
-        // The reminder has been answered: do not push the words it asked
-        // for down the screen.
-        if (backingUp) return const SizedBox.shrink();
-        return BlocBuilder<AuthBloc, AuthBlocState>(
-          builder: (context, state) {
-            final currentWallet = state.currentUser?.wallet;
-            if (currentWallet == null ||
-                currentWallet.config.hasRecoveryPhrase) {
-              return const SizedBox();
-            }
-            final text = Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Line(customization.line),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: customization.titleStyle),
-                      const SizedBox(height: 2),
-                      Text(description, style: customization.descriptionStyle),
-                    ],
-                  ),
-                ),
-              ],
-            );
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 17,
-                    vertical: 15,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.all(Radius.circular(18)),
-                    color:
-                        customization.backgroundColor ??
-                        Theme.of(context).colorScheme.surface,
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final beside =
-                          !customization.isBelowButton &&
-                          constraints.maxWidth >= 560 &&
-                          MediaQuery.textScalerOf(context).scale(1) <= 1.5;
-                      if (!beside) {
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            text,
-                            const SizedBox(height: 12),
-                            _BackupButton(customization),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: text),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 180,
-                            child: _BackupButton(customization),
+    return BlocBuilder<AuthBloc, AuthBlocState>(
+      builder: (context, state) {
+        final currentWallet = state.currentUser?.wallet;
+        if (currentWallet == null || currentWallet.config.hasRecoveryPhrase) {
+          return const SizedBox();
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 15),
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.all(Radius.circular(18)),
+                color:
+                    customization.backgroundColor ??
+                    Theme.of(context).colorScheme.surface,
+              ),
+              child: customization.isBelowButton
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _Line(customization.line),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title, style: customization.titleStyle),
+                              const SizedBox(height: 8),
+                              Text(
+                                description,
+                                style: customization.descriptionStyle,
+                              ),
+                              const SizedBox(height: 12),
+                              _BackupButton(customization),
+                            ],
                           ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            );
-          },
+                        ),
+                      ],
+                    )
+                  : Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      runSpacing: 12,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _Line(customization.line),
+                            Flexible(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(title, style: customization.titleStyle),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    description,
+                                    style: customization.descriptionStyle,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        _BackupButton(customization),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+          ],
         );
       },
     );
@@ -131,14 +123,13 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
       return customizationNotification;
     }
     return CustomizationBackupNotificationData(
-      titleStyle: Theme.of(context).textTheme.bodyMedium!
-          .copyWith(fontWeight: FontWeight.w700, fontSize: 16),
-      // The theme draws this style at half opacity, which is unreadable for
-      // the one sentence that says why to back up.
+      titleStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 16,
+      ),
       descriptionStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
         fontWeight: FontWeight.w500,
         fontSize: 14,
-        color: Theme.of(context).colorScheme.onSurface,
       ),
       line: BackupNotificationLineStyle(
         width: 8,
@@ -156,18 +147,45 @@ class _BackupButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Backing up is the most important thing an unprotected wallet can do,
-    // so it gets a full-size primary button, and the button starts the
-    // backup rather than opening the list it is offered in.
-    return UiPrimaryButton(
-      expandForText: true,
-      backgroundColor: customization.buttonBackgroundColor,
-      textStyle: customization.buttonTextColor == null
-          ? null
-          : TextStyle(color: customization.buttonTextColor),
-      onPressed: () =>
-          openSecuritySettings(entry: SecuritySettingsEntry.recoveryPhrase),
-      text: LocaleKeys.backupSeedNotificationButton.tr(),
+    final colorScheme = Theme.of(context).colorScheme;
+    final background =
+        customization.buttonBackgroundColor ??
+        theme.custom.simpleButtonBackgroundColor;
+    // Not UiPrimaryButton: its fixed size leaves no room for the 48 dp target
+    // Material pads around a smaller button, and split the label at large
+    // text. Padded at standard density, the target is 48 dp on desktop too.
+    return ElevatedButton(
+      onPressed: routingState.settingsState.openSecurity,
+      style:
+          ElevatedButton.styleFrom(
+            backgroundColor: background,
+            foregroundColor:
+                ThemeData.estimateBrightnessForColor(background) ==
+                    Brightness.dark
+                ? Colors.white
+                : colorScheme.secondary,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            minimumSize: const Size(85, 28),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
+          ).copyWith(
+            shadowColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.focused)
+                  ? colorScheme.primary
+                  : Colors.transparent,
+            ),
+          ),
+      child: Text(
+        LocaleKeys.backupSeedNotificationButton.tr(),
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontSize: 12,
+          color: customization.buttonTextColor,
+        ),
+      ),
     );
   }
 }

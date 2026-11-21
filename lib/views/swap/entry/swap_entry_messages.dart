@@ -1,37 +1,12 @@
 part of 'swap_entry_view.dart';
 
-/// What the form says under the cards: [alerts] to act on, shown first, and
-/// standing [hints], shown where they move nothing as they change.
-typedef _EntryLines = ({List<Widget> alerts, List<String> hints});
-
-const _EntryLines _noLines = (alerts: <Widget>[], hints: <String>[]);
-
 /// The lines under the cards, and the figures they quote.
 extension _SwapEntryMessages on _SwapEntryViewState {
-  /// An error, else warnings, else hints. With [stale], the selected option
-  /// is one the open review has replaced, so nothing is said about it.
-  _EntryLines _lines(UnifiedSwapState state, {required bool stale}) {
+  /// One line under the cards: an error, else a warning, else a hint.
+  List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
-    // The button and the quote strip say what is being prepared.
-    if (state.preparingAssets) return _noLines;
-    if (state.preparationFailedAsset case final asset?) {
-      return (
-        alerts: [
-          SwapHelperLine(
-            text: 'swapAssetPreparationUnavailable'.tr(
-              args: [SwapFormat.ticker(asset)],
-            ),
-            tone: SwapTone.warning,
-          ),
-        ],
-        hints: const [],
-      );
-    }
-    if (issue == SwapFormIssue.assetInactive) return _noLines;
-    if (issue == SwapFormIssue.noOffers) {
-      return (alerts: _noOffersLines(state), hints: const []);
-    }
+    if (issue == SwapFormIssue.noOffers) return _noOffersLines(state);
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
         issue,
@@ -46,52 +21,48 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         heldElsewhere: _heldElsewhere(state),
       );
       if (copy != null) {
-        return (
-          alerts: [
-            SwapHelperLine(
-              text: copy.message,
-              tone: issue == SwapFormIssue.assetInactive
-                  ? SwapTone.warning
-                  : SwapTone.danger,
-            ),
-            if (copy.detail != null) SwapHelperLine(text: copy.detail!),
-            // Still priced, so why no price came back matters too.
-            if (issue.stillPriced) ..._failureLines(state),
-          ],
-          hints: const [],
-        );
+        return [
+          SwapHelperLine(
+            text: copy.message,
+            tone: issue == SwapFormIssue.assetInactive
+                ? SwapTone.warning
+                : SwapTone.danger,
+          ),
+          if (copy.detail != null) SwapHelperLine(text: copy.detail!),
+          // Still priced, so why no price came back matters too.
+          if (issue.stillPriced) ..._failureLines(state),
+        ];
       }
     }
 
     if (state.fundingFailedAsset case final asset?) {
-      return (
-        alerts: [
-          SwapHelperLine(
-            text: 'swapFundingBalanceUnavailable'.tr(
-              args: [SwapFormat.ticker(asset)],
-            ),
-            tone: SwapTone.warning,
+      return [
+        SwapHelperLine(
+          text: 'swapFundingBalanceUnavailable'.tr(
+            args: [SwapFormat.ticker(asset)],
           ),
-        ],
-        hints: const [],
-      );
+          tone: SwapTone.warning,
+        ),
+      ];
     }
     final failed = _failureLines(state);
-    if (failed.isNotEmpty) return (alerts: failed, hints: const []);
+    if (failed.isNotEmpty) return failed;
 
-    final quote = stale ? null : state.selectedQuote;
-    final alerts = <Widget>[];
+    final partial = _partialNote(state);
+
+    final messages = <Widget>[];
     if (state.structuralNotice) {
-      alerts.add(
+      messages.add(
         SwapHelperLine(
           text: LocaleKeys.swapHelperStructural.tr(),
           tone: SwapTone.warning,
         ),
       );
     }
+    final quote = state.selectedQuote;
     final impact = quote?.pricing.priceImpact;
     if (impact != null && impact >= swapHighImpact) {
-      alerts.add(
+      messages.add(
         SwapHelperLine(
           text: LocaleKeys.swapWarningHighImpact.tr(
             args: [SwapFormat.percent(impact)],
@@ -102,7 +73,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     }
     final feeShare = quote?.pricing.feeShare;
     if (feeShare != null && feeShare >= swapHighFeeShare) {
-      alerts.add(
+      messages.add(
         SwapHelperLine(
           text: LocaleKeys.swapWarningHighFees.tr(
             args: [SwapFormat.percent(feeShare)],
@@ -111,41 +82,39 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         ),
       );
     }
-    final partial = stale ? null : _partialNote(state);
-    final priced = partial != null
-        ? [partial]
-        : !state.signedIn && quote != null
-        ? [LocaleKeys.swapHelperSignedOutPriced.tr()]
-        : const <String>[];
-    if (alerts.isNotEmpty || priced.isNotEmpty) {
-      return (alerts: alerts, hints: priced);
+    if (partial != null) {
+      messages.add(SwapHelperLine(text: partial));
+    } else if (!state.signedIn && quote != null) {
+      messages.add(
+        SwapHelperLine(text: LocaleKeys.swapHelperSignedOutPriced.tr()),
+      );
     }
+    if (messages.isNotEmpty) return messages;
 
+    if (state.evaluation == SwapEvaluationStatus.checking) {
+      return [SwapHelperLine(text: LocaleKeys.swapHelperChecking.tr())];
+    }
     final max = state.maxApplied;
     if (max != null && pay != null) {
-      return (alerts: const [], hints: [_maxHint(max, pay)]);
+      return [SwapHelperLine(text: _maxHint(max, pay))];
     }
     if (quote != null && quote.pricing.expectedUsd == null) {
-      return (
-        alerts: const [],
-        hints: [LocaleKeys.swapWarningPriceUnavailable.tr()],
-      );
+      return [
+        SwapHelperLine(text: LocaleKeys.swapWarningPriceUnavailable.tr()),
+      ];
     }
     final range = _offerRange(state);
     // Signed out, "Checking what this wallet can swap" would name no wallet.
     if (!state.signedIn) {
-      return (
-        alerts: const [],
-        hints: [?range, LocaleKeys.swapHelperSignedOut.tr()],
-      );
+      return [
+        ?range,
+        SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr()),
+      ];
     }
     if (state.loadingAssets) {
-      return (
-        alerts: const [],
-        hints: [LocaleKeys.swapHelperLoadingAssets.tr()],
-      );
+      return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
     }
-    return (alerts: const [], hints: [?range]);
+    return [?range];
   }
 
   SwapFailureCopy _failureCopy(
@@ -183,23 +152,8 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       _ => SwapTone.danger,
     };
     return [
-      // A failed check is news whatever its tone.
-      SwapHelperLine(text: copy.message, tone: tone, liveRegion: true),
-      if (copy.detail != null)
-        if (failure.reasons.isNotEmpty)
-          SwapDetails(
-            key: ValueKey((
-              state.pay,
-              state.receive,
-              state.inputText,
-              state.amountMode,
-              failure,
-            )),
-            title: LocaleKeys.swapDetails.tr(),
-            children: [SwapHelperLine(text: copy.detail!)],
-          )
-        else
-          SwapHelperLine(text: copy.detail!),
+      SwapHelperLine(text: copy.message, tone: tone),
+      if (copy.detail != null) SwapHelperLine(text: copy.detail!),
       if (paused)
         SwapHelperLine(text: LocaleKeys.swapHelperRoutedPausedLine.tr()),
     ];
@@ -280,7 +234,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeNeeded(UnifiedSwapState state) {
-    final parent = state.insufficientFeeAsset;
+    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
     final quote = state.selectedQuote;
     if (parent == null || quote == null) return null;
     return SwapFormat.tokens(
@@ -307,7 +261,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeHeld(UnifiedSwapState state) {
-    final parent = state.insufficientFeeAsset;
+    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
     final held = parent == state.pay?.parentId
         ? state.feeBalance
         : state.fundingBalances[parent];

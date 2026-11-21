@@ -39,7 +39,6 @@ import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell.dart';
-import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/backup_seed_notification.dart';
 
 import 'swap_accessibility_checks.dart' show swapFont;
 import 'swap_surface_ui_fakes.dart';
@@ -94,29 +93,14 @@ void main() {
     }
 
     /// The main layout on a phone, signed in, on Swap with ETH for USDC.
-    Future<void> show(
-      WidgetTester tester, {
-      bool hasRecoveryPhrase = true,
-    }) async {
+    Future<void> show(WidgetTester tester) async {
       services.requestIntent((
         pay: 'ETH',
         receive: 'USDC-ERC20',
         amount: null,
         fiat: false,
       ));
-      final user = softwareUser();
-      final auth = FakeAuthBloc(
-        AuthBlocState.loggedIn(
-          user.copyWith(
-            metadata: {
-              ...user.metadata,
-              'recovery_evidence': hasRecoveryPhrase
-                  ? 'phraseConfirmed'
-                  : 'none',
-            },
-          ),
-        ),
-      );
+      final auth = FakeAuthBloc(AuthBlocState.loggedIn(softwareUser()));
       final settings = FakeSettingsBloc();
       final coins = FakeCoinsBloc();
       addTearDown(auth.close);
@@ -293,42 +277,6 @@ void main() {
       });
       expect(executor.starts, 1);
     });
-
-    for (final starting in [false, true]) {
-      testWidgets(
-        'unbacked wallet keeps review confirmation reachable in landscape, starting=$starting',
-        (tester) async {
-          await show(tester, hasRecoveryPhrase: false);
-          await typeAmount(tester);
-          await openReview(tester);
-          if (starting) {
-            await tester.tap(find.byKey(const Key('swap-start')));
-            await settle(tester);
-            expect(
-              form(tester).state.review?.status,
-              SwapReviewStatus.starting,
-            );
-          }
-          tester.view.physicalSize = const Size(844, 390);
-          await settle(tester);
-          expect(find.byType(BackupSeedNotification), findsOneWidget);
-          expect(find.byType(SwapReviewView), findsOneWidget);
-          expect(tester.takeException(), isNull);
-          final confirmation = find.byKey(const Key('swap-start'));
-          await tester.ensureVisible(confirmation);
-          await settle(tester);
-          final reviewRect = tester.getRect(find.byType(SwapReviewView));
-          final confirmationRect = tester.getRect(confirmation);
-          expect(confirmationRect.top, greaterThanOrEqualTo(reviewRect.top));
-          expect(confirmationRect.bottom, lessThanOrEqualTo(reviewRect.bottom));
-          expect(tester.takeException(), isNull);
-          if (starting) {
-            executor.answer();
-            await settle(tester);
-          }
-        },
-      );
-    }
 
     testWidgets('stays on the destination it was showing', (tester) async {
       await show(tester);

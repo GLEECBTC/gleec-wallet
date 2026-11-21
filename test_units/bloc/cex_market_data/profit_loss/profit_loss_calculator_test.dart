@@ -13,28 +13,24 @@ final _asset = AssetId(
   subClass: CoinSubClass.utxo,
 );
 
-Transaction _transaction(
-  String id,
-  DateTime timestamp,
-  num netChange, {
-  int blockHeight = 1,
-}) => Transaction(
-  id: id,
-  internalId: id,
-  assetId: _asset,
-  balanceChanges: BalanceChanges(
-    netChange: Decimal.parse('$netChange'),
-    receivedByMe: Decimal.parse('${netChange > 0 ? netChange : 0}'),
-    spentByMe: Decimal.parse('${netChange < 0 ? -netChange : 0}'),
-    totalAmount: Decimal.parse('${netChange.abs()}'),
-  ),
-  timestamp: timestamp,
-  confirmations: 1,
-  blockHeight: blockHeight,
-  from: const ['from-address'],
-  to: const ['to-address'],
-  txHash: 'hash-$id',
-);
+Transaction _transaction(String id, DateTime timestamp, num netChange) =>
+    Transaction(
+      id: id,
+      internalId: id,
+      assetId: _asset,
+      balanceChanges: BalanceChanges(
+        netChange: Decimal.parse('$netChange'),
+        receivedByMe: Decimal.parse('${netChange > 0 ? netChange : 0}'),
+        spentByMe: Decimal.parse('${netChange < 0 ? -netChange : 0}'),
+        totalAmount: Decimal.parse('${netChange.abs()}'),
+      ),
+      timestamp: timestamp,
+      confirmations: 1,
+      blockHeight: 1,
+      from: const ['from-address'],
+      to: const ['to-address'],
+      txHash: 'hash-$id',
+    );
 
 class _MarketData implements MarketDataManager {
   _MarketData(this.prices);
@@ -244,91 +240,6 @@ void main() {
 
       expect(marketData.requested, hasLength(2));
       expect(marketData.requested.every((date) => date.isUtc), isTrue);
-    });
-
-    test(
-      'a receive is counted before the spend that shares its block',
-      () async {
-        final calculator = RealisedProfitLossCalculator(
-          _Sdk(_MarketData({firstPricedDay: Decimal.one})),
-        );
-        final blockTime = firstPricedDay.add(const Duration(hours: 3));
-
-        final result = await calculator.getProfitFromTransactions(
-          [
-            _transaction('spend', blockTime, -2),
-            _transaction('receive', blockTime, 2),
-          ],
-          coinId: _asset,
-          fiatCoinId: 'USDT',
-        );
-
-        expect(result.map((entry) => entry.internalId), ['receive', 'spend']);
-        expect(result.last.profitLoss, 0);
-      },
-    );
-
-    test('same-block pairs stay ordered in a long history', () async {
-      final calculator = RealisedProfitLossCalculator(
-        _Sdk(_MarketData({firstPricedDay: Decimal.one})),
-      );
-      // Long enough to leave the insertion sort that small lists get, with
-      // every spend listed before the receive it consumes.
-      final transactions = [
-        for (var block = 60; block > 0; block--) ...[
-          _transaction(
-            'spend-$block',
-            firstPricedDay.add(Duration(minutes: block)),
-            -1,
-            blockHeight: block,
-          ),
-          _transaction(
-            'receive-$block',
-            firstPricedDay.add(Duration(minutes: block)),
-            1,
-            blockHeight: block,
-          ),
-        ],
-      ];
-
-      final result = await calculator.getProfitFromTransactions(
-        transactions,
-        coinId: _asset,
-        fiatCoinId: 'USDT',
-      );
-
-      expect(result, hasLength(120));
-      expect(result.take(4).map((entry) => entry.internalId), [
-        'receive-1',
-        'spend-1',
-        'receive-2',
-        'spend-2',
-      ]);
-      expect(result.last.profitLoss, 0);
-    });
-
-    test('equal timestamps resolve the same way in any input order', () async {
-      final calculator = RealisedProfitLossCalculator(
-        _Sdk(_MarketData({firstPricedDay: Decimal.one})),
-      );
-      final transactions = [
-        _transaction('b', firstPricedDay, 1, blockHeight: 7),
-        _transaction('a', firstPricedDay, 1, blockHeight: 7),
-        _transaction('c', firstPricedDay, 1, blockHeight: 6),
-        _transaction('d', firstPricedDay, -1, blockHeight: 6),
-      ];
-
-      Future<List<String>> order(List<Transaction> input) async => [
-        for (final entry in await calculator.getProfitFromTransactions(
-          input,
-          coinId: _asset,
-          fiatCoinId: 'USDT',
-        ))
-          entry.internalId,
-      ];
-
-      expect(await order(transactions), ['c', 'a', 'b', 'd']);
-      expect(await order(transactions.reversed.toList()), ['c', 'a', 'b', 'd']);
     });
   });
 }

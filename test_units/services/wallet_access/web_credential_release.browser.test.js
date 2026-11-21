@@ -62,9 +62,6 @@ const credentialsSummary = `(async()=>{
 
 const buttonPresent = label => `Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})`;
 
-// The cover drawn over the wallet while its page is hidden.
-const privacyCover = "(document.body.textContent.includes('Wallet content hidden')||Array.from(document.querySelectorAll('[aria-label]')).some(el=>el.getAttribute('aria-label')==='Wallet content hidden'))";
-
 async function waitForPasskeySettingsReady(browser,page) {
   try {
     await browser.wait(page, `(()=>{
@@ -82,11 +79,11 @@ async function waitForPasskeySettingsReady(browser,page) {
       const metrics=__gleecReleaseProbe.metrics();
       return {challenges:metrics.challenges,registrations:metrics.registrations,
         createAction:${buttonPresent('Create a passkey')},replaceAction:${buttonPresent('Replace passkey using password')},
-        canceled:document.body.textContent.includes('Setup cancelled'),
+        canceled:document.body.textContent.includes('Setup canceled'),
         stale:document.body.textContent.includes('Wallet access changed'),
         busy:document.body.textContent.includes('Finish the current device'),
-        unsupported:document.body.textContent.includes("couldn't create a passkey"),
-        failed:document.body.textContent.includes("That didn't work, so nothing changed")};
+        unsupported:document.body.textContent.includes('This browser or provider'),
+        failed:document.body.textContent.includes('This change could not be completed')};
     })()`)));
     throw error;
   }
@@ -107,29 +104,19 @@ async function virtualAuthenticator(browser,page) {
   return {authenticatorId,counts};
 }
 
-// The lock screen and the sign-in sheet name their primary action by method.
-// While a ceremony runs that button reads 'Please wait', so an enabled
-// 'Unlock with passkey' is always a fresh, explicit choice.
-const passkeyUnlock='Unlock with passkey';
-const passwordFace=`Array.from(document.querySelectorAll('input')).some(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||'').split('\\n').some(part=>part.trim()==='Wallet password')&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
-
 async function unlockApp(browser,page) {
   // Status loading and automatic return can finish between CDP requests. Wait
   // for a live choice and activate it atomically, once per explicit stage.
-  // Beside a password field the same label only returns to the passkey face;
-  // the ceremony then needs its own activation of that face's primary action.
-  const activate=`(()=>{
+  const activate=labels=>`(()=>{
     if(${buttonPresent('Gleec Wallet')})return 'wallet';
-    const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(passkeyUnlock)}&&el.getAttribute('aria-disabled')!=='true');
+    const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>${JSON.stringify(labels)}.includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true');
     if(!element)return false;
-    const stage=(${passwordFace})?'face':'unlock';element.click();return stage;
+    const label=(element.getAttribute('aria-label')||element.textContent||'').trim();element.click();return label;
   })()`;
-  let stage=await browser.wait(page,activate,{timeout:60000,label:'wallet unlock entry'});
-  if(stage==='face'){
-    await browser.wait(page,`(${buttonPresent('Gleec Wallet')})||!(${passwordFace})`,{label:'passkey face after leaving the password field'});
-    stage=await browser.wait(page,activate,{timeout:60000,label:'passkey unlock entry'});
-    assert.notEqual(stage,'face','The passkey face must not ask for a password');
-  }
+  const stage=await browser.wait(page,activate(['Unlock','Unlock with passkey']),
+    {timeout:60000,label:'wallet unlock entry'});
+  if(stage==='Unlock')await browser.wait(page,activate(['Unlock with passkey']),
+    {timeout:60000,label:'passkey unlock entry'});
   await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'wallet unlocked'});
 }
 
@@ -137,7 +124,7 @@ async function verifiedBrowserReturn(browser,page,before) {
   const snapshot=`(()=>({
     ...__gleecReleaseProbe.metrics(),walletVisible:${buttonPresent('Gleec Wallet')},
     retryAvailable:Array.from(document.querySelectorAll('[role=button]')).some(el=>
-      (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(passkeyUnlock)}&&el.getAttribute('aria-disabled')!=='true')
+      ['Unlock','Unlock with passkey'].includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true')
   }))()`;
   // Browser focus and user-activation policies differ. A return may either
   // finish its one automatic challenge or require an explicit retry. Count
@@ -357,26 +344,6 @@ async function main() {
         ![...state.held,...state.pending].some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
         {timeout:5000,label:'corrupt-envelope probe releases the vault lock'});
       await unlockApp(browser,page);
-      // On desktop and web another window taking focus is not leaving: the
-      // wallet stays readable. Only a hidden page is covered, at once, and a
-      // return inside the grace period lifts the cover without a ceremony.
-      const settled=await page.evaluate('__gleecReleaseProbe.metrics()');
-      await page.evaluate("window.dispatchEvent(new Event('blur'));true");
-      await delay(1000);
-      assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')),true,'Losing window focus must not cover the wallet');
-      assert.equal(await page.evaluate(privacyCover),false,'Losing window focus must not show the privacy cover');
-      await page.evaluate("window.dispatchEvent(new Event('focus'));true");
-      await browser.visibility(page,'hidden');
-      await browser.wait(page,`(${privacyCover})&&!(${buttonPresent('Gleec Wallet')})`,
-        {timeout:5000,label:'privacy cover over a hidden page'});
-      await browser.visibility(page,'visible');
-      await browser.wait(page,`(${buttonPresent('Gleec Wallet')})&&!(${privacyCover})`,{label:'cover lifted inside grace'});
-      const uncovered=await page.evaluate('__gleecReleaseProbe.metrics()');
-      assert.equal(uncovered.challenges,settled.challenges,'A return inside grace must not prompt');
-      assert.equal(uncovered.fulfilledAssertions,settled.fulfilledAssertions);
-      evidence.focusLoss={walletStaysReadable:true,privacyCoverShown:false};
-      evidence.hiddenPage={privacyCoverShown:true,returnInsideGraceKeepsSession:true,additionalAssertions:0};
-      console.log('PASS: window blur leaves the wallet readable; a hidden page is covered and returns inside grace without a prompt');
       await page.send('Emulation.setFocusEmulationEnabled',{enabled:false});
       await page.send('Page.bringToFront');
       const background=await browser.page();
@@ -386,13 +353,6 @@ async function main() {
         await browser.wait(page,"document.visibilityState==='visible'",{label:'visible wallet before background'});
         const assertionsBefore=virtual.counts.asserted;
         const requestsBefore=await page.evaluate('__gleecReleaseProbe.metrics()');
-        if(seconds===29){
-          // The re-lock clock starts when the page is hidden, never at a lost
-          // focus before it: these seconds would otherwise exhaust the grace.
-          await page.evaluate("window.dispatchEvent(new Event('blur'));true");
-          await delay(3000);
-          assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')),true,'A window without focus stays readable');
-        }
         await background.send('Page.bringToFront');
         await browser.wait(page,"document.visibilityState==='hidden'",{label:'real background visibility'});
         await page.send('Page.setWebLifecycleState',{state:'frozen'});
@@ -407,8 +367,7 @@ async function main() {
           const current=await page.evaluate('__gleecReleaseProbe.metrics()');
           assert.equal(current.fulfilledAssertions,requestsBefore.fulfilledAssertions);
           assert.equal(current.challenges,requestsBefore.challenges);
-          returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:false,additionalAssertions:0,
-            unfocusedSecondsBeforeHidden:3});
+          returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:false,additionalAssertions:0});
         }else{
           const result=await verifiedBrowserReturn(browser,page,requestsBefore);
           returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:true,
@@ -441,7 +400,7 @@ async function main() {
 
     await browser.click(page,'Use password');
     await browser.fill(page,'Wallet password',generatedCredential);
-    await browser.click(page,'Unlock');
+    await browser.click(page,'Log In');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'known-password provider-loss return'});
     assert.deepEqual(await page.evaluate(credentialsSummary),protectedSummary);
     await browser.click(page,'Settings');await browser.click(page,'Security');
@@ -457,5 +416,5 @@ async function main() {
   } finally { generatedCredential=null;await browser.cleanup(); }
 }
 
-module.exports={probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady,passkeyUnlock,privacyCover};
+module.exports={probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady};
 if(require.main===module)main().catch(error=>{console.error(error.name,error.message);process.exitCode=1;});

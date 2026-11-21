@@ -28,10 +28,6 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// Creates a source backed by [manager]. Sources given the same [rateLimit]
   /// wait out a refusal together. Each failed quote or catalog read is
   /// described in one line to [log], for the app's exportable log.
-  ///
-  /// [tradingAllowed] says whether this location may trade a pair, and a
-  /// refusal is reported as that restriction. The order book's own rules,
-  /// such as wallet-only assets, bind no routed swap and do not belong in it.
   RoutedSwapQuoteSource(
     this.manager, {
     required SwapNetworks Function() networks,
@@ -118,9 +114,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Set<AssetId> onceActive,
   ) async {
     try {
-      final eligible = (await manager.eligibleAssets().timeout(_catalogTimeout))
-          .where((asset) => !isSolanaTradingAsset(asset))
-          .toSet();
+      final eligible = (await manager.eligibleAssets().timeout(
+        _catalogTimeout,
+      )).where((asset) => !isSolanaTradingAsset(asset)).toSet();
       _lastEligible = eligible;
       return SwapSourceAssets(
         source: source,
@@ -192,23 +188,15 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     );
   }
 
-  /// Why [from] for [to] is not asked for at all, if it is not. The engine
-  /// routes EVM networks only, which is no restriction of the location: only
-  /// [_tradingAllowed] refusing reads as one.
-  SwapQuoteRejected? _refusal(AssetId from, AssetId to) {
-    if (isSolanaTradingAsset(from) || isSolanaTradingAsset(to)) {
-      return _rejected(SwapQuoteFailureKind.pairUnsupported);
-    }
-    if (_tradingAllowed != null && !_tradingAllowed(from, to)) {
-      return _rejected(SwapQuoteFailureKind.tradingBlocked);
-    }
-    return null;
-  }
+  bool _blocked(AssetId from, AssetId to) =>
+      isSolanaTradingAsset(from) ||
+      isSolanaTradingAsset(to) ||
+      (_tradingAllowed != null && !_tradingAllowed(from, to));
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {
-    if (_refusal(request.from, request.to) case final refusal?) {
-      return [refusal];
+    if (_blocked(request.from, request.to)) {
+      return [_rejected(SwapQuoteFailureKind.tradingBlocked)];
     }
     final orders = request.orders.isEmpty
         ? const {SwapQuoteOrder.cheapest}
@@ -267,7 +255,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// better price must still execute against the accepted minimum.
   @override
   Future<SwapQuoteResult> requote(SwapQuote quote) async {
-    if (_refusal(quote.from, quote.to) case final refusal?) return refusal;
+    if (_blocked(quote.from, quote.to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
     final order = quote.order ?? SwapQuoteOrder.cheapest;
     final result = await _quote(
       quote.from,
@@ -299,7 +289,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     bool max = false,
   }) async {
     // Max and cached/requoted routes share this boundary too.
-    if (_refusal(from, to) case final refusal?) return refusal;
+    if (_blocked(from, to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
     final pausedUntil = _budget.pausedUntil;
     if (pausedUntil != null) {
       return _rejected(SwapQuoteFailureKind.rateLimited, retryAt: pausedUntil);
@@ -346,7 +338,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
           retainedBalance: null,
         );
       }
-      if (_refusal(from, to) case final refusal?) return refusal;
+      if (_blocked(from, to)) {
+        return _rejected(SwapQuoteFailureKind.tradingBlocked);
+      }
       final quote = routedQuoteFromOffer(
         priced.offer,
         networks: _networks(),
@@ -440,7 +434,6 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       Decimal? minimum,
       Decimal? maximum,
       List<String> reasons = const [],
-      SwapQuoteFailureCause? cause,
     }) => SwapQuoteFailure(
       source: SwapLiquiditySource.routed,
       kind: kind,
@@ -448,7 +441,6 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       minimum: minimum,
       maximum: maximum,
       reasons: reasons,
-      cause: cause,
       providerRequestId: error.providerRequestId,
       detail: '${error.errorType}: ${error.message}',
       retryAt: retryAt,
@@ -514,21 +506,14 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       RoutedSwapRateLimitedException() => failure(
         SwapQuoteFailureKind.rateLimited,
       ),
-      RoutedSwapProviderException() => failure(
-        SwapQuoteFailureKind.serviceError,
-        cause: SwapQuoteFailureCause.provider,
-      ),
-      RoutedSwapTransportException() => failure(
-        SwapQuoteFailureKind.serviceError,
-        cause: SwapQuoteFailureCause.transport,
-      ),
-      RoutedSwapInternalException() => failure(
-        SwapQuoteFailureKind.serviceError,
-        cause: SwapQuoteFailureCause.engine,
-      ),
+      // A node that won't estimate gas for an address without the network's
+      // coin answers the same as one that is down, so a failed estimate reads
+      // as a service error, whose copy names the coin to check.
+      RoutedSwapProviderException() ||
+      RoutedSwapTransportException() ||
+      RoutedSwapInternalException() ||
       RoutedSwapGasEstimationFailedException() => failure(
         SwapQuoteFailureKind.serviceError,
-        cause: SwapQuoteFailureCause.feeEstimation,
       ),
       _ => failure(SwapQuoteFailureKind.unknown),
     };

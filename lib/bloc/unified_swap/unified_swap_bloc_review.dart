@@ -10,7 +10,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (!state.canReview) return;
-    final tapped = state.selectedQuote!;
+    final quote = state.selectedQuote!;
     final SwapSubmission reviewedIn;
     try {
       reviewedIn = _registry.beginSubmission();
@@ -19,16 +19,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       // the registry announces the next one.
       emit(state.copyWith(sessionReady: false));
       return;
-    } on WalletOperationDenied {
-      // Locked, which no session change will lift: Review stays as it was,
-      // to be asked for again once unlocked.
-      return;
     }
     final version = ++_startVersion;
     final epoch = _walletEpoch;
-    // Each arriving source prices the options again as new instances. The
-    // tap stands while the selected one is the offer tapped, on its terms;
-    // anything else is a price the user has not asked to review.
     bool current() =>
         !_closing &&
         !isClosed &&
@@ -36,9 +29,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         version == _startVersion &&
         epoch == _walletEpoch &&
         _registry.isCurrent(reviewedIn) &&
-        (state.selectedQuote?.isSameOfferAs(tapped) ?? false) &&
+        identical(state.selectedQuote, quote) &&
         state.view == UnifiedSwapView.form;
-    final routed = tapped.source == SwapLiquiditySource.routed;
+    final routed = quote.source == SwapLiquiditySource.routed;
     final snapshot = routed ? await _terms.loadSnapshot() : null;
     if (!current()) return;
     final termsRequired =
@@ -48,7 +41,6 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           walletKey: reviewedIn.walletKey,
         );
     if (!current()) return;
-    final quote = state.selectedQuote!;
     _reviewSubmission = reviewedIn;
     // Freeze the selected snapshot and ignore form requests already in flight.
     _invalidate();
@@ -57,8 +49,6 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       state.copyWith(
         view: UnifiedSwapView.review,
         structuralNotice: false,
-        quotesPending: false,
-        pricingPending: false,
         review: SwapReview(
           quote: quote,
           status: quote.isExpiredAt(_now())
@@ -347,8 +337,6 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           add(const UnifiedSwapEvaluationRequested());
           return null;
         }
-        // Unknown funding is not an affordable balance. Final confirmation
-        // must not start after a failed balance read, even with a valid quote.
         if (held.balance == null ||
             (fresh.from.parentId != null && held.feeBalance == null) ||
             fresh.fundingAssets.any(
@@ -393,11 +381,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           );
           return null;
         }
-        if (_isMaterialChange(
-          accepted,
-          fresh,
-          usdPrice: _repository.pricing.prices.usdPrice,
-        )) {
+        if (_isMaterialChange(accepted, fresh)) {
           emit(
             state.copyWith(
               review: SwapReview(
@@ -476,5 +460,59 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     final fresh = await _revalidate(emit, review, confirmation);
     if (fresh == null) return;
     await _start(emit, fresh, termsRequired: false, confirmation: confirmation);
+  }
+
+  void _onProgressLeft(
+    UnifiedSwapProgressLeft event,
+    Emitter<UnifiedSwapState> emit,
+  ) => _resetForm(emit, keepPair: true);
+
+  void _onResetRequested(
+    UnifiedSwapResetRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) => _resetForm(emit, keepPair: event.keepPair);
+
+  void _resetForm(Emitter<UnifiedSwapState> emit, {required bool keepPair}) {
+    if (state.review?.status == SwapReviewStatus.starting) return;
+    _invalidate();
+    _startVersion++;
+    emit(
+      _validated(
+        state.copyWith(
+          view: UnifiedSwapView.form,
+          inputText: '',
+          amountMode: SwapAmountMode.token,
+          clearActiveExecution: true,
+          clearReview: true,
+          clearQuotes: true,
+          clearSelectedId: true,
+          clearFailure: true,
+          clearMaxApplied: true,
+          checkingMax: false,
+          clearPay: !keepPair,
+          clearReceive: !keepPair,
+          evaluation: SwapEvaluationStatus.idle,
+          structuralNotice: false,
+        ),
+      ),
+    );
+    add(const UnifiedSwapBalancesRefreshed());
+    // The swap just made may have taken the last offer.
+    if (keepPair) add(const UnifiedSwapOffersRequested(recount: true));
+  }
+
+  Future<void> _onFollowUpRequested(
+    UnifiedSwapFollowUpRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    if (_startInDoubt) return;
+    _startVersion++;
+    emit(state.copyWith(clearActiveExecution: true, clearReview: true));
+    await _setPair(
+      emit,
+      pay: event.pay,
+      receive: event.receive == event.pay ? null : event.receive,
+      amount: event.amount ?? '',
+    );
   }
 }

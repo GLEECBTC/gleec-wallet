@@ -27,7 +27,6 @@ void main() {
 
   AtomicSwapQuoteSource source({
     bool Function(AssetId from, AssetId to)? tradingAllowed,
-    bool Function(AssetId from, AssetId to)? pairAllowed,
     bool Function()? clockValid,
     bool Function(AssetId asset)? isWalletOnly,
   }) => AtomicSwapQuoteSource(
@@ -35,7 +34,6 @@ void main() {
     networks: () => networks,
     addressOf: (asset) async => '${asset.id}-address',
     tradingAllowed: tradingAllowed,
-    pairAllowed: pairAllowed,
     clockValid: clockValid,
     isWalletOnly: isWalletOnly,
     now: () => now,
@@ -308,18 +306,6 @@ void main() {
 
       expect(reason.kind, SwapQuoteFailureKind.tradingBlocked);
       expect(asked, [(btc, eth)]);
-      expect(trading.books, isEmpty);
-    });
-
-    test('a pair its own rules refuse is unsupported, whatever the location '
-        'allows', () async {
-      final reason = failure(
-        await ask(
-          source(tradingAllowed: (_, _) => false, pairAllowed: (_, _) => false),
-        ),
-      );
-
-      expect(reason.kind, SwapQuoteFailureKind.pairUnsupported);
       expect(trading.books, isEmpty);
     });
 

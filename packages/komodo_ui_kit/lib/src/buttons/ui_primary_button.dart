@@ -18,7 +18,6 @@ class UiPrimaryButton extends StatefulWidget {
     this.padding,
     this.borderRadius,
     this.expandForText = false,
-    this.autofocus = false,
     super.key,
   });
 
@@ -41,10 +40,6 @@ class UiPrimaryButton extends StatefulWidget {
   /// Existing callers retain their fixed-height layout unless they opt in.
   final bool expandForText;
 
-  /// Takes keyboard focus when first shown, so Enter or Space activates it
-  /// unless a text field holds focus.
-  final bool autofocus;
-
   @override
   State<UiPrimaryButton> createState() => _UiPrimaryButtonState();
 }
@@ -61,7 +56,6 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
       border: widget.border,
       child: ElevatedButton(
         focusNode: widget.focusNode,
-        autofocus: widget.autofocus,
         onFocusChange: (value) {
           setState(() {
             _hasFocus = value;
@@ -101,12 +95,7 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   Color get _shadowColor {
-    // The glow marks keyboard focus. On a touch screen an autofocused button
-    // would otherwise glow before anyone has touched it.
-    final keyboardFocus =
-        _hasFocus &&
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    return keyboardFocus
+    return _hasFocus
         ? widget.shadowColor ?? Theme.of(context).colorScheme.primary
         : Colors.transparent;
   }

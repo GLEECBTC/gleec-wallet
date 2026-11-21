@@ -2,7 +2,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 
 class WalletImportTypeDropdown extends StatelessWidget {
   const WalletImportTypeDropdown({
@@ -25,11 +24,8 @@ class WalletImportTypeDropdown extends StatelessWidget {
       children: [
         Text(
           LocaleKeys.selectWalletType.tr(),
-          // The theme's bodyLarge is half-transparent; a field label is not
-          // secondary text.
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -37,8 +33,6 @@ class WalletImportTypeDropdown extends StatelessWidget {
           key: const Key('wallet-import-type-dropdown'),
           initialValue: selectedType,
           isExpanded: true,
-          // Two-line entries need more than the fixed 48 dp at large text.
-          itemHeight: null,
           borderRadius: BorderRadius.circular(12),
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
@@ -79,9 +73,12 @@ class WalletImportTypeDropdown extends StatelessWidget {
         ),
         if (!isHdOptionEnabled) ...[
           const SizedBox(height: 8),
-          // A limit of this phrase, not a mistake: informative, and announced
-          // because it appears while the user is typing elsewhere.
-          WalletAccessNotice(text: 'walletImportTypeHdDisabledHint'.tr()),
+          Text(
+            'walletImportTypeHdDisabledHint'.tr(),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
         ],
       ],
     );

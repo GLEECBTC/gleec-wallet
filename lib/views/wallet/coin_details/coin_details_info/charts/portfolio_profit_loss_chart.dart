@@ -83,15 +83,9 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
   Widget build(BuildContext context) {
     return BlocBuilder<ProfitLossBloc, ProfitLossState>(
       builder: (BuildContext context, ProfitLossState state) {
-        // Nothing to draw and nothing loading. The card keeps its header, so
-        // the period and coin can still be changed, and says so in the chart
-        // area.
-        final isUnavailable =
-            state is ProfitLossLoadFailure ||
-            state is PortfolioProfitLossChartUnsupported;
-        final excludedAssets = state is PortfolioProfitLossChartLoadSuccess
-            ? state.excludedAssetIds.length
-            : 0;
+        if (state is ProfitLossLoadFailure) {
+          return Center(child: Text(state.error.message));
+        }
 
         final (dateAxisLabelCount, dateAxisLabelFormat) =
             PriceChartPage.dateAxisLabelCountFormat(state.selectedPeriod);
@@ -154,9 +148,7 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
                       .toList(),
                   selectedCoinId: _singleCoinOrNull?.abbr,
                   onCoinSelected: _isCoinPage ? null : _showSpecificCoin,
-                  // Not a number reads as "--" in the control; an amount that
-                  // is not known must not read as $0.00.
-                  centreAmount: hasValidTotal ? totalValue : double.nan,
+                  centreAmount: totalValue,
                   percentageIncrease: percentageIncrease,
                   selectedPeriod: state.selectedPeriod,
                   onPeriodChanged: (selected) {
@@ -169,80 +161,61 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
                     }
                   },
                 ),
-                if (excludedAssets > 0) ...[
-                  const Gap(4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'portfolioExcludesUnpricedAssets'.plural(excludedAssets),
-                      key: const Key('portfolio-profit-loss-excluded-assets'),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
                 const Gap(16),
                 Expanded(
-                  child: isUnavailable
-                      ? const _ProfitLossUnavailableMessage()
-                      : LineChart(
-                          key: ValueKey<String>(
-                            'portfolio_profit_loss_chart_${state.selectedPeriod.inMilliseconds}',
-                          ),
-                          rangeExtent: const ChartExtent.tight(),
-                          elements: [
-                            ChartDataSeries(
-                              data: chartData,
-                              color:
-                                  (_isSingleCoinSelected
-                                      ? getCoinColor(_singleCoinOrNull!.abbr)
-                                      : null) ??
-                                  Theme.of(context).colorScheme.primary,
-                            ),
-                            ChartGridLines(isVertical: false, count: 5),
-                            ChartAxisLabels(
-                              isVertical: true,
-                              count: 5,
-                              labelBuilder: (value) =>
-                                  NumberFormat.compactSimpleCurrency(
-                                    locale: 'en_US',
-                                  ).format(value),
-                            ),
-                            ChartAxisLabels(
-                              isVertical: false,
-                              count: dateAxisLabelCount,
-                              labelBuilder: (value) {
-                                return dateAxisLabelFormat.format(
-                                  DateTime.fromMillisecondsSinceEpoch(
-                                    value.toInt(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                          backgroundColor: Theme.of(context)
-                              .colorScheme
-                              .surface,
-                          markerSelectionStrategy: CartesianSelectionStrategy(
-                            snapToClosest: true,
-                          ),
-                          tooltipBuilder: (context, dataPoints, dataColors) {
-                            return _PortfolioProfitLossTooltip(
-                              date: DateTime.fromMillisecondsSinceEpoch(
-                                dataPoints.first.x.toInt(),
-                              ),
-                              portfolioValue: dataPoints.first.y,
-                              selectedChartCoin: _singleCoinOrNull,
-                            );
-                          },
-                          domainExtent: ChartExtent.withBounds(
-                            min: minChartExtent,
-                            max: maxChartExtent,
-                          ),
+                  child: LineChart(
+                    key: ValueKey<String>(
+                      'portfolio_profit_loss_chart_${state.selectedPeriod.inMilliseconds}',
+                    ),
+                    rangeExtent: const ChartExtent.tight(),
+                    elements: [
+                      ChartDataSeries(
+                        data: chartData,
+                        color:
+                            (_isSingleCoinSelected
+                                ? getCoinColor(_singleCoinOrNull!.abbr)
+                                : null) ??
+                            Theme.of(context).colorScheme.primary,
+                      ),
+                      ChartGridLines(isVertical: false, count: 5),
+                      ChartAxisLabels(
+                        isVertical: true,
+                        count: 5,
+                        labelBuilder: (value) =>
+                            NumberFormat.compactSimpleCurrency(
+                              locale: 'en_US',
+                            ).format(value),
+                      ),
+                      ChartAxisLabels(
+                        isVertical: false,
+                        count: dateAxisLabelCount,
+                        labelBuilder: (value) {
+                          return dateAxisLabelFormat.format(
+                            DateTime.fromMillisecondsSinceEpoch(value.toInt()),
+                          );
+                        },
+                      ),
+                    ],
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    markerSelectionStrategy: CartesianSelectionStrategy(
+                      snapToClosest: true,
+                    ),
+                    tooltipBuilder: (context, dataPoints, dataColors) {
+                      return _PortfolioProfitLossTooltip(
+                        date: DateTime.fromMillisecondsSinceEpoch(
+                          dataPoints.first.x.toInt(),
                         ),
+                        portfolioValue: dataPoints.first.y,
+                        selectedChartCoin: _singleCoinOrNull,
+                      );
+                    },
+                    domainExtent: ChartExtent.withBounds(
+                      min: minChartExtent,
+                      max: maxChartExtent,
+                    ),
+                  ),
                 ),
-                if (!isUnavailable && (!isSuccess || isUpdating))
+                if (!isSuccess || isUpdating)
                   Container(
                     clipBehavior: Clip.none,
                     child: const LinearProgressIndicator(
@@ -274,28 +247,6 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
     );
 
     setState(() => _selectedCoins = newCoins);
-  }
-}
-
-class _ProfitLossUnavailableMessage extends StatelessWidget {
-  const _ProfitLossUnavailableMessage();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Text(
-          'portfolioProfitLossUnavailable'.tr(),
-          key: const Key('portfolio-profit-loss-unavailable'),
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
   }
 }
 

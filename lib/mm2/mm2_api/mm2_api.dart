@@ -537,9 +537,7 @@ class Mm2Api {
         trace: s,
         isError: true,
       ).ignore();
-      // Text, as KDF's own error answers are: the response model reads no
-      // other, and a refusal before the order was sent has to say why.
-      return <String, dynamic>{'error': e.toString()};
+      return <String, dynamic>{'error': e};
     }
   }
 

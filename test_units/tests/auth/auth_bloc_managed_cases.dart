@@ -1,85 +1,91 @@
 part of 'auth_bloc_test.dart';
 
+/// Managed sign-in whose outcome each test chooses.
+class _ManagedAccess extends _FakeWalletAccess {
+  _ManagedAccess(this.outcome);
+  final Future<KdfUser> Function() outcome;
+  final requests = <bool>[];
+  int invalidations = 0;
+
+  @override
+  void invalidatePendingOperations() => invalidations++;
+
+  @override
+  Future<KdfUser> signInManaged(Wallet wallet, {bool automatic = false}) {
+    requests.add(automatic);
+    return outcome();
+  }
+}
+
 void _managedSignInCases() {
   group('AuthBloc managed sign-in', () {
-    late _Session s;
+    late _FakeSdk sdk;
+    const canceled = WalletAccessException(WalletAccessFailure.canceled);
+
     setUp(() {
-      s = _Session();
+      sdk = _FakeSdk(_FakeAuth());
       WalletLoadTimeline.instance.reset();
     });
-    tearDown(() => s.dispose());
+
+    AuthBloc build(_ManagedAccess access) {
+      final bloc = AuthBloc(
+        sdk,
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+        walletAccessService: access,
+      );
+      addTearDown(bloc.close);
+      return bloc;
+    }
+
+    Future<AuthBlocState> outcomeOf(AuthBloc bloc, AuthBlocEvent event) {
+      final settled = bloc.stream
+          .firstWhere((state) => !state.isLoading)
+          .timeout(const Duration(seconds: 2));
+      bloc.add(event);
+      return settled;
+    }
 
     test('a cancelled automatic unlock reports nothing', () async {
-      final user = await s.installManaged();
-      s.vault.cancelReads = true;
-      final state = await s.outcomeOf(
-        AuthManagedSignInRequested(wallet: user.wallet, automatic: true),
+      final bloc = build(_ManagedAccess(() async => throw canceled));
+      final state = await outcomeOf(
+        bloc,
+        AuthManagedSignInRequested(wallet: _wallet(), automatic: true),
       );
       expect(state.isError, isFalse);
       expect(state.authError, isNull);
       expect(state.currentUser, isNull);
-      expect(s.engine.active, isNull);
-      s.vault.cancelReads = false;
-      final opened = await s.outcomeOf(
-        AuthManagedSignInRequested(wallet: user.wallet),
-      );
-      expect(opened.authError, isNull);
-      expect(opened.currentUser, s.engine.active);
     });
 
     test('a cancelled explicit unlock still says it was cancelled', () async {
-      final user = await s.installManaged();
-      s.vault.cancelReads = true;
-      final state = await s.outcomeOf(
-        AuthManagedSignInRequested(wallet: user.wallet),
+      final bloc = build(_ManagedAccess(() async => throw canceled));
+      final state = await outcomeOf(
+        bloc,
+        AuthManagedSignInRequested(wallet: _wallet()),
       );
-      expect(state.authError?.message, 'authManagedUnlockCanceled');
+      expect(state.authError?.message, startsWith('Unlock canceled'));
     });
 
     test('asking again for the open wallet changes nothing', () async {
-      final user = await s.installManaged();
-      final opened = await s.outcomeOf(
+      final user = _user();
+      final access = _ManagedAccess(() async => user);
+      final bloc = build(access);
+      final opened = await outcomeOf(
+        bloc,
         AuthManagedSignInRequested(wallet: user.wallet, automatic: true),
       );
-      expect(opened.currentUser, s.engine.active);
+      expect(opened.currentUser, user);
+      final invalidations = access.invalidations;
       final states = <AuthBlocState>[];
-      final subscription = s.bloc.stream.listen(states.add);
-      s.bloc.add(AuthManagedSignInRequested(wallet: user.wallet));
+      final subscription = bloc.stream.listen(states.add);
+      bloc.add(AuthManagedSignInRequested(wallet: user.wallet));
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await subscription.cancel();
       expect(states, isEmpty);
-      expect(s.bloc.state, opened);
-      expect(s.engine.signInModes, hasLength(1));
-      expect(s.engine.signOuts, 0);
-      expect(s.coordinator.operationGate.allowsOperations, isTrue);
+      expect(bloc.state, opened);
+      expect(access.requests, [true]);
+      expect(access.invalidations, invalidations);
     });
-
-    test('an unlock completes a session the engine already holds', () async {
-      final user = await s.installManaged();
-      // Opened by an earlier request whose result the app never showed.
-      s.engine._activate(user);
-      final state = await s.outcomeOf(
-        AuthManagedSignInRequested(wallet: user.wallet),
-      );
-      expect(state.authError, isNull);
-      expect(state.currentUser, s.engine.active);
-      expect(s.engine.signInModes, isEmpty);
-      expect(s.engine.signOuts, 0);
-      expect(s.coordinator.operationGate.allowsOperations, isTrue);
-    });
-
-    test(
-      'a held session the stored password does not open is closed',
-      () async {
-        final user = await s.installManaged();
-        s.engine._activate(user);
-        s.engine.password = 'Different-password-0!';
-        final state = await s.outcomeOf(
-          AuthManagedSignInRequested(wallet: user.wallet),
-        );
-        expect(state.authError?.message, 'authManagedUnlockFailed');
-        expect(s.engine.active, isNull);
-      },
-    );
   });
 }

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,8 +11,6 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
-import 'package:web_dex/views/swap/execution/swap_execution_display.dart';
-import 'package:web_dex/views/swap/execution/swap_loading_status.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -137,15 +133,17 @@ class _ActivityList extends StatelessWidget {
     switch (state.status) {
       case SwapActivityStatus.loading:
         return [
-          SwapLoadingStatus(
-            label: 'swapActivityLoading'.tr(),
-            skeletons: const [
-              SwapSkeleton(height: 76),
-              SizedBox(height: 12),
-              SwapSkeleton(height: 76),
-              SizedBox(height: 12),
-              SwapSkeleton(height: 76),
-            ],
+          Semantics(
+            label: LocaleKeys.swapNavActivity.tr(),
+            child: const Column(
+              children: [
+                SwapSkeleton(height: 76),
+                SizedBox(height: 12),
+                SwapSkeleton(height: 76),
+                SizedBox(height: 12),
+                SwapSkeleton(height: 76),
+              ],
+            ),
           ),
         ];
       case SwapActivityStatus.error:
@@ -169,7 +167,7 @@ class _ActivityList extends StatelessWidget {
           for (final entry in entries) ...[
             _ActivityRow(
               snapshot: entry,
-              copy: SwapExecutionDisplay(entry, networks),
+              copy: SwapExecutionCopy(entry, networks),
               returning: entry.id == shell.lastDetail?.id,
               onTap: () => shell.showActivity(
                 swap: (id: entry.id, source: entry.source),
@@ -243,9 +241,6 @@ class _ActivityRow extends StatefulWidget {
 }
 
 class _ActivityRowState extends State<_ActivityRow> {
-  static const _iconSize = 42.0;
-  static const _gap = 12.0;
-
   final FocusNode _focus = FocusNode(debugLabel: 'Activity row');
 
   @override
@@ -273,11 +268,6 @@ class _ActivityRowState extends State<_ActivityRow> {
     final actionRequired = snapshot.stage == SwapProgressStage.actionRequired;
     final attention = snapshot.isTerminal && snapshot.needsAttention;
     final refunded = snapshot.outcome?.kind == SwapOutcomeKind.refunded;
-    // A swap waiting on the user already says so as its status; a badge
-    // would only say it again.
-    final badge = attention ? LocaleKeys.swapNavNeedsAttention.tr() : null;
-    final when = time == null ? null : SwapFormat.time(time);
-    final timeStyle = SwapText.small(context);
     return Semantics(
       button: true,
       child: Material(
@@ -294,78 +284,53 @@ class _ActivityRowState extends State<_ActivityRow> {
             constraints: const BoxConstraints(minHeight: 76),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Beside the swap while that leaves it most of the row.
-                  // A dated time, a badge or large text takes more than
-                  // that, and would squeeze the amounts into a column of
-                  // single characters; then they go under it.
-                  final trailing = math.max(
-                    when == null
-                        ? 0.0
-                        : SwapText.widthOf(context, when, timeStyle),
-                    badge == null ? 0.0 : SwapBadge.widthOf(context, badge),
-                  );
-                  final room = constraints.maxWidth - _iconSize - 2 * _gap;
-                  final beside = trailing <= room * 0.35;
-                  final marks = [
-                    if (badge != null)
-                      SwapBadge(label: badge, tone: SwapTone.warning),
-                    if (when != null) Text(when, style: timeStyle),
-                  ];
-                  return Row(
-                    children: [
-                      SwapTokenIcon(
-                        asset: snapshot.from,
-                        ticker: snapshot.fromTicker,
-                        size: _iconSize,
-                      ),
-                      const SizedBox(width: _gap),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              copy.pairLine,
-                              style: SwapText.strong(context),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              copy.statusLine,
-                              style: SwapText.small(context).copyWith(
-                                color: attention || actionRequired || refunded
-                                    ? palette.warning
-                                    : palette.textTertiary,
-                              ),
-                            ),
-                            if (!beside && marks.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: marks,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (beside && marks.isNotEmpty) ...[
-                        const SizedBox(width: _gap),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (final (index, mark) in marks.indexed) ...[
-                              if (index > 0) const SizedBox(height: 4),
-                              mark,
-                            ],
-                          ],
+              child: Row(
+                children: [
+                  SwapTokenIcon(
+                    asset: snapshot.from,
+                    ticker: snapshot.fromTicker,
+                    size: 42,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(copy.pairLine, style: SwapText.strong(context)),
+                        const SizedBox(height: 3),
+                        Text(
+                          copy.statusLine,
+                          style: SwapText.small(context).copyWith(
+                            color: attention || actionRequired || refunded
+                                ? palette.warning
+                                : palette.textTertiary,
+                          ),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (actionRequired || attention) ...[
+                        SwapBadge(
+                          label: actionRequired
+                              ? LocaleKeys.swapActivityActionRequired.tr()
+                              : LocaleKeys.swapNavNeedsAttention.tr(),
+                          tone: SwapTone.warning,
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      if (time != null)
+                        Text(
+                          SwapFormat.time(time),
+                          style: SwapText.small(context),
+                        ),
                     ],
-                  );
-                },
+                  ),
+                ],
               ),
             ),
           ),

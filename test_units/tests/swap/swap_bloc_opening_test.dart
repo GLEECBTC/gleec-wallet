@@ -47,14 +47,7 @@ void main() {
   });
 
   group('the opening pair', () {
-    swapBlocTest('is ETH and a stablecoin with no last pair and no holding '
-        'valued yet', (h) {
-      expect(openingPair(h), (eth, usdc));
-    });
-
-    swapBlocTest('is empty when nothing trades for a stablecoin or ETH', (h) {
-      tradeOnly(h, {btc, gleec});
-
+    swapBlocTest('is empty with no last pair and nothing held', (h) {
       expect(openingPair(h), (null, null));
     });
 
@@ -102,10 +95,10 @@ void main() {
       expect(openingPair(h), (null, null));
     });
 
-    swapBlocTest('is ETH and a stablecoin when holdings cannot be read', (h) {
+    swapBlocTest('is empty when holdings cannot be read', (h) {
       h.holdingsError = StateError('offline');
 
-      expect(openingPair(h), (eth, usdc));
+      expect(openingPair(h), (null, null));
     });
 
     swapBlocTest('never pairs a holding with a legacy asset', (h) {

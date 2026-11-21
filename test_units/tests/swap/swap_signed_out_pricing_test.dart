@@ -12,7 +12,6 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_bloc_fakes.dart' show ScriptedQuoteSource;
@@ -235,7 +234,7 @@ void main() {
     });
 
     test(
-      'signing in drops the signed-out price until activation is ready',
+      'signing in drops the signed-out price and reads the wallet',
       () async {
         final bloc = await open('ETH', 'USDC-ERC20');
         expect(bloc.state.selectedQuote, isNotNull);
@@ -249,10 +248,9 @@ void main() {
         expect(bloc.state.selectedQuote, isNull);
         expect(bloc.state.failures, isEmpty);
         expect(bloc.state.evaluation, SwapEvaluationStatus.idle);
-        expect(bloc.state.balance, isNull);
-        expect(bloc.state.payAddress, isNull);
-        // This fixture has no activation service, so preparation stops at
-        // that prerequisite rather than treating an inactive coin as ready.
+        expect(bloc.state.balance, d('10'));
+        expect(bloc.state.payAddress, '0xwallet');
+        // Nothing is active yet: the catalog was read signed out.
         expect(bloc.state.issue, SwapFormIssue.assetInactive);
         expect(bloc.state.canReview, isFalse);
       },
@@ -367,9 +365,7 @@ void main() {
     test("a signed-in price in flight at sign-out is dropped", () async {
       routed.gate = Completer<void>();
       final bloc = await open('ETH', 'USDC-ERC20', signedInAtStart: true);
-      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
-      expect(bloc.state.quotesPending, isTrue);
-      expect(bloc.state.selectedQuote!.source, SwapLiquiditySource.atomic);
+      expect(bloc.state.evaluation, SwapEvaluationStatus.checking);
 
       walletSignedIn = false;
       bloc.add(signedIn(false));

@@ -112,15 +112,11 @@ class FileLoaderNativeAndroid implements FileLoader {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: fileType == null ? FileType.any : fileType.fileType,
-        allowedExtensions: fileType?.importExtensions,
+        allowedExtensions: fileType != null ? [fileType.extension] : null,
       );
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
-      if (fileType != null && !fileType.acceptsImport(file.name)) {
-        onError('Unsupported file type');
-        return;
-      }
       final path = file.path;
       if (path == null) return;
 

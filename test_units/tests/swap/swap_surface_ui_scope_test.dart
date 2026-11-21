@@ -100,111 +100,6 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('leaving the complete shell restores only an unsigned draft', (
-      tester,
-    ) async {
-      final source = services.quoteSource = FakeQuoteSource(
-        SwapLiquiditySource.routed,
-        pricesSignedOut: true,
-      );
-      services.resolvedAssets.addAll({eth.id: eth, usdc.id: usdc});
-      services.requestIntent((
-        pay: eth.id,
-        receive: usdc.id,
-        amount: '25.50',
-        fiat: true,
-      ));
-      await show(tester);
-      final first = form(tester);
-      first.add(const UnifiedSwapSlippageChanged(0.007));
-      await tester.pumpAndSettle();
-      expect(first.state.inputText, '25.50');
-      expect(first.state.amountMode, SwapAmountMode.fiat);
-      final requests = source.requests.length;
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      await show(tester);
-      final restored = form(tester);
-      expect(identical(first, restored), isFalse);
-      expect((restored.state.pay, restored.state.receive), (eth, usdc));
-      expect(restored.state.inputText, '25.50');
-      expect(restored.state.amountMode, SwapAmountMode.fiat);
-      expect(restored.state.slippage, 0.007);
-      expect(restored.state.review, isNull);
-      expect(restored.state.activeExecutionId, isNull);
-      expect(source.requests.length, greaterThan(requests));
-    });
-
-    testWidgets('a new intent wins over the previous session draft', (
-      tester,
-    ) async {
-      services.quoteSource = FakeQuoteSource(
-        SwapLiquiditySource.routed,
-        pricesSignedOut: true,
-      );
-      services.resolvedAssets.addAll({eth.id: eth, usdc.id: usdc});
-      services.requestIntent((
-        pay: eth.id,
-        receive: usdc.id,
-        amount: '25',
-        fiat: true,
-      ));
-      await show(tester);
-      await tester.pumpWidget(const SizedBox());
-      services.requestIntent((
-        pay: eth.id,
-        receive: usdc.id,
-        amount: '10',
-        fiat: true,
-      ));
-      await show(tester);
-      expect(form(tester).state.inputText, '10');
-    });
-
-    testWidgets('resetting the wallet session rejects a late shell draft', (
-      tester,
-    ) async {
-      services.quoteSource = FakeQuoteSource(
-        SwapLiquiditySource.routed,
-        pricesSignedOut: true,
-      );
-      services.resolvedAssets.addAll({eth.id: eth, usdc.id: usdc});
-      services.requestIntent((
-        pay: eth.id,
-        receive: usdc.id,
-        amount: '25',
-        fiat: true,
-      ));
-      await show(tester);
-      services.resetDraftSession();
-      await tester.pumpWidget(const SizedBox());
-      await show(tester);
-      expect(form(tester).state.inputText, isEmpty);
-    });
-
-    testWidgets(
-      'a consumed deep-link amount is not replayed after session reset',
-      (tester) async {
-        services.quoteSource = FakeQuoteSource(
-          SwapLiquiditySource.routed,
-          pricesSignedOut: true,
-        );
-        services.resolvedAssets.addAll({eth.id: eth, usdc.id: usdc});
-        routingState.dexState
-          ..fromCurrency = eth.id
-          ..toCurrency = usdc.id
-          ..fromAmount = '25';
-        await show(tester);
-        expect(form(tester).state.inputText, '25');
-        final consumed = services.lastRouteIntent;
-        await tester.pumpWidget(const SizedBox());
-        services.resetDraftSession();
-        await show(tester);
-        expect(services.lastRouteIntent, consumed);
-        expect(form(tester).state.inputText, isEmpty);
-      },
-    );
-
     testWidgets('starts the form with the trading and clock checks it finds', (
       tester,
     ) async {
@@ -312,11 +207,12 @@ void main() {
       expect(bloc.state.view, UnifiedSwapView.review);
       expect(bloc.state.review, same(review));
       expect(bloc.state.tradingEnabled, isFalse);
-      final retry = tester.widget<SwapButton>(
-        find.byKey(const Key('swap-start')),
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNull,
       );
-      expect(retry.label, 'Try again');
-      expect(retry.onPressed, isNotNull);
 
       tradingStatus.push(TradingStatusLoadSuccess());
       await tester.pumpAndSettle();

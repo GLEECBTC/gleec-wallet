@@ -26,37 +26,9 @@ void _reviewCases() {
         view: const SwapReviewView(),
       );
 
-      final changed = find.byKey(const Key('swap-review-changed'));
+      final changed = find.text('Outcome updated');
       expect(changed.hitTestable(), findsOneWidget);
       expect(above(tester, changed, find.text('You pay')), isTrue);
-    });
-
-    testWidgets('brings a change into view for someone who had scrolled on, '
-        'with the button accepting it', (tester) async {
-      await pump(
-        tester,
-        reviewing(SwapReviewStatus.ready),
-        view: const SwapReviewView(),
-      );
-      await tester.drag(find.text('You pay'), const Offset(0, -400));
-      await tester.pumpAndSettle();
-      expect(find.text('You pay').hitTestable(), findsNothing);
-
-      await emitSwapState(
-        tester,
-        swap,
-        reviewing(SwapReviewStatus.materialUpdate),
-      );
-      await tester.pumpAndSettle();
-
-      final changed = find.byKey(const Key('swap-review-changed'));
-      expect(changed.hitTestable(), findsOneWidget);
-      expect(
-        tester.getTopLeft(changed).dy,
-        greaterThanOrEqualTo(0),
-        reason: 'from its first line',
-      );
-      expect(find.byKey(const Key('swap-start')).hitTestable(), findsOneWidget);
     });
 
     testWidgets('gives the provider terms beside the button accepting them', (
@@ -68,43 +40,38 @@ void _reviewCases() {
         view: const SwapReviewView(),
       );
 
-      final consent = find.byKey(const Key('swap-legal-consent'));
-      final link = find.byKey(const Key('swap-terms-link'));
-      final start = find.byKey(const Key('swap-start'));
-      expect(find.descendant(of: footer, matching: consent), findsOneWidget);
-      expect(find.descendant(of: footer, matching: link), findsOneWidget);
-      // What is accepted, then the documents, then the button accepting.
-      expect(above(tester, consent, link), isTrue);
-      expect(above(tester, link, start), isTrue);
-      for (final part in [consent, link, start]) {
-        expect(part.hitTestable(), findsOneWidget);
-      }
-      // Who the provider is closes the review, above the pinned block.
+      expect(
+        find.descendant(
+          of: footer,
+          matching: find.byKey(const Key('swap-terms-link')),
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(SwapProviderNotice), findsOneWidget);
       expect(
-        find.descendant(of: footer, matching: find.byType(SwapProviderNotice)),
-        findsNothing,
+        above(
+          tester,
+          find.byType(SwapProviderNotice),
+          find.byKey(const Key('swap-start')),
+        ),
+        isTrue,
       );
     });
 
-    testWidgets('already accepted terms leave only the button pinned, and '
-        'stay readable at the end of the review', (tester) async {
+    testWidgets('already accepted terms remain readable beside the action', (
+      tester,
+    ) async {
       await pump(
         tester,
         reviewing(SwapReviewStatus.ready),
         view: const SwapReviewView(),
       );
 
-      final notice = find.byType(SwapProviderNotice);
-      final link = find.byKey(const Key('swap-terms-link'));
-      expect(find.descendant(of: footer, matching: notice), findsNothing);
-      expect(find.descendant(of: footer, matching: link), findsNothing);
-      expect(tester.getSize(footer).height, lessThan(iPhoneSe.height * .15));
-
-      await tester.ensureVisible(link);
-      await tester.pumpAndSettle();
-      expect(notice, findsOneWidget);
-      expect(link.hitTestable(), findsOneWidget);
+      expect(
+        find.descendant(of: footer, matching: find.byType(SwapProviderNotice)),
+        findsOneWidget,
+      );
+      expect(find.byType(SwapProviderNotice), findsOneWidget);
     });
 
     for (final layout in [
@@ -148,59 +115,17 @@ void _reviewCases() {
           await tester.pumpAndSettle();
           expect(item.hitTestable(), findsOneWidget);
         }
-        // With no room to spare, what blocks the action stays with it and
-        // the documents scroll with the review.
-        expect(
-          find.descendant(
-            of: footer,
-            matching: find.byKey(const Key('legal-documents-unavailable')),
-          ),
-          findsOneWidget,
-        );
         expect(
           find.descendant(
             of: footer,
             matching: find.byKey(const Key('swap-terms-link')),
           ),
-          findsNothing,
+          findsOneWidget,
         );
         expect(swap.state.review, same(review));
         expect(swap.events, isEmpty);
       });
     }
-
-    testWidgets('at 200% text a first routed swap pins one line of consent '
-        'with its button, and leaves most of the screen to the review', (
-      tester,
-    ) async {
-      swap.emit(reviewing(SwapReviewStatus.ready, termsRequired: true));
-      await pumpSwapUi(
-        tester,
-        const SwapReviewView(),
-        bloc: swap,
-        services: services,
-        size: const Size(390, 844),
-        textScale: 2,
-      );
-
-      expect(tester.takeException(), isNull);
-      final consent = find.byKey(const Key('swap-legal-consent'));
-      expect(find.descendant(of: footer, matching: consent), findsOneWidget);
-      expect(tester.widget<Text>(consent).data, 'swapLegalConsentCompact'.tr());
-      expect(
-        find.descendant(
-          of: footer,
-          matching: find.byKey(const Key('swap-terms-link')),
-        ),
-        findsNothing,
-      );
-      expect(tester.getSize(footer).height, lessThan(844 * .3));
-      // The heading does not take the room the figures need.
-      expect(
-        tester.getSize(find.text(LocaleKeys.swapReviewTitle.tr())).height,
-        lessThan(50),
-      );
-    });
   });
 }
 

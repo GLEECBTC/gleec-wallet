@@ -498,17 +498,6 @@ class SwapQuote extends Equatable {
     return conservative != null && conservative > total ? conservative : total;
   }
 
-  /// Whether [other] is this very offer on the same terms: everything but
-  /// the US-dollar figures, which a later price read fills in without
-  /// changing what would be swapped.
-  bool isSameOfferAs(SwapQuote other) =>
-      identical(payload, other.payload) && _unpriced == other._unpriced;
-
-  SwapQuote get _unpriced => withPricing(
-    const SwapQuotePricing(),
-    fees: [for (final fee in fees) fee.withUsd(null)],
-  );
-
   /// A copy with [pricing] and fee USD values replaced.
   SwapQuote withPricing(
     SwapQuotePricing pricing, {

@@ -12,8 +12,10 @@ class _PickerRow extends StatelessWidget {
     required this.active,
     required this.signedIn,
     required this.blocked,
+    required this.activating,
     this.unreachableWith,
     this.noOffers = false,
+    required this.activationFailed,
     required this.onTap,
   });
 
@@ -33,6 +35,8 @@ class _PickerRow extends StatelessWidget {
   /// No one is offering it for the other side's asset right now. It can
   /// still be chosen: orders come and go.
   final bool noOffers;
+  final bool activating;
+  final bool activationFailed;
   final VoidCallback? onTap;
 
   @override
@@ -45,14 +49,42 @@ class _PickerRow extends StatelessWidget {
     final subtitle = contract == null
         ? network
         : '$network · ${SwapFormat.short(contract)}';
+    final failure = activationFailed
+        ? LocaleKeys.swapPickerActivationFailed.tr(args: [ticker])
+        : null;
     final tickerStyle = SwapText.strong(context);
     final small = SwapText.small(context);
+    final failureStyle = small.copyWith(color: palette.danger);
     double widest(Iterable<double> widths) =>
         widths.fold(0.0, (a, b) => a > b ? a : b);
 
     final Widget? trailing;
     final double trailingWidth;
-    if (active && balance != null) {
+    if (activating) {
+      final label = LocaleKeys.swapPickerActivating.tr();
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: palette.brand,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: small),
+        ],
+      );
+      trailingWidth = 16 + 8 + SwapText.widthOf(context, label, small);
+    } else if (signedIn && !active && !blocked && unreachableWith == null) {
+      final label = LocaleKeys.swapPickerActivate.tr();
+      final style = SwapText.strong(
+        context,
+      ).copyWith(color: palette.brandHover, fontSize: 14);
+      trailing = Text(label, style: style);
+      trailingWidth = SwapText.widthOf(context, label, style);
+    } else if (active && balance != null) {
       final amount = SwapFormat.amount(balance, rounding: SwapRounding.down);
       final usd = price == null ? null : SwapFormat.usd(balance * price);
       final style = SwapText.strong(context).copyWith(fontSize: 14);
@@ -89,7 +121,9 @@ class _PickerRow extends StatelessWidget {
         SwapBadge(
           label: LocaleKeys.swapPickerBlocked.tr(),
           tone: SwapTone.warning,
-        ),
+        )
+      else if (signedIn && !active)
+        SwapBadge(label: LocaleKeys.swapPickerInactive.tr()),
     ];
 
     final title = Column(
@@ -106,6 +140,7 @@ class _PickerRow extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(subtitle, style: small),
+        if (failure != null) Text(failure, style: failureStyle),
       ],
     );
     // Narrower than this, a badge or word of the title would split.
@@ -113,6 +148,8 @@ class _PickerRow extends StatelessWidget {
       SwapText.widthOf(context, ticker, tickerStyle),
       for (final badge in badges) SwapBadge.widthOf(context, badge.label),
       SwapText.widthOf(context, subtitle, small, longestWord: true),
+      if (failure != null)
+        SwapText.widthOf(context, failure, failureStyle, longestWord: true),
     ]);
 
     final disabled = blocked || unreachableWith != null;

@@ -136,30 +136,27 @@ class _NavItem extends StatelessWidget {
                             label,
                             key: Key('swap-destination-${destination.name}'),
                             maxLines: 1,
-                            style: SwapText.strong(context)
-                                .copyWith(color: foreground, fontSize: 14),
+                            style: SwapText.strong(
+                              context,
+                            ).copyWith(color: foreground, fontSize: 14),
                           ),
                         ),
                       ),
-                      // Pops as a swap starts or starts needing a look, which
-                      // shows where a closed swap went. It stays in the tree
-                      // with no count, so it is the count changing that
-                      // plays, never a return to this screen.
-                      SwapPop(
-                        trigger: (badge, attention > 0),
-                        from: 0.6,
-                        child: badge == 0
-                            ? const SizedBox.shrink()
-                            : Padding(
-                                padding: const EdgeInsetsDirectional.only(
-                                  start: 6,
-                                ),
-                                child: SwapCountDot(
-                                  count: badge,
-                                  tone: attention > 0 ? SwapTone.warning : null,
-                                ),
-                              ),
-                      ),
+                      if (badge > 0) ...[
+                        const SizedBox(width: 6),
+                        // Pops as a swap starts or starts needing a look, which
+                        // shows where a closed swap went.
+                        SwapPop(
+                          trigger: (badge, attention > 0),
+                          onMount: true,
+                          from: 0.6,
+                          curve: SwapMotion.success,
+                          child: SwapCountDot(
+                            count: badge,
+                            tone: attention > 0 ? SwapTone.warning : null,
+                          ),
+                        ),
+                      ],
                     ],
                   );
                 },

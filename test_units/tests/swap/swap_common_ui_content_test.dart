@@ -6,7 +6,6 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
 import 'swap_common_ui_fakes.dart';
-import 'swap_motion_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Token icons, copyable values and loading placeholders.
@@ -236,9 +235,7 @@ void main() {
         expect(tester.getSize(find.byType(SwapSkeleton)).height, 24);
       });
 
-      testWidgets('stops without replay when the setting changes', (
-        tester,
-      ) async {
+      testWidgets('stops and restarts as the setting changes', (tester) async {
         await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
         expect(tester.hasRunningAnimations, isTrue);
 
@@ -254,44 +251,7 @@ void main() {
         expect(tester.hasRunningAnimations, isFalse);
 
         await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
-        expect(tester.hasRunningAnimations, isFalse);
-      });
-
-      testWidgets(
-        'settles within three seconds and never restarts on rebuild',
-        (tester) async {
-          await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
-          expect(tester.hasRunningAnimations, isTrue);
-          await tester.pump(const Duration(seconds: 3));
-          expect(tester.hasRunningAnimations, isFalse);
-          await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
-          expect(tester.hasRunningAnimations, isFalse);
-        },
-      );
-
-      testWidgets('does not animate or replay after leaving the visible page', (
-        tester,
-      ) async {
-        Widget skeleton(bool visible) =>
-            TickerMode(enabled: visible, child: const SwapSkeleton());
-        await pumpSwapUi(tester, skeleton(true), settle: false);
-        await pumpSwapUi(tester, skeleton(false), settle: false);
-        expect(tester.hasRunningAnimations, isFalse);
-        await pumpSwapUi(tester, skeleton(true), settle: false);
-        expect(tester.hasRunningAnimations, isFalse);
-      });
-
-      testWidgets('stops in the background without replaying on resume', (
-        tester,
-      ) async {
-        addTearDown(() => resumeMotionApp(tester));
-        await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
-        pauseMotionApp(tester);
-        await tester.pump();
-        expect(tester.hasRunningAnimations, isFalse);
-        resumeMotionApp(tester);
-        await tester.pump();
-        expect(tester.hasRunningAnimations, isFalse);
+        expect(tester.hasRunningAnimations, isTrue);
       });
     });
   });

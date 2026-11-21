@@ -3,8 +3,8 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
@@ -17,8 +17,6 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
 import 'swap_test_fixtures.dart';
-
-class _CatalogAuth extends Fake implements KomodoDefiLocalAuth {}
 
 /// Covers who gets asked for a price. The aggregator's request budget is
 /// small and shared, so a source that cannot price a pair is not asked, and
@@ -305,3 +303,4 @@ class _Script implements ApiClient {
 }
 
 // A catalog lookup must not ask for a signed-in wallet.
+class _CatalogAuth extends Fake implements KomodoDefiLocalAuth {}
