@@ -306,10 +306,14 @@ class LocalBrowser {
 
   async stopBrowser() {
     if(!this.process)return;
-    if(this.process.exitCode==null) {
+    // A signalled process keeps exitCode null and sets signalCode instead.
+    const running=()=>this.process.exitCode==null&&this.process.signalCode==null;
+    const settle=async tries=>{for(let count=0;count<tries&&running();count++)await delay(100);};
+    if(running()) {
       await this.command('Browser.close').catch(()=>{});
-      for(let count=0;count<100&&this.process.exitCode==null;count++)await delay(100);
-      if(this.process.exitCode==null)this.process.kill('SIGTERM');
+      await settle(100);
+      if(running()){this.process.kill('SIGTERM');await settle(50);}
+      if(running()){this.process.kill('SIGKILL');await settle(20);}
     }
     this.socket?.close(); this.process=null;
     for(const request of this.pending.values()){clearTimeout(request.timer);request.reject(new Error('Isolated browser stopped'));}
@@ -320,7 +324,11 @@ class LocalBrowser {
     await this.stopBrowser();
     if(this.server)await new Promise(resolve=>this.server.close(resolve));
     assert.ok(path.basename(this.profile).startsWith('gleec-browser-release-'));
-    fs.rmSync(this.profile,{recursive:true,force:true});
+    // Chrome helpers can still be writing the profile after the browser
+    // exits. Cleanup runs in each suite's `finally`, so a throw here would
+    // replace the suite's own failure with ENOTEMPTY.
+    try {fs.rmSync(this.profile,{recursive:true,force:true,maxRetries:10,retryDelay:200});}
+    catch(error){console.warn(`Isolated browser profile not removed (${error.code ?? error.name})`);}
   }
 }
 
