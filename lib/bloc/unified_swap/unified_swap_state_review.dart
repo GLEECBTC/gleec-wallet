@@ -54,6 +54,7 @@ class SwapReview extends Equatable {
     this.legalLoading = false,
     this.legalFailed = false,
     this.isRecovery = false,
+    this.rejectionReason,
     this.rejectionDetail,
     this.revalidationFailure,
   });
@@ -84,6 +85,8 @@ class SwapReview extends Equatable {
       legalBypass ||
       (legalLoading && !legalFailed) ||
       (legalSnapshot?.covers(swapConsentDocuments) ?? false);
+
+  final SwapStartRejection? rejectionReason;
 
   /// Diagnostic text for a rejection.
   final String? rejectionDetail;
@@ -127,6 +130,7 @@ class SwapReview extends Equatable {
     LegalConsentSnapshot? legalSnapshot,
     bool? legalLoading,
     bool? legalFailed,
+    SwapStartRejection? rejectionReason,
     String? rejectionDetail,
     SwapQuoteFailure? revalidationFailure,
   }) => SwapReview(
@@ -139,6 +143,7 @@ class SwapReview extends Equatable {
     legalFailed: legalFailed ?? this.legalFailed,
     legalBypass: legalBypass,
     isRecovery: isRecovery,
+    rejectionReason: rejectionReason ?? this.rejectionReason,
     rejectionDetail: rejectionDetail ?? this.rejectionDetail,
     revalidationFailure: revalidationFailure ?? this.revalidationFailure,
   );
@@ -154,6 +159,7 @@ class SwapReview extends Equatable {
     legalFailed,
     legalBypass,
     isRecovery,
+    rejectionReason,
     rejectionDetail,
     revalidationFailure,
   ];

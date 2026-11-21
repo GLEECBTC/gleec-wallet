@@ -419,7 +419,7 @@ void main() {
     });
   });
 
-  test('only EVM assets on a network the aggregator serves are routable', () {
+  test('recognizes Bitcoin and TRON mainnet in the routing catalog', () {
     final gleecEvm = assetOf(
       'GLEEC',
       subClass: CoinSubClass.grc20,
@@ -429,6 +429,46 @@ void main() {
     expect(isRoutedSwapCandidate(usdcArb), isTrue);
     expect(isRoutedSwapCandidate(eth), isTrue);
     expect(isRoutedSwapCandidate(gleecEvm), isFalse);
-    expect(isRoutedSwapCandidate(btc), isFalse);
+    final btcSegwit = btc.copyWith(id: 'BTC-segwit', name: 'Bitcoin');
+    final trx = assetOf('TRX', subClass: CoinSubClass.trx, decimals: 6);
+    final usdtTron = assetOf(
+      'USDT-TRC20',
+      subClass: CoinSubClass.trc20,
+      parent: trx,
+    );
+    final nile = trx.copyWith(id: 'TRX-NILE');
+    for (final asset in [btc, btcSegwit, trx, usdtTron]) {
+      expect(isRoutedSwapCandidate(asset), isTrue, reason: asset.id);
+    }
+    for (final asset in [
+      btc.copyWith(id: 'BCH'),
+      btc.copyWith(id: 'ZEC'),
+      nile,
+      usdtTron.copyWith(id: 'USDT-NILE', parentId: nile),
+    ]) {
+      expect(isRoutedSwapCandidate(asset), isFalse, reason: asset.id);
+    }
+    expect(networks.networkOf(usdtTron), 'TRON');
+    expect(networks.networkOf(btcSegwit), 'Bitcoin');
+  });
+
+  test('labels a Bitcoin bridge and TRON conversion using route chain IDs', () {
+    final quote = quoteFrom(
+      offerOf(
+        kind: RoutedSwapRouteKind.crossChain,
+        legs: [
+          const RoutedSwapLeg(
+            type: RoutedSwapStepType.cross,
+            toChainId: 20000000000001,
+          ),
+          const RoutedSwapLeg(
+            type: RoutedSwapStepType.swap,
+            chainId: 728126428,
+          ),
+        ],
+      ),
+    );
+    expect(quote.stages, contains(stage(SwapRouteStageKind.bridge, 'Bitcoin')));
+    expect(quote.stages, contains(stage(SwapRouteStageKind.convert, 'TRON')));
   });
 }

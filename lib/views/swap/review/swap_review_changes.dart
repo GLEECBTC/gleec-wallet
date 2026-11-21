@@ -73,7 +73,12 @@ extension _ReviewContentStatus on _ReviewContent {
           SwapCallout(
             tone: SwapTone.danger,
             title: LocaleKeys.swapReviewRejectedTitle.tr(),
-            message: LocaleKeys.swapReviewRejectedBody.tr(),
+            message:
+                (review.rejectionReason ==
+                            SwapStartRejection.signingPolicyUnsupported
+                        ? LocaleKeys.swapReviewSigningPolicyBody
+                        : LocaleKeys.swapReviewRejectedBody)
+                    .tr(),
             liveRegion: true,
           ),
         );

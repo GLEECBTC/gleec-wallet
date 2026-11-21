@@ -96,6 +96,9 @@ enum SwapStartRejection {
   /// The pair or amount is no longer accepted.
   notAvailable,
 
+  /// The activated pay asset cannot sign this route with its current wallet.
+  signingPolicyUnsupported,
+
   /// Something else; retrying may work.
   unknown,
 }

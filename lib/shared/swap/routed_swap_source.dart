@@ -192,9 +192,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     );
   }
 
-  /// Why [from] for [to] is not asked for at all, if it is not. The engine
-  /// routes EVM networks only, which is no restriction of the location: only
-  /// [_tradingAllowed] refusing reads as one.
+  /// Local restrictions before KDF checks routing coverage for the pair.
   SwapQuoteRejected? _refusal(AssetId from, AssetId to) {
     if (isSolanaTradingAsset(from) || isSolanaTradingAsset(to)) {
       return _rejected(SwapQuoteFailureKind.pairUnsupported);

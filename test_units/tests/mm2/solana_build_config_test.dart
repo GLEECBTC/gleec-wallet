@@ -76,6 +76,7 @@ void main() {
       expect(SolanaBuildConfig.enginesWithOpenWithdrawalDefects, {
         engine,
         '46769c4df3b043669eee59508bf1af017157dcdd',
+        'fd8249c904ae1c75d66fce1c1e361686f13d723c',
       });
       for (final commit in SolanaBuildConfig.enginesWithOpenWithdrawalDefects) {
         expect(
@@ -109,9 +110,9 @@ void main() {
         throwsStateError,
       );
       expect(
-        () => const SolanaBuildConfig(
-          enabled: true,
-        ).verifyPreviewOrigin(Uri.parse('http://localhost:8787')),
+        () =>
+            const SolanaBuildConfig(enabled: true)
+                .verifyPreviewOrigin(Uri.parse('http://localhost:8787')),
         throwsStateError,
       );
     });
@@ -151,9 +152,9 @@ void main() {
         'http://local\\host:8787',
       ]) {
         expect(
-          () => candidate(
-            origin: origin,
-          ).verifyPreviewOrigin(Uri.parse(origin.trim())),
+          () =>
+              candidate(origin: origin)
+                  .verifyPreviewOrigin(Uri.parse(origin.trim())),
           throwsStateError,
           reason: origin,
         );

@@ -168,6 +168,32 @@ void main() {
       );
     });
 
+    test(
+      'surfaces the local signing requirement for a Bitcoin source',
+      () async {
+        manager.startError = const RoutedSwapInvalidParamException(
+          param: 'from',
+          reason:
+              'The activated signing policy is not supported for routed swaps',
+          message: 'Invalid parameter',
+        );
+        final bitcoinQuote = quoteOf(
+          from: btc,
+          payload: offerOf(from: btc),
+        );
+        await expectLater(
+          executor.start(bitcoinQuote, authorization: testSwapAuthorization()),
+          throwsA(
+            isA<SwapStartRejectedException>().having(
+              (error) => error.reason,
+              'reason',
+              SwapStartRejection.signingPolicyUnsupported,
+            ),
+          ),
+        );
+      },
+    );
+
     test('a refusal about the pair or amount reads as not available', () async {
       const refusals = <RoutedSwapRpcException>[
         RoutedSwapCoinNotActiveException(coin: 'ETH', message: 'inactive'),

@@ -63,6 +63,53 @@ void main() {
       expect(quote.fundingOnTopIn(usdc), quote.costOnTopIn(usdc));
     });
 
+    test('a TRC20 approval and swap use TRX funding only once', () {
+      final trx = assetOf('TRX', subClass: CoinSubClass.trx, decimals: 6);
+      final token = assetOf(
+        'USDT-TRC20',
+        subClass: CoinSubClass.trc20,
+        parent: trx,
+      );
+      final quote = routedQuoteFromOffer(
+        offerOf(
+          from: token,
+          to: btc,
+          approval: const RoutedSwapApprovalInfo(
+            txCount: 2,
+            resetsFirst: true,
+            spender: 'T-spender',
+          ),
+          costs: [
+            for (final kind in [
+              RoutedSwapCostKind.gas,
+              RoutedSwapCostKind.approvalGas,
+            ])
+              RoutedSwapCost(
+                label: 'Network fee',
+                amount: d('2'),
+                kind: kind,
+                isDeductedFromReceive: false,
+                assetId: trx,
+              ),
+          ],
+          networkFees: [
+            RoutedSwapNetworkFee(
+              ticker: 'TRX',
+              assetId: trx,
+              amount: d('4'),
+              requiredBalance: d('5'),
+            ),
+          ],
+        ),
+        networks: SwapNetworks([trx, token, btc]),
+      );
+
+      expect(quote.approval?.resetsFirst, isTrue);
+      expect(quote.costOnTopIn(trx), d('4'));
+      expect(quote.fundingOnTopIn(trx), d('5'));
+      expect(quote.fundingOnTopIn(token), d('0'));
+    });
+
     test('without a requirement, funding is the estimated cost', () {
       final quote = routedQuoteFromOffer(
         _ethOffer('1', required: null),

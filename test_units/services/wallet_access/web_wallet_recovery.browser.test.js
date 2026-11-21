@@ -76,17 +76,16 @@ async function openImport(browser,page){
     {label:'import form ready'});
 }
 
-async function newDownload(browser,before,{suffix}={}){
+async function newDownload(browser,before,{suffix}){
   for(let attempt=0;attempt<150;attempt++){
-    // Chrome can expose a hidden staging file before renaming the completed
-    // download. Never decode that file as an encrypted wallet or log archive.
+    // Chrome can write temporary files, including downloads.html, alongside
+    // the requested download. Wait for the expected file type.
     const filename=fs.readdirSync(browser.downloads).find(name=>
-      !before.has(name)&&!name.startsWith('.')&&!name.endsWith('.crdownload')&&
-      (!suffix||name.endsWith(suffix)));
+      !before.has(name)&&!name.startsWith('.')&&name.endsWith(suffix));
     if(filename)return path.join(browser.downloads,filename);
     await delay(100);
   }
-  throw new Error('Fixture encrypted-wallet download did not complete');
+  throw new Error(`Fixture ${suffix} download did not complete`);
 }
 
 async function main(){
@@ -252,7 +251,7 @@ async function main(){
     await browser.wait(page,buttonPresent('Continue'),{label:'encrypted export authorization'});
     assert.equal(await page.evaluate("document.querySelectorAll('input[type=password]').length"),0);
     await browser.click(page,'Continue');
-    const exported=await newDownload(browser,filesBefore);
+    const exported=await newDownload(browser,filesBefore,{suffix:'.txt'});
     const ciphertext=fs.readFileSync(exported,'utf8');
     for(const secret of [generatedCredential,filePassword,phrase])assert.equal(ciphertext.includes(secret),false);
     assert.ok(virtual.counts.asserted>beforeExport);
@@ -320,7 +319,7 @@ async function main(){
       {label:'file-restored export authorization'});
     await browser.fill(page,'Wallet password',filePassword);
     await browser.click(page,'Continue');
-    const secondCiphertext=fs.readFileSync(await newDownload(browser,filesBeforeSecond),'utf8');
+    const secondCiphertext=fs.readFileSync(await newDownload(browser,filesBeforeSecond,{suffix:'.txt'}),'utf8');
     for(const secret of [generatedCredential,filePassword,phrase])assert.equal(secondCiphertext.includes(secret),false);
     await browser.wait(page,`(${recoverySummary}).then(value=>value.exportRequested)`,{label:'file-restored export evidence'});
     assert.deepEqual(await page.evaluate(recoverySummary),
