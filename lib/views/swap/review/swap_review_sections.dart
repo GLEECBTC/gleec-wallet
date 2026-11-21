@@ -182,6 +182,18 @@ class _DecisionGrid extends StatelessWidget {
     final total = pricing.totalCostUsd;
     final network = pricing.networkCostUsd;
     final facts = [
+      for (final entry in quote.requiredFeeBalances.entries)
+        if (entry.value > Decimal.zero)
+          (
+            'swapReviewRequiredFunding'.tr(
+              args: [SwapFormat.ticker(entry.key)],
+            ),
+            SwapFormat.tokens(
+              entry.value,
+              SwapFormat.ticker(entry.key),
+              rounding: SwapRounding.up,
+            ),
+          ),
       (
         LocaleKeys.swapTotalCost.tr(),
         total == null || !pricing.isComplete
@@ -208,6 +220,14 @@ class _DecisionGrid extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (quote.requiredFeeBalances.isNotEmpty)
+              SizedBox(
+                width: constraints.maxWidth,
+                child: SwapHelperLine(
+                  text: 'swapReviewRequiredFundingExplanation'.tr(),
+                  tone: SwapTone.neutral,
+                ),
+              ),
             for (final (label, value) in facts)
               SizedBox(
                 width: width,

@@ -5,6 +5,7 @@ import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_response.dart';
@@ -82,12 +83,27 @@ class AtomicSwapExecutor implements SwapExecutor {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
     }
 
+    final receiveFees = <String, Rational>{};
+    for (final fee in quote.fees) {
+      if (fee.deductedFromReceive && fee.asset != null) {
+        final id = fee.asset!.id;
+        receiveFees[id] =
+            (receiveFees[id] ?? Rational.zero) +
+            Rational.parse(fee.amount.toString());
+      }
+    }
     final request = SellRequest(
       base: plan.base.id,
       rel: plan.rel.id,
       volume: Rational.parse(plan.volume.toString()),
       price: plan.orderPrice,
       orderType: SellBuyOrderType.fillOrKill,
+      reviewedFeeRequirements: {
+        for (final asset in quote.fundingAssets)
+          asset.id: Rational.parse(quote.fundingOnTopIn(asset).toString()),
+      },
+      isQuoteCurrent: () => !quote.isExpiredAt(_now()),
+      reviewedReceiveFees: receiveFees,
     );
     var dispatched = false;
     final SellResponse response;
@@ -99,6 +115,11 @@ class AtomicSwapExecutor implements SwapExecutor {
         // Only the submission holds the lease, not polling or recovery.
         return _dex.sellOrThrow(request);
       });
+    } on TradePreflightRejected catch (error) {
+      throw SwapStartRejectedException(
+        SwapStartRejection.unknown,
+        detail: error.toString(),
+      );
     } on AuthSessionChangedException catch (error) {
       if (dispatched) throw SwapStartUnconfirmedException(error);
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);

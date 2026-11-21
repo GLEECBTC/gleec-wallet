@@ -25,18 +25,14 @@ List<Coin> sortByPriorityAndBalance(List<Coin> coins, KomodoDefiSdk sdk) {
   // The comparator below is otherwise unchanged, including the `> 0` / `== 0`
   // asymmetry. `test_units/tests/sorting/coin_sort_order_test.dart` pins the
   // resulting order against the original.
-  final decorated = List.generate(
-    coins.length,
-    (i) {
-      final coin = coins[i];
-      return (
-        coin: coin,
-        isParent: coin.parentCoin == null,
-        usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
-      );
-    },
-    growable: false,
-  );
+  final decorated = List.generate(coins.length, (i) {
+    final coin = coins[i];
+    return (
+      coin: coin,
+      isParent: coin.parentCoin == null,
+      usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
+    );
+  }, growable: false);
 
   decorated.sort((a, b) {
     if (a.isParent != b.isParent) return a.isParent ? -1 : 1;
@@ -63,19 +59,15 @@ List<Coin> sortFiatBalance(List<Coin> coins, KomodoDefiSdk sdk) {
   // Same reasoning as [sortByPriorityAndBalance], and worse in the original:
   // this comparator read *two* SDK-backed values per side, so four lookups per
   // comparison rather than two.
-  final decorated = List.generate(
-    coins.length,
-    (i) {
-      final coin = coins[i];
-      return (
-        coin: coin,
-        isParent: coin.parentCoin == null,
-        usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
-        balance: coin.balance(sdk) ?? 0,
-      );
-    },
-    growable: false,
-  );
+  final decorated = List.generate(coins.length, (i) {
+    final coin = coins[i];
+    return (
+      coin: coin,
+      isParent: coin.parentCoin == null,
+      usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
+      balance: coin.balance(sdk) ?? 0,
+    );
+  }, growable: false);
 
   decorated.sort((a, b) {
     if (a.isParent != b.isParent) return a.isParent ? -1 : 1;

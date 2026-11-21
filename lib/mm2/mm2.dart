@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:web_dex/app_config/solana_build_config.dart';
+
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
@@ -26,24 +29,32 @@ TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
 }
 
 final class MM2 {
-  MM2() {
-    _kdfSdk = KomodoDefiSdk(
-      config: KomodoDefiSdkConfig(
-        initialActivationPolicy: ActivationPolicySnapshot(
-          status: ActivationPolicyStatus.loading,
-        ),
-        // Syncing pre-activation coin states is not yet implemented,
-        // so we disable it for now.
-        // TODO: sync pre-activation of coins (show activating coins in list)
-        preActivateHistoricalAssets: false,
-        preActivateDefaultAssets: false,
-        tronGaslessProvider: _tronGaslessProviderConfig(),
-        assetConfigTransform: applyGleecTronGaslessActivationConfig,
-        lifiProxyUrl: _lifiProxyUrl(),
-        lifiIntegrator: gleecLifiIntegratorConfig(),
-      ),
-      onLog: _handleSdkLog,
-    );
+  MM2({KomodoDefiSdk? sdk}) {
+    SolanaBuildConfig.environment.validate();
+    _kdfSdk =
+        sdk ??
+        KomodoDefiSdk(
+          config: KomodoDefiSdkConfig(
+            solanaCapabilities: SolanaBuildConfig.environment.capabilities,
+            assetsAutoUpdate: !SolanaBuildConfig.environment.enabled,
+            assetsStorageNamespace: SolanaBuildConfig.environment.enabled
+                ? SolanaBuildConfig.environment.storageNamespace
+                : null,
+            initialActivationPolicy: ActivationPolicySnapshot(
+              status: ActivationPolicyStatus.loading,
+            ),
+            // Syncing pre-activation coin states is not yet implemented,
+            // so we disable it for now.
+            // TODO: sync pre-activation of coins (show activating coins in list)
+            preActivateHistoricalAssets: false,
+            preActivateDefaultAssets: false,
+            tronGaslessProvider: _tronGaslessProviderConfig(),
+            assetConfigTransform: applyGleecTronGaslessActivationConfig,
+            lifiProxyUrl: _lifiProxyUrl(),
+            lifiIntegrator: gleecLifiIntegratorConfig(),
+          ),
+          onLog: _handleSdkLog,
+        );
   }
 
   String? _lifiProxyUrl() {
@@ -74,8 +85,7 @@ final class MM2 {
   }
 
   late final KomodoDefiSdk _kdfSdk;
-  bool _isInitializing = false;
-  final Completer<KomodoDefiSdk> _initCompleter = Completer<KomodoDefiSdk>();
+  Future<KomodoDefiSdk>? _initialization;
 
   Future<bool> isSignedIn() => _kdfSdk.auth.isSignedIn();
 
@@ -89,25 +99,24 @@ final class MM2 {
     }
   }
 
-  Future<KomodoDefiSdk> initialize() async {
-    if (_initCompleter.isCompleted) return _kdfSdk;
-    if (_isInitializing) return _initCompleter.future;
+  /// Every caller observes the same initialization, including its failure.
+  /// A failed catalog or engine check must never turn into a usable SDK on a
+  /// later call, and must not create a second unobserved error future.
+  Future<KomodoDefiSdk> initialize() => _initialization ??= _initialize();
 
-    try {
-      _isInitializing = true;
-
-      await _kdfSdk.initialize();
-      // Hack to ensure that kdf is running in noauth mode
-      await _kdfSdk.auth.getUsers();
-
-      _initCompleter.complete(_kdfSdk);
-      return _kdfSdk;
-    } catch (e) {
-      _initCompleter.completeError(e);
-      rethrow;
-    } finally {
-      _isInitializing = false;
+  Future<KomodoDefiSdk> _initialize() async {
+    if (kIsWeb) {
+      SolanaBuildConfig.environment.verifyPreviewOrigin(Uri.base);
     }
+    await SolanaBuildConfig.environment.verifyCatalog();
+    await _kdfSdk.initialize();
+    // Hack to ensure that kdf is running in noauth mode
+    await _kdfSdk.auth.getUsers();
+    if (SolanaBuildConfig.environment.enabled) {
+      SolanaBuildConfig.environment.verifyEngineVersion(await version());
+    }
+
+    return _kdfSdk;
   }
 
   Future<String> version() async {

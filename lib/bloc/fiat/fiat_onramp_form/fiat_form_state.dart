@@ -24,6 +24,8 @@ final class FiatFormState extends Equatable with FormzMixin {
     this.selectedCoinPubkeys,
     this.webViewMode = WebViewDialogMode.fullscreen,
     this.providerError,
+    this.currenciesStatus = FiatFormStatus.initial,
+    this.providerUnavailable = false,
   });
 
   /// Creates an initial state with default values.
@@ -43,7 +45,9 @@ final class FiatFormState extends Equatable with FormzMixin {
       fiatMode = FiatMode.onramp,
       selectedCoinPubkeys = null,
       webViewMode = WebViewDialogMode.fullscreen,
-      providerError = null;
+      providerError = null,
+      currenciesStatus = FiatFormStatus.initial,
+      providerUnavailable = false;
 
   /// The selected fiat currency to use to purchase [selectedAsset].
   final CurrencyInput<FiatCurrency> selectedFiat;
@@ -96,6 +100,10 @@ final class FiatFormState extends Equatable with FormzMixin {
   /// Raw error message from the provider when there is an order error
   final String? providerError;
 
+  /// Catalog requests finish even when the provider returns no currencies.
+  final FiatFormStatus currenciesStatus;
+  final bool providerUnavailable;
+
   /// Gets the transaction limit from the selected payment method
   FiatTransactionLimit? get transactionLimit =>
       selectedPaymentMethod.transactionLimits.firstOrNull;
@@ -107,16 +115,25 @@ final class FiatFormState extends Equatable with FormzMixin {
   Decimal? get maxFiatAmount => fiatAmount.maxValue ?? transactionLimit?.max;
 
   /// Whether currencies are still being loaded
-  bool get isLoadingCurrencies => fiatList.length < 2 || coinList.length < 2;
+  bool get isLoadingCurrencies =>
+      currenciesStatus == FiatFormStatus.loading ||
+      (currenciesStatus == FiatFormStatus.initial &&
+          (fiatList.isEmpty || coinList.isEmpty));
 
   /// Whether the form is in a loading state
   bool get isLoading =>
-      status != FiatFormStatus.failure &&
-      (isLoadingCurrencies || status == FiatFormStatus.loading);
+      currenciesStatus == FiatFormStatus.loading ||
+      (status != FiatFormStatus.failure &&
+          (isLoadingCurrencies || status == FiatFormStatus.loading));
 
   /// Whether the form can be submitted
   bool get canSubmit =>
       !isLoading &&
+      currenciesStatus != FiatFormStatus.failure &&
+      !providerUnavailable &&
+      paymentMethods.isNotEmpty &&
+      !selectedPaymentMethod.isNone &&
+      selectedPaymentMethod.priceInfo.coinAmount > Decimal.zero &&
       selectedAssetAddress != null &&
       status != FiatFormStatus.failure &&
       !fiatOrderStatus.isSubmitting &&
@@ -142,6 +159,8 @@ final class FiatFormState extends Equatable with FormzMixin {
     ValueGetter<AssetPubkeys?>? selectedCoinPubkeys,
     WebViewDialogMode? webViewMode,
     ValueGetter<String?>? providerError,
+    FiatFormStatus? currenciesStatus,
+    bool? providerUnavailable,
   }) {
     return FiatFormState(
       selectedFiat: selectedFiat ?? this.selectedFiat,
@@ -167,6 +186,8 @@ final class FiatFormState extends Equatable with FormzMixin {
       providerError: providerError != null
           ? providerError()
           : this.providerError,
+      currenciesStatus: currenciesStatus ?? this.currenciesStatus,
+      providerUnavailable: providerUnavailable ?? this.providerUnavailable,
     );
   }
 
@@ -195,5 +216,7 @@ final class FiatFormState extends Equatable with FormzMixin {
     selectedCoinPubkeys,
     webViewMode,
     providerError,
+    currenciesStatus,
+    providerUnavailable,
   ];
 }

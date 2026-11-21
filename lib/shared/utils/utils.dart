@@ -223,7 +223,11 @@ String getTxExplorerUrl(Coin coin, String txHash) {
     return '$explorerUrl$normalizedHash';
   }
 
-  return '$explorerUrl$explorerTxUrl$normalizedHash';
+  return ExplorerUrlPattern(baseUrl: Uri.tryParse(explorerUrl)).buildUrl(
+        explorerTxUrl,
+        {'HASH': normalizedHash, 'TX': normalizedHash},
+      )?.toString() ??
+      '';
 }
 
 String getAddressExplorerUrl(Coin coin, String address) {
@@ -231,7 +235,10 @@ String getAddressExplorerUrl(Coin coin, String address) {
   final String explorerAddressUrl = coin.explorerAddressUrl;
   if (explorerUrl.isEmpty || explorerAddressUrl.isEmpty) return '';
 
-  return '$explorerUrl$explorerAddressUrl$address';
+  return ExplorerUrlPattern(baseUrl: Uri.tryParse(explorerUrl))
+          .buildUrl(explorerAddressUrl, {'ADDRESS': address})
+          ?.toString() ??
+      '';
 }
 
 @Deprecated('Use the Protocol class\'s explorer URL methods')

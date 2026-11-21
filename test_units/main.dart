@@ -1,3 +1,13 @@
+import 'tests/integration_test_runner_test.dart'
+    as integration_test_runner_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
+import 'tests/swap/solana_trade_dispatch_test.dart'
+    as solana_trade_dispatch_test;
+import 'tests/mm2/mm2_initialization_test.dart' as mm2_initialization_test;
+import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
+import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
+import 'tests/swap/solana_atomic_lifecycle_test.dart'
+    as solana_atomic_lifecycle_test;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'services/file_loader/diagnostic_artifacts_test.dart'
@@ -37,6 +47,13 @@ import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
 
 import 'services/initializer/app_error_handling_test.dart'
     as app_error_handling_test;
+import 'services/storage/app_storage_test.dart' as app_storage_test;
+import 'tests/fiat/fiat_provider_availability_test.dart'
+    as fiat_provider_availability_test;
+import 'views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart'
+    as legacy_migration_cleanup_plate_test;
+import 'views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart'
+    as legacy_migration_compatibility_dialog_test;
 import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
     as wallet_simple_import_test;
 
@@ -509,6 +526,13 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  solana_build_config_test.main();
+  solana_trade_dispatch_test.main();
+  mm2_initialization_test.main();
+  prefetch_native_kdf_test.main();
+  integration_test_runner_test.main();
+  solana_trading_test.main();
+  solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
   safe_log_exporter_test.main();
@@ -528,6 +552,10 @@ void main() {
   auto_scroll_text_test.main();
   scale_down_or_scroll_test.main();
   app_error_handling_test.main();
+  app_storage_test.main();
+  fiat_provider_availability_test.main();
+  legacy_migration_cleanup_plate_test.main();
+  legacy_migration_compatibility_dialog_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
     testUpdateVersionCompare();

@@ -119,7 +119,10 @@ class AppBlocRoot extends StatelessWidget {
       mm2Api,
       myOrdersService,
     );
-    final dexRepository = DexRepository(mm2Api);
+    final dexRepository = DexRepository(
+      mm2Api,
+      tradingPolicy: mm2Api.tradingPolicy,
+    );
 
     final transactionsRepo = performanceMode != null
         ? MockTransactionHistoryRepo(
@@ -188,6 +191,7 @@ class AppBlocRoot extends StatelessWidget {
         RepositoryProvider(
           lazy: false,
           create: (context) => SwapServices(
+            tradingPolicy: mm2Api.tradingPolicy,
             legalDocuments: context.read<LegalDocumentsRepository>(),
             sdk: komodoDefiSdk,
             coinsRepo: coinsRepository,
@@ -275,7 +279,11 @@ class AppBlocRoot extends StatelessWidget {
             ),
           BlocProvider<MarketMakerBotBloc>(
             create: (context) => MarketMakerBotBloc(
-              MarketMakerBotRepository(mm2Api, SettingsRepository()),
+              MarketMakerBotRepository(
+                mm2Api,
+                SettingsRepository(),
+                tradingPolicy: mm2Api.tradingPolicy,
+              ),
               MarketMakerBotOrderListRepository(
                 myOrdersService,
                 SettingsRepository(),
@@ -287,9 +295,10 @@ class AppBlocRoot extends StatelessWidget {
           ),
           BlocProvider<TradingStatusBloc>(
             lazy: false,
-            create: (context) =>
-                TradingStatusBloc(context.read<TradingStatusService>())
-                  ..add(TradingStatusWatchStarted()),
+            create: (context) => TradingStatusBloc(
+              context.read<TradingStatusService>(),
+              tradingPolicy: mm2Api.tradingPolicy,
+            )..add(TradingStatusWatchStarted()),
           ),
           BlocProvider<SystemHealthBloc>(
             create: (_) =>

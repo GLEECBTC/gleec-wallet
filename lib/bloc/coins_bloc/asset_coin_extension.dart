@@ -53,11 +53,13 @@ extension AssetCoinExtension on Asset {
     );
   }
 
-  String? get contractAddress => protocol.config.valueOrNull(
-    'protocol',
-    'protocol_data',
-    'contract_address',
-  );
+  String? get contractAddress => protocol is SolanaTokenProtocol
+      ? (protocol as SolanaTokenProtocol).mintAddress
+      : protocol.config.valueOrNull(
+          'protocol',
+          'protocol_data',
+          'contract_address',
+        );
   String? get platform =>
       protocol.config.valueOrNull('protocol', 'protocol_data', 'platform');
 }

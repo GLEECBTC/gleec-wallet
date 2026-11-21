@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    as typed_rpc;
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show KomodoDefiRpcMethodsExtension, RpcDispatchGuard, RpcDispatchRejected;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -52,15 +57,220 @@ import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 
 class Mm2Api {
-  Mm2Api({required MM2 mm2, required KomodoDefiSdk sdk})
-    : _sdk = sdk,
-      _mm2 = mm2 {
+  Mm2Api({
+    required MM2 mm2,
+    required KomodoDefiSdk sdk,
+    TradingAssetPolicy? tradingPolicy,
+    Future<JsonMap> Function(Object request)? tradingTransport,
+  }) : _sdk = sdk,
+       _tradingPolicy = tradingPolicy,
+       _tradingTransport = tradingTransport ?? mm2.call,
+       _mm2 = mm2 {
     nft = Mm2ApiNft(_mm2.call);
   }
 
   final MM2 _mm2;
+
+  final TradingAssetPolicy? _tradingPolicy;
+  TradingAssetPolicy? get tradingPolicy => _tradingPolicy;
+  final Future<JsonMap> Function(Object request) _tradingTransport;
+
+  void _checkTradingRequest(Object request) {
+    void requirePair(String base, String rel) {
+      if (!(_tradingPolicy?.allowsPair(base, rel) ??
+          canTradeAssetPair(base, rel))) {
+        throw TradePreflightRejected(
+          StateError('Trading is unavailable for this asset pair.'),
+        );
+      }
+    }
+
+    if (request is SellRequest) {
+      requirePair(request.base, request.rel);
+      if (!(request.isQuoteCurrent?.call() ?? true)) {
+        throw TradePreflightRejected(StateError('The reviewed quote expired.'));
+      }
+    }
+    if (request is SetPriceRequest) requirePair(request.base, request.rel);
+    if (request is MarketMakerBotRequest &&
+        request.method == 'start_simple_market_maker_bot') {
+      for (final pair
+          in request.params?.tradeCoinPairs?.values ??
+              const <TradeCoinPairConfig>[]) {
+        requirePair(pair.baseCoinId, pair.relCoinId);
+        if (_tradingPolicy?.isSolanaPair(pair.baseCoinId, pair.relCoinId) ??
+            false) {
+          throw const TradePreflightRejected(SolanaMarketMakerUnavailable());
+        }
+      }
+    }
+  }
+
+  /// Recheck every engine-reported funding currency for Solana orders, also
+  /// for maker forms and restored entry points which do not use unified quotes.
+  Future<void> _checkSolanaFunding(Object request) async {
+    final String base;
+    final String rel;
+    final Rational volume;
+    final Rational price;
+    final typed_rpc.SwapMethod method;
+    final bool max;
+    if (request is SellRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = request.method == 'buy'
+          ? typed_rpc.SwapMethod.buy
+          : typed_rpc.SwapMethod.sell;
+      max = false;
+    } else if (request is SetPriceRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = typed_rpc.SwapMethod.setPrice;
+      max = request.max;
+    } else {
+      return;
+    }
+    if (!(_tradingPolicy?.isSolanaPair(base, rel) ?? false)) return;
+    final assets = _sdk.assets.available.values;
+    final from = assets.where((asset) => asset.id.id == base).firstOrNull;
+    final to = assets.where((asset) => asset.id.id == rel).firstOrNull;
+    if (from == null || to == null) {
+      throw TradePreflightRejected(StateError('Unknown trading asset'));
+    }
+    try {
+      final preimage = await _sdk.client.rpc.trading
+          .tradePreimage(
+            base: base,
+            rel: rel,
+            swapMethod: method,
+            volume: max
+                ? null
+                : volume.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+            max: max,
+            price: price.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (preimage.totalFees.isEmpty) {
+        throw const FormatException('Missing funding requirements');
+      }
+      final requirements = <String, Rational>{};
+      for (final total in preimage.totalFees) {
+        final required = Rational.parse(total.requiredBalance);
+        if (required < Rational.zero) {
+          throw const FormatException('Invalid funding amount');
+        }
+        requirements[total.coin] =
+            (requirements[total.coin] ?? Rational.zero) + required;
+      }
+      final estimated = <String, Rational>{};
+      final receiveFees = <String, Rational>{};
+      for (final fee in [
+        preimage.takerFee,
+        preimage.feeToSendTakerFee,
+        preimage.baseCoinFee,
+        preimage.relCoinFee,
+      ]) {
+        if (fee == null) continue;
+        final amount = Rational.parse(fee.amount);
+        if (amount < Rational.zero) {
+          throw const FormatException('Invalid fee amount');
+        }
+        if (!fee.paidFromTradingVol) {
+          estimated[fee.coin] = (estimated[fee.coin] ?? Rational.zero) + amount;
+        } else {
+          receiveFees[fee.coin] =
+              (receiveFees[fee.coin] ?? Rational.zero) + amount;
+        }
+      }
+      for (final entry in estimated.entries) {
+        if (entry.value > (requirements[entry.key] ?? Rational.zero)) {
+          requirements[entry.key] = entry.value;
+        }
+      }
+      final reviewed = request is SellRequest
+          ? request.reviewedFeeRequirements
+          : null;
+      if (reviewed != null &&
+          requirements.entries.any(
+            (entry) => entry.value > (reviewed[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade funding changed. Review the quote again.');
+      }
+      final reviewedReceive = request is SellRequest
+          ? request.reviewedReceiveFees
+          : null;
+      if (reviewedReceive != null &&
+          receiveFees.entries.any(
+            (entry) =>
+                entry.value > (reviewedReceive[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade receive fees changed. Review the quote again.');
+      }
+      // A total_fees row can be absent (or zero) for the sold currency.
+      // Its principal still has to be funded independently of the fees.
+      if (!max) {
+        final paying = method == typed_rpc.SwapMethod.buy ? rel : base;
+        final amount = method == typed_rpc.SwapMethod.buy
+            ? volume * price
+            : volume;
+        requirements[paying] = (requirements[paying] ?? Rational.zero) + amount;
+      }
+      for (final entry in requirements.entries) {
+        if (entry.value == Rational.zero) continue;
+        final asset = assets
+            .where((asset) => asset.id.id == entry.key)
+            .firstOrNull;
+        if (asset == null) throw StateError('Unknown funding asset');
+        final balance = await _sdk.balances
+            .getBalance(asset.id, forceRefresh: true)
+            .timeout(const Duration(seconds: 15));
+        if (balance.spendable.toRational() < entry.value) {
+          throw StateError('Insufficient ${entry.key} for trade funding');
+        }
+      }
+    } on Object catch (cause) {
+      // No order was dispatched, so a local funding refusal is certain.
+      throw TradePreflightRejected(cause);
+    }
+  }
+
+  Future<JsonMap> _callTradingRequest(Object request) async {
+    try {
+      _checkTradingRequest(request);
+      await _checkSolanaFunding(request);
+      // Catalog, quote and engine eligibility can change while funding is read.
+      _checkTradingRequest(request);
+    } on TradePreflightRejected {
+      rethrow;
+    } on Object catch (cause) {
+      // A catalog/balance read can fail before preimage handling begins too.
+      throw TradePreflightRejected(cause);
+    }
+    try {
+      return await RpcDispatchGuard.run(
+        () => _checkTradingRequest(request),
+        () => _tradingTransport(request),
+        methods: const {
+          'buy',
+          'sell',
+          'setprice',
+          'start_simple_market_maker_bot',
+        },
+      );
+    } on RpcDispatchRejected catch (error) {
+      // The SDK checks after credentials/engine preparation, immediately
+      // before transport; a refusal there still proves nothing was sent.
+      throw TradePreflightRejected(error.cause);
+    }
+  }
 
   // Ideally we will transition cleanly over to the SDK, but for methods
   // which are deeply intertwined with the app and are broken by HD wallet
@@ -275,7 +485,7 @@ class Mm2Api {
 
   Future<Map<String, dynamic>> sell(SellRequest request) async {
     try {
-      return await _mm2.call(request);
+      return await _callTradingRequest(request);
     } catch (e, s) {
       log(
         'Error sell ${request.base}/${request.rel}: $e',
@@ -290,11 +500,11 @@ class Mm2Api {
   /// [sell] without turning a call that got no answer into an error answer:
   /// KDF's answer, error or not, and a throw when none arrived.
   Future<Map<String, dynamic>> sellOrThrow(SellRequest request) =>
-      _mm2.call(request);
+      _callTradingRequest(request);
 
   Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
     try {
-      return await _mm2.call(request) as Map<String, dynamic>?;
+      return await _callTradingRequest(request) as Map<String, dynamic>?;
     } catch (e, s) {
       log(
         'Error setprice ${request.base}/${request.rel}: $e',
@@ -602,7 +812,7 @@ class Mm2Api {
     MarketMakerBotRequest marketMakerBotRequest,
   ) async {
     try {
-      final JsonMap response = await _mm2.call(marketMakerBotRequest.toJson());
+      final JsonMap response = await _callTradingRequest(marketMakerBotRequest);
       log(
         response.toString(),
         path: 'api => ${marketMakerBotRequest.method} => _call',

@@ -96,18 +96,31 @@ void main() {
   });
 
   group('updated numbers', () {
-    swapBlocTest('accepted while they stand start as shown', (h) {
+    swapBlocTest('accepted current updates revalidate before one start', (h) {
       final bloc = h.inReview();
-      h.routed.requoteResult = lower(h);
+      final original = bloc.state.review!.quote;
+      final update = lower(h);
+      h.routed.requoteResult = update;
       bloc.add(const UnifiedSwapStartRequested());
       h.settle();
+      expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      final acceptedUpdate = bloc.state.review!.quote;
+      expect(h.routedExecutor.started, isEmpty);
       h.elapse(SwapQuote.lifetime - const Duration(seconds: 1));
 
+      // Accepting the displayed update still refreshes executable funding
+      // and quote validity; it never submits the earlier transaction blindly.
+      final refreshed = lower(h);
+      h.routed.requoteResult = refreshed;
       bloc.add(const UnifiedSwapStartRequested());
       h.settle();
 
-      expect(h.routed.requoted, hasLength(1));
-      expect(h.routedExecutor.started.single.id, 'lower');
+      expect(h.routed.requoted, [original, acceptedUpdate]);
+      final submitted = h.routedExecutor.started.single;
+      expect(submitted.id, refreshed.quote.id);
+      expect(submitted.quotedAt, refreshed.quote.quotedAt);
+      expect(submitted.guaranteedReceive, acceptedUpdate.guaranteedReceive);
+      expect(bloc.state.view, UnifiedSwapView.progress);
     });
 
     swapBlocTest('expire a minute after they were priced', (h) {

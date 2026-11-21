@@ -13,6 +13,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      # Git reports a submodule update as the gitlink itself, without a slash.
+      - "sdk"
       - "sdk/**"
       - ".github/scripts/**"
       - ".github/workflows/sdk-unit-tests-on-pr.yml"

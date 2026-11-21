@@ -3,7 +3,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 
 /// Recipient principal from a signed withdrawal, independent of wallet debit.
-/// EVM/TRON encode the transferred value in totalAmount. UTXO totalAmount is
+/// EVM/TRON/Solana encode the transferred value in totalAmount. UTXO totalAmount is
 /// the consumed inputs, so change and the same-asset fee must be excluded.
 /// For a Max self-transfer, all inputs less the fee return to the recipient.
 Decimal withdrawalRecipientAmount(
@@ -14,7 +14,9 @@ Decimal withdrawalRecipientAmount(
   final protocol = asset.protocol;
   if (protocol is Erc20Protocol ||
       protocol is TrxProtocol ||
-      protocol is Trc20Protocol) {
+      protocol is Trc20Protocol ||
+      protocol is SolanaProtocol ||
+      protocol is SolanaTokenProtocol) {
     return changes.totalAmount;
   }
   final sameAssetFee = fee.coin.isEmpty || fee.coin == asset.id.id

@@ -28,7 +28,7 @@ class _EmptyAssetLoader extends AssetLoader {
 
   @override
   Future<Map<String, dynamic>> load(String path, Locale locale) async =>
-      <String, dynamic>{};
+      <String, dynamic>{'cancel': 'Cancel'};
 }
 
 void main() {
@@ -68,62 +68,69 @@ void main() {
       },
     );
 
-    testWidgets(
-      'strict password validation ignores the weak-password setting',
-      (tester) async {
-        final repository = await _createRepository();
-        final settingsBloc = _FakeSettingsBloc(weakPasswordsAllowed: true);
-        addTearDown(settingsBloc.close);
+    for (final allowWeak in [false, true]) {
+      testWidgets(
+        'password validation respects weak-password opt-in: $allowWeak',
+        (tester) async {
+          final repository = await _createRepository();
+          final settingsBloc = _FakeSettingsBloc(
+            weakPasswordsAllowed: allowWeak,
+          );
+          addTearDown(settingsBloc.close);
 
-        await _pumpContent(
-          tester,
-          settingsBloc: settingsBloc,
-          child: LegacyMigrationCompatibilityContent(
-            walletsRepository: repository,
-            migration: PreparedLegacyMigration(
-              sourceWallet: _legacySourceWallet(name: 'LegacyWallet'),
-              seedPhrase: 'seed',
-              suggestedTargetWalletName: 'LegacyWallet',
-              requiresNameConfirmation: false,
-              requiresNewKdfPassword: true,
+          await _pumpContent(
+            tester,
+            settingsBloc: settingsBloc,
+            child: LegacyMigrationCompatibilityContent(
+              walletsRepository: repository,
+              migration: PreparedLegacyMigration(
+                sourceWallet: _legacySourceWallet(name: 'LegacyWallet'),
+                seedPhrase: 'seed',
+                suggestedTargetWalletName: 'LegacyWallet',
+                requiresNameConfirmation: false,
+                requiresNewKdfPassword: true,
+              ),
             ),
-          ),
-        );
+          );
 
-        expect(
-          find.byKey(const Key('legacy-migration-wallet-name-field')),
-          findsNothing,
-        );
-        expect(
-          find.byKey(const Key('legacy-migration-password-fields')),
-          findsOneWidget,
-        );
+          expect(
+            find.byKey(const Key('legacy-migration-wallet-name-field')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const Key('legacy-migration-password-fields')),
+            findsOneWidget,
+          );
 
-        await tester.enterText(
-          find.byKey(const Key('create-password-field')),
-          'weak',
-        );
-        await tester.enterText(
-          find.byKey(const Key('create-password-field-confirm')),
-          'weak',
-        );
-        await tester.pump();
+          await tester.enterText(
+            find.byKey(const Key('create-password-field')),
+            'weak',
+          );
+          await tester.enterText(
+            find.byKey(const Key('create-password-field-confirm')),
+            'weak',
+          );
+          await tester.pump();
 
-        expect(_continueButton(tester).onPressed, isNull);
+          expect(
+            _continueButton(tester).onPressed,
+            allowWeak ? isNotNull : isNull,
+          );
 
-        await tester.enterText(
-          find.byKey(const Key('create-password-field')),
-          'Strong1!A',
-        );
-        await tester.enterText(
-          find.byKey(const Key('create-password-field-confirm')),
-          'Strong1!A',
-        );
-        await tester.pump();
+          await tester.enterText(
+            find.byKey(const Key('create-password-field')),
+            'Strong1!A',
+          );
+          await tester.enterText(
+            find.byKey(const Key('create-password-field-confirm')),
+            'Strong1!A',
+          );
+          await tester.pump();
 
-        expect(_continueButton(tester).onPressed, isNotNull);
-      },
-    );
+          expect(_continueButton(tester).onPressed, isNotNull);
+        },
+      );
+    }
 
     testWidgets(
       'cancel dismisses the compatibility dialog without returning a migration result',
