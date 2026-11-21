@@ -521,17 +521,15 @@ class _GaslessRecoveryBanner extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               _gaslessReceiveUnavailableMessage(reason),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: style.foreground),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: style.foreground),
             ),
             if (offersOfficialRecovery) ...[
               const SizedBox(height: 4),
               Text(
                 LocaleKeys.gaslessRecoveryBody.tr(),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: style.foreground),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: style.foreground),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -1526,7 +1524,11 @@ class PubkeyReceiveDialog extends StatelessWidget {
       )) {
         return AlertDialog(
           key: const Key('gasless-receive-paused-dialog'),
-          title: Semantics(header: true, child: Text(LocaleKeys.receive.tr())),
+          title: Semantics(
+            header: true,
+            headingLevel: 1,
+            child: Text(LocaleKeys.receive.tr()),
+          ),
           content: SingleChildScrollView(
             child: _GaslessRecoveryBanner(
               isTestnet: coin.isTestCoin,
@@ -1568,6 +1570,7 @@ class PubkeyReceiveDialog extends StatelessWidget {
           Expanded(
             child: Semantics(
               header: true,
+              headingLevel: 1,
               child: Text(
                 LocaleKeys.receive.tr(),
                 style: Theme.of(context).textTheme.titleMedium,
@@ -1636,9 +1639,8 @@ class PubkeyReceiveDialog extends StatelessWidget {
               Text(
                 LocaleKeys.scanTheQrCode.tr(),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.color?.withValues(alpha: 0.72),
+                  color: Theme.of(context).textTheme.bodySmall?.color
+                      ?.withValues(alpha: 0.72),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -2118,9 +2120,10 @@ class QrCode extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     child: QrImageView(
                       data: address,
-                      backgroundColor: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium!.color!,
+                      backgroundColor: Theme.of(context)
+                          .textTheme
+                          .bodyMedium!
+                          .color!,
                       eyeStyle: QrEyeStyle(
                         color: theme.custom.dexPageTheme.emptyPlace,
                       ),

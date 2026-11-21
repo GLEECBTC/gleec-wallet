@@ -52,7 +52,9 @@ jobs:
       # matching silently; these fixtures are what notice.
       - name: Test the hosting deploy URL reader
         id: test_hosting_deploy_url
-        run: .github/scripts/test_hosting_deploy_url.sh
+        run: |
+          .github/scripts/test_hosting_deploy_url.sh
+          python3 .github/scripts/test_firebase_hosting_deploy.py
 
       # `flutter analyze` runs with --no-fatal-warnings --no-fatal-infos, and a
       # background painted with a foreground colour role compiles cleanly

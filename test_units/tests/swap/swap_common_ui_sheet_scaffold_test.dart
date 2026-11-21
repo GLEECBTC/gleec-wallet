@@ -30,6 +30,7 @@ void main() {
           .getSemantics(find.text('You pay'))
           .getSemanticsData();
       expect(title.flagsCollection.isHeader, isTrue);
+      expect(title.headingLevel, 1);
       expect(tester.widget<Text>(find.text('You pay')).style!.fontSize, 20);
       expect(find.bySemanticsLabel('Close'), findsOneWidget);
       semantics.dispose();

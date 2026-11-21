@@ -8,8 +8,8 @@ ARG BUILD_USER_ID=1000
 ENV USER_ID=${BUILD_USER_ID}
 
 RUN apt update && apt install -y sudo && \
-    useradd -u $USER_ID -m $USER && \ 
-    usermod -aG sudo $USER && \ 
+    useradd -u $USER_ID -m $USER && \
+    usermod -aG sudo $USER && \
     echo "$USER ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER $USER
@@ -23,27 +23,28 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
     PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator
 
 # comes from https://developer.android.com/studio/#command-tools
-ENV ANDROID_SDK_TOOLS_VERSION=11076708
+ENV ANDROID_SDK_TOOLS_VERSION=15859902
+ENV ANDROID_SDK_TOOLS_SHA256=4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583
 
 # https://developer.android.com/studio/releases/build-tools
 ENV ANDROID_PLATFORM_VERSION=36
-ENV ANDROID_BUILD_TOOLS_VERSION=35.0.1
+ENV ANDROID_BUILD_TOOLS_VERSION=36.0.0
 
 # https://developer.android.com/ndk/downloads
-ENV ANDROID_NDK_VERSION=27.3.13750724
+ENV ANDROID_NDK_VERSION=28.2.13676358
 
 RUN set -o xtrace \
     && sudo chown -R $USER:$USER /opt \
     && cd /opt \
     && sudo apt-get update \
-    && sudo apt-get install -y jq openjdk-17-jdk nodejs npm \
+    && sudo apt-get install -y jq openjdk-21-jdk nodejs npm \
     wget zip unzip git openssh-client curl bc software-properties-common build-essential \
     ruby-full ruby-bundler libstdc++6 libpulse0 libglu1-mesa locales lcov libsqlite3-dev --no-install-recommends \
     # For Linux build
     xz-utils acl \
     binutils clang cmake git lld llvm \
     ninja-build pkg-config \
-    libgtk-3-dev liblzma-dev \
+    libgtk-3-dev liblzma-dev libwebkit2gtk-4.1-dev \
     libstdc++-12-dev libsecret-1-dev \
     # for x86 emulators
     libxtst6 libnss3-dev libnspr4 libxss1 libatk-bridge2.0-0 libgtk-3-0 libgdk-pixbuf2.0-0 \
@@ -52,6 +53,7 @@ RUN set -o xtrace \
     && sudo locale-gen \
     && sudo update-locale LANG=en_US.UTF-8 \
     && wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS_VERSION}_latest.zip -O android-sdk-tools.zip \
+    && echo "$ANDROID_SDK_TOOLS_SHA256  android-sdk-tools.zip" | sha256sum --check --strict \
     && mkdir -p ${ANDROID_HOME}/cmdline-tools/ \
     && unzip -q android-sdk-tools.zip -d ${ANDROID_HOME}/cmdline-tools/ \
     && mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest \

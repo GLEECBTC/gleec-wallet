@@ -127,6 +127,7 @@ extension _PickerReach on _SwapAssetPickerState {
     padding: const EdgeInsets.only(top: 14, bottom: 2),
     child: Semantics(
       header: true,
+      headingLevel: 2,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

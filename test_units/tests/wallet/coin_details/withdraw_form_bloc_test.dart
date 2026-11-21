@@ -636,8 +636,10 @@ class _FakeWithdrawalManager implements WithdrawalManager {
   @override
   Stream<WithdrawalProgress> executeWithdrawal(
     WithdrawalPreview preview,
-    String assetId,
-  ) {
+    String assetId, {
+    void Function()? beforeBroadcast,
+  }) {
+    beforeBroadcast?.call();
     executeCallCount += 1;
     return _executeWithdrawalHandler?.call(preview, assetId) ??
         const Stream<WithdrawalProgress>.empty();

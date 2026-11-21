@@ -70,7 +70,7 @@ Prioritize:
 ## Validation and deliverable
 
 Follow repository AGENTS.md and docs/TESTING.md. New app unit files must be
-imported by test_units/main.dart. Use Flutter 3.41.4 and the four production
+imported by test_units/main.dart. Use Flutter 3.50.0 / Dart 3.14.0 and the four production
 GasFree defines for that aggregator. SDK validation uses the prepared Melos
 workspace (7.8.1), native package suites and relevant WASM suites. Preserve
 lockfiles and unrelated changes. Name exact failures and skipped cases; a setup

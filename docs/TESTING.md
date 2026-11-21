@@ -32,6 +32,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | Suite | Where | Command | CI workflow | Gates? |
 |---|---|---|---|---|
 | Unit + widget | `test_units/` | `flutter test test_units/main.dart` **+ 4 defines** | `unit-tests-on-pr.yml` | Yes |
+| App workspace packages | `packages/komodo_ui_kit/test`, `packages/komodo_persistence_layer/test` | `flutter test --no-pub packages/komodo_ui_kit/test packages/komodo_persistence_layer/test` | `unit-tests-on-pr.yml` | Yes |
 | Integration / GUI | `test_integration/` | `dart run_integration_tests.dart` | `ui-tests-on-pr.yml` | Yes |
 | KDF harness — replay | `sdk/packages/komodo_defi_harness` | `flutter test --exclude-tags bench` | `kdf-harness-on-pr.yml` | Yes |
 | KDF harness — bench | same | `flutter test --tags bench` + `compare_bench.dart` | `kdf-harness-on-pr.yml` | Yes, at 30% regression |
@@ -69,9 +70,13 @@ how the app reads it.
 
 ### The aggregator trap
 
-CI runs *only* `test_units/main.dart`. **A test file not reachable from it never runs,
-anywhere, and nothing reports that.** Adding a test means adding an import there. Two
-files are orphaned today — see §9.
+The app unit/widget step runs *only* `test_units/main.dart`. **A new file under
+`test_units/` that is not reachable from it does not run in CI.** Add an import
+there when adding a test. Two files are orphaned today — see §9.
+
+The same workflow separately runs the two app-owned workspace package test
+directories. This includes the persistence close/reopen regression and the UI
+scrollbar focus regression; SDK package suites remain separate.
 
 ### Coverage
 

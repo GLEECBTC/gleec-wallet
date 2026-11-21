@@ -26,6 +26,7 @@ class WithdrawFormHeader extends StatelessWidget {
         return Semantics(
           container: true,
           header: true,
+          headingLevel: 1,
           liveRegion: true,
           label: state.step.title,
           child: PageHeader(

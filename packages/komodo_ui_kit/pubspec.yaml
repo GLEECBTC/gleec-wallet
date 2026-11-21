@@ -3,8 +3,8 @@ description: Gleec Wallet's UI Kit Flutter package.
 publish_to: none
 
 environment:
-  sdk: ">=3.8.1 <4.0.0"
-  flutter: ">=3.41.4 <4.0.0"
+  sdk: ">=3.14.0 <4.0.0"
+  flutter: ">=3.50.0 <4.0.0"
 
 resolution: workspace
 

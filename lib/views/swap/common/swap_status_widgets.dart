@@ -271,6 +271,7 @@ class SwapStatusHero extends StatelessWidget {
     final copy = [
       Semantics(
         header: true,
+        headingLevel: 1,
         child: motion == null ? titleText : _rise(title, motion, titleText),
       ),
       if (bodyText != null) ...[

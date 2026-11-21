@@ -258,6 +258,7 @@ class SwapSheetScaffold extends StatelessWidget {
                   children: [
                     Semantics(
                       header: true,
+                      headingLevel: 1,
                       child: Text(title, style: SwapText.heading(context)),
                     ),
                     if (pinnedSubtitle != null) ...[

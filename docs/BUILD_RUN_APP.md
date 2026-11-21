@@ -2,6 +2,11 @@
 
 Before proceeding, make sure that you have set up a working environment for your host platform according to the [guide](PROJECT_SETUP.md#host-platform-setup).
 
+Use Flutter **3.50.0 / Dart 3.14.0**, pinned in `.fvmrc`. Run `fvm install`
+and use `fvm flutter` for the commands below, or prepend `.fvm/flutter_sdk/bin`
+to your session's `PATH`. The SDK submodule uses the same pin. See
+[Flutter version management](FLUTTER_VERSION.md).
+
 There are two main commands, `flutter run` to run the app or `flutter build` to build for the specified platform.
 
 When using `flutter run` you can specify the mode in which the app will run. By default, it uses the debug mode.
