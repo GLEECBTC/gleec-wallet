@@ -5,6 +5,7 @@ import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
@@ -81,6 +82,7 @@ SwapExecutionRegistry testSwapRegistry({
   final owner = auth ?? testSwapAuth;
   return SwapExecutionRegistry(
     executors: executors,
+    operationGate: WalletOperationGate(),
     inFlight: inFlight,
     retryDelay: retryDelay,
     currentSession: () => owner.currentSession,

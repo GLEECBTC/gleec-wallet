@@ -4,6 +4,8 @@
 <head>
     <base href="/">
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-uGXOfa1CtBizLQ0TdMrpsMrnzKSOLSpfhZGPlfDLta0='; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self' https:; form-action 'self'">
     <meta content="IE=Edge" http-equiv="X-UA-Compatible">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="description"
@@ -43,9 +45,10 @@
         crossorigin>
     <script src="/assets/packages/flutter_inappwebview_web/assets/web/web_support.js" defer="defer"></script>
     <script src="/services/theme_checker/theme_checker.js"></script>
+    <script src="services/wallet_browser_support.js"></script>
+    <script src="services/wallet_credentials.js"></script>
+    <script src="services/wallet_bootstrap.js" defer></script>
     <link rel="prefetch" href="/icons/logo_icon.webp" as="image"><!-- Preconnects -->
-    <link rel="preconnect" href="https://www.gstatic.com" />
-    <link rel="preconnect" href="https://www.googletagmanager.com" />
     <link rel="preconnect" href="https://worldtimeapi.org" /><!-- Preload resources -->
     <link rel="preload" as="fetch"
         href="https://defistats.gleec.com/api/v3/prices/tickers_v2?expire_at=1800" crossorigin>
@@ -82,8 +85,39 @@
         body.dark {
             background-color: #202337
         }
+
+        #loading[hidden] { display: none; }
+
+        #browser-support {
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            overflow: auto;
+            padding: 24px;
+            font-family: system-ui, sans-serif;
+            line-height: 1.5;
+            color: #202337;
+        }
+
+        body.dark #browser-support { color: #f7f7fc; }
+        #browser-support section { max-width: 34rem; margin: auto; }
+        #browser-support h1 { font-size: 1.5rem; line-height: 1.3; }
+        #browser-support button {
+            min-height: 48px;
+            padding: 12px 24px;
+            border: 0;
+            border-radius: 12px;
+            background: #7833d8;
+            color: white;
+            font: inherit;
+            cursor: pointer;
+        }
+        #browser-support button:focus-visible { outline: 3px solid #58218f; outline-offset: 4px; }
+        body.dark #browser-support button:focus-visible { outline-color: #ccb0ff; }
+        #browser-support button:disabled { opacity: .65; cursor: progress; }
     </style>
-    <script>var queryParams = new URLSearchParams(window.location.search), theme = queryParams.get("brightness"); theme ||= window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", document.body.classList.add(theme)</script>
     <!-- Loading indicator -->
     <div id="loading">
         <style>
@@ -119,6 +153,10 @@
                 opacity: .05
             }
 
+            @media (prefers-reduced-motion: reduce) {
+                #loading img, #loading.init_done img { animation: none; transition: none; }
+            }
+
             @keyframes breathe {
                 from {
                     transform: scale(1)
@@ -141,8 +179,6 @@
         </style><img src="/icons/logo_icon.webp" width="192" height="192"
             alt="Gleec Dex is starting... Please wait." />
     </div>
-    <script
-        async="false">window.addEventListener("DOMContentLoaded", (d => { const initWasm = window.kdf && window.kdf.init_wasm ? window.kdf.init_wasm : window.init_wasm; console.log("DOM fully loaded and parsed"), initWasm && !0 !== window.is_mm2_preload_busy && (window.is_mm2_preload_busy = !0, initWasm().then((() => { window.is_mm2_preloaded = !0 })).finally((() => { window.is_mm2_preload_busy = !1 }))) }))</script>
     <!-- App -->
     <div id="main-content" style="position:absolute;width:100%;height:100%;display:none">
         <!-- Flutter app will be injected here -->

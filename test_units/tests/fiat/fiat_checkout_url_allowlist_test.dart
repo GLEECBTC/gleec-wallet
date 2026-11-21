@@ -8,6 +8,7 @@ import 'package:web_dex/bloc/fiat/fiat_checkout_url_allowlist.dart';
 /// Pins the checkout-URL check on both sides: the Dart caller, and the
 /// deployed HTML asset that already-shipped builds fetch from production.
 const String _widgetAssetPath = 'assets/web_pages/fiat_widget.html';
+const String _widgetScriptPath = 'assets/web_pages/fiat_widget.js';
 
 void main() {
   group('Fiat checkout URL allowlist:', () {
@@ -160,7 +161,23 @@ void main() {
         isTrue,
         reason: 'run this suite from the repository root',
       );
-      widgetSource = file.readAsStringSync();
+      widgetSource =
+          '${file.readAsStringSync()}\n'
+          '${File(_widgetScriptPath).readAsStringSync()}';
+    });
+
+    test('loads its validation from a bundled script under the wallet CSP', () {
+      final html = File(_widgetAssetPath).readAsStringSync();
+      expect(html, contains('<script src="fiat_widget.js"></script>'));
+      expect(html, isNot(contains('<script>')));
+      final redirect = File(
+        'assets/web_pages/checkout_status_redirect.html',
+      ).readAsStringSync();
+      expect(
+        redirect,
+        contains('<script src="checkout_status_redirect.js"></script>'),
+      );
+      expect(redirect, isNot(contains('<script>')));
     });
 
     test('carries the same allowlists as the Dart source', () {
@@ -223,7 +240,7 @@ void main() {
   test('no changed web page broadcasts with a wildcard target origin', () {
     // The other two pages this change touched have no tests of their own.
     for (final path in const <String>[
-      'assets/web_pages/checkout_status_redirect.html',
+      'assets/web_pages/checkout_status_redirect.js',
       'assets/web_pages/bitrefill_widget.js',
     ]) {
       final file = File(path);
@@ -358,7 +375,7 @@ final RegExp _wildcardPostMessage = RegExp(
   '''postMessage\\([^)]*,\\s*['"]\\*['"]''',
 );
 
-/// Reads a `var <name> = ['a', 'b'];` array out of the widget's inline script.
+/// Reads a `var <name> = ['a', 'b'];` array out of the widget's bundled script.
 ///
 /// Strict on purpose. This helper exists to notice when the deployed asset's
 /// allowlist stops matching the Dart one, so every way of writing an entry

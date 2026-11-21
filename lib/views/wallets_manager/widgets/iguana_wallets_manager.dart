@@ -22,6 +22,8 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/views/common/wallet_password_dialog/password_manager_save.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_creation.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
@@ -35,6 +37,8 @@ class IguanaWalletsManager extends StatefulWidget {
     required this.close,
     required this.onSuccess,
     this.initialWallet,
+    this.onSwitchWallet,
+    this.onRecover,
     this.initialHdMode = false,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
@@ -46,6 +50,8 @@ class IguanaWalletsManager extends StatefulWidget {
   final VoidCallback close;
   final void Function(Wallet) onSuccess;
   final Wallet? initialWallet;
+  final VoidCallback? onSwitchWallet;
+  final VoidCallback? onRecover;
   final bool initialHdMode;
   final bool rememberMe;
 
@@ -69,6 +75,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   bool _initialHdMode = false;
   bool _rememberMe = false;
   bool _didHandleSuccessfulLogin = false;
+  bool _manualCredentialSubmitted = false;
   WalletImportTypes _importType = WalletImportTypes.simple;
   late final OnboardingFunnel _funnel;
 
@@ -191,6 +198,8 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
             wallet: selectedWallet,
             onLogin: _logInToWallet,
             onCancel: _cancel,
+            onSwitchWallet: widget.onSwitchWallet,
+            onRecover: widget.onRecover,
             initialHdMode: _initialHdMode,
             initialQuickLogin: _rememberMe,
           );
@@ -219,6 +228,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
           action: _action,
           key: const Key('wallet-creation'),
           onCreate: _createWallet,
+          acceptedOnEntry: _action == WalletsManagerAction.create,
           onCancel: _cancel,
         );
     }
@@ -283,67 +293,16 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     widget.close();
   }
 
-  void _createWallet({
-    required String name,
-    required String password,
-    WalletType? walletType,
-    required bool rememberMe,
-  }) async {
+  void _createWallet() {
+    if (_isLoading) return;
     setState(() {
       _isLoading = true;
-      _rememberMe = rememberMe;
+      _rememberMe = true;
     });
-
-    try {
-      // Async uniqueness check prior to dispatch
-      final repo = context.read<WalletsRepository>();
-      final uniquenessError = await repo.validateWalletNameUniqueness(name);
-      if (!mounted) return;
-      if (uniquenessError != null) {
-        setState(() => _isLoading = false);
-        final theme = Theme.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              uniquenessError,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
-            ),
-            backgroundColor: theme.colorScheme.errorContainer,
-          ),
-        );
-        return;
-      }
-      final Wallet newWallet = Wallet.fromName(
-        name: name,
-        walletType: walletType ?? WalletType.iguana,
-      );
-
-      _funnel
-        ..complete()
-        ..enter(OnboardingStep.authSubmitted);
-
-      context.read<AuthBloc>().add(
-        AuthRegisterRequested(wallet: newWallet, password: password),
-      );
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Unexpected error during wallet creation: $error\n$stackTrace',
-      );
-      if (!mounted) return;
-      context.read<AuthBloc>().add(
-        AuthErrorReported(
-          AuthException(
-            error.toString(),
-            type: AuthExceptionType.generalAuthError,
-          ),
-        ),
-      );
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    _funnel
+      ..complete()
+      ..enter(OnboardingStep.authSubmitted);
+    context.read<AuthBloc>().add(const AuthQuickCreateRequested());
   }
 
   void _importWallet({
@@ -396,13 +355,13 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
           seed: walletConfig.seedPhrase,
         ),
       );
-    } catch (error, stackTrace) {
-      debugPrint('Unexpected error during wallet import: $error\n$stackTrace');
+    } catch (_) {
+      _log.warning('Wallet import could not be completed');
       if (!mounted) return;
       context.read<AuthBloc>().add(
         AuthErrorReported(
           AuthException(
-            error.toString(),
+            LocaleKeys.somethingWrong.tr(),
             type: AuthExceptionType.generalAuthError,
           ),
         ),
@@ -421,6 +380,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     setState(() {
       _isLoading = true;
       _rememberMe = rememberMe;
+      _manualCredentialSubmitted = true;
     });
 
     final walletsRepository = RepositoryProvider.of<WalletsRepository>(context);
@@ -498,13 +458,13 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         if (mounted) {
           setState(() => _isLoading = false);
         }
-      } catch (error, stackTrace) {
-        debugPrint('Unexpected error during legacy login: $error\n$stackTrace');
+      } catch (_) {
+        _log.warning('Legacy wallet sign-in could not be completed');
         if (!mounted) return;
         context.read<AuthBloc>().add(
           AuthErrorReported(
             AuthException(
-              error.toString(),
+              LocaleKeys.somethingWrong.tr(),
               type: AuthExceptionType.generalAuthError,
             ),
           ),
@@ -639,8 +599,29 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     }
     context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
     unawaited(_updateRememberedWallet(currentUser));
-    TextInput.finishAutofillContext(shouldSave: true);
+    // Typed imports/logins use their submitted autofill form. Managed creation
+    // requests the provider's own prompt after the wallet has opened.
+    TextInput.finishAutofillContext(
+      shouldSave:
+          action == WalletsManagerAction.import || _manualCredentialSubmitted,
+    );
+    final access = context.read<WalletAccessService?>();
+    final navigator = Navigator.of(context, rootNavigator: true);
     widget.onSuccess(currentWallet);
+    if (action == WalletsManagerAction.create && access != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigator.mounted) {
+          unawaited(
+            offerWalletPasswordSave(
+              navigator.context,
+              access: access,
+              walletId: currentUser.walletId,
+              expectedEntryId: WalletAccessService.entryId(currentUser),
+            ),
+          );
+        }
+      });
+    }
 
     if (mounted) {
       setState(() {
@@ -650,6 +631,9 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   }
 
   Future<void> _updateRememberedWallet(KdfUser currentUser) async {
+    // The access service stores canonical entry identity after successful use.
+    // Legacy hosts without it retain their existing remember preference.
+    if (context.read<WalletAccessService?>() != null) return;
     final storage = getStorage();
     if (_rememberMe) {
       // Store the full WalletId JSON instead of just the name

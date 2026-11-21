@@ -17,6 +17,7 @@ class UiPrimaryButton extends StatefulWidget {
     this.child,
     this.padding,
     this.borderRadius,
+    this.expandForText = false,
     super.key,
   });
 
@@ -35,6 +36,10 @@ class UiPrimaryButton extends StatefulWidget {
   final EdgeInsets? padding;
   final double? borderRadius;
 
+  /// Treat [height] as a minimum and wrap the complete label at large text sizes.
+  /// Existing callers retain their fixed-height layout unless they opt in.
+  final bool expandForText;
+
   @override
   State<UiPrimaryButton> createState() => _UiPrimaryButtonState();
 }
@@ -47,6 +52,7 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
       isEnabled: widget.onPressed != null,
       width: widget.width,
       height: widget.height,
+      expandVertically: widget.expandForText,
       border: widget.border,
       child: ElevatedButton(
         focusNode: widget.focusNode,
@@ -73,7 +79,11 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
           style: _defaultTextStyle,
           child:
               widget.child ??
-              _ButtonContent(text: widget.text, prefix: widget.prefix),
+              _ButtonContent(
+                text: widget.text,
+                prefix: widget.prefix,
+                wrap: widget.expandForText,
+              ),
         ),
       ),
     );
@@ -132,10 +142,15 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
 }
 
 class _ButtonContent extends StatelessWidget {
-  const _ButtonContent({required this.text, required this.prefix});
+  const _ButtonContent({
+    required this.text,
+    required this.prefix,
+    required this.wrap,
+  });
 
   final String text;
   final Widget? prefix;
+  final bool wrap;
 
   @override
   Widget build(BuildContext context) {
@@ -146,8 +161,8 @@ class _ButtonContent extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            maxLines: wrap ? null : 2,
+            overflow: wrap ? TextOverflow.visible : TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
         ),

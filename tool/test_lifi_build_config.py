@@ -125,7 +125,13 @@ class LifiBuildConfigTest(unittest.TestCase):
                 (work / "bin").mkdir()
                 (work / "tool").symlink_to(ROOT / "tool", target_is_directory=True)
                 flutter = work / "bin/flutter"
-                flutter.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FLUTTER_CALLS\"\n")
+                flutter.write_text(
+                    "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FLUTTER_CALLS\"\n"
+                    "if [ \"$1\" = build ]; then\n"
+                    "  mkdir -p build/web\n"
+                    "  printf '<!doctype html><title>Public fixture</title>' > build/web/index.html\n"
+                    "fi\n"
+                )
                 flutter.chmod(0o700)
                 for asset in ["coin_icons/png/kmd.png", "config/coins.json", "config/coins_config.json"]:
                     path = work / "sdk/packages/komodo_defi_framework/assets" / asset

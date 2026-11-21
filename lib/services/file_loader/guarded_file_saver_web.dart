@@ -15,6 +15,7 @@ class WebGuardedFileSaver implements GuardedFileSaver {
     required String data,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
     await beforeWrite();
     beforeCommit();

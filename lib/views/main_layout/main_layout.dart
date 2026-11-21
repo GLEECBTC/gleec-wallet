@@ -30,6 +30,7 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_entry_boundary.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -133,7 +134,9 @@ class _MainLayoutState extends State<MainLayout> {
                   FloatingActionButtonLocation.endFloat,
               appBar: null,
               body: SafeArea(
-                child: SwapNoticeListener(child: MainLayoutRouter()),
+                child: SwapNoticeListener(
+                  child: WalletEntryScope(child: MainLayoutRouter()),
+                ),
               ),
               bottomNavigationBar: (isMobile || isTablet)
                   ? MainMenuBarMobile()

@@ -5,85 +5,34 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/common/app_assets.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
 class SeedConfirmSuccess extends StatelessWidget {
   const SeedConfirmSuccess();
 
   @override
-  Widget build(BuildContext context) {
-    return isMobile ? const _MobileLayout() : const _DesktopLayout();
-  }
-}
-
-class _MobileLayout extends StatelessWidget {
-  const _MobileLayout();
-
-  @override
-  Widget build(BuildContext context) {
-    final scrollController = ScrollController();
-    return DexScrollbar(
-      scrollController: scrollController,
-      child: SingleChildScrollView(
-        controller: scrollController,
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => SingleChildScrollView(
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 415),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  SizedBox(height: 25),
-                  DexSvgImage(path: Assets.seedSuccess),
-                  SizedBox(height: 20),
-                  _Title(),
-                  SizedBox(height: 9),
-                  _Body(),
-                  SizedBox(height: 20),
-                  _Button(),
-                ],
-              ),
+            const SizedBox(height: 25),
+            const ExcludeSemantics(
+              child: DexSvgImage(path: Assets.seedSuccess),
             ),
+            const SizedBox(height: 20),
+            Semantics(header: true, child: const _Title()),
+            const SizedBox(height: 9),
+            const _Body(),
+            const SizedBox(height: 20),
+            const _Button(),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DesktopLayout extends StatelessWidget {
-  const _DesktopLayout();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              SizedBox(height: 25),
-              DexSvgImage(path: Assets.seedSuccess),
-              SizedBox(height: 20),
-              _Title(),
-              SizedBox(height: 9),
-              _Body(),
-              SizedBox(height: 20),
-              _Button(),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }
 
 class _Title extends StatelessWidget {
@@ -93,9 +42,8 @@ class _Title extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       LocaleKeys.seedPhraseSuccessTitle.tr(),
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontSize: 16,
-          ),
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
     );
   }
 }
@@ -133,7 +81,8 @@ class _Button extends StatelessWidget {
     return UiPrimaryButton(
       key: const Key('seed-confirm-got-it'),
       width: 198,
-      height: isMobile ? 52 : 40,
+      height: 52,
+      expandForText: true,
       onPressed: gotoSecurityMain,
       text: LocaleKeys.seedPhraseGotIt.tr(),
     );

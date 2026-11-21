@@ -12,6 +12,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_response.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -78,6 +79,7 @@ class AtomicSwapExecutor implements SwapExecutor {
     SwapQuote quote, {
     required SwapExecutionAuthorization authorization,
   }) async {
+    WalletOperationGate.instance.capture().ensureCurrent();
     final plan = quote.payload;
     if (plan is! AtomicSwapPlan) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
@@ -115,6 +117,10 @@ class AtomicSwapExecutor implements SwapExecutor {
         // Only the submission holds the lease, not polling or recovery.
         return _dex.sellOrThrow(request);
       });
+    } on WalletOperationDenied {
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
+    } on RpcDispatchRejected {
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
     } on TradePreflightRejected catch (error) {
       throw SwapStartRejectedException(
         SwapStartRejection.unknown,
@@ -380,6 +386,7 @@ class _AtomicSwapTracker {
   }
 
   Future<void> cancel() async {
+    WalletOperationGate.instance.capture().ensureCurrent();
     final last = _last;
     if (last != null && last.isTerminal) {
       throw const SwapCancelRefusedException(SwapCancelRefusal.alreadyFinished);
@@ -392,6 +399,10 @@ class _AtomicSwapTracker {
     final String? error;
     try {
       error = await _executor._orders.cancelOrder(uuid).timeout(_readTimeout);
+    } on WalletOperationDenied {
+      rethrow;
+    } on RpcDispatchRejected {
+      rethrow;
     } on Object catch (lost) {
       throw SwapCancelUnconfirmedException(lost);
     }

@@ -8,6 +8,8 @@ import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
 import 'package:komodo_defi_types/komodo_defi_types.dart'
     show KomodoDefiRpcMethodsExtension, RpcDispatchGuard, RpcDispatchRejected;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show RpcDispatchGuard, RpcDispatchRejected, KomodoDefiRpcMethodsExtension;
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -36,6 +38,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_response
 import 'package:web_dex/mm2/mm2_api/rpc/my_swap_status/my_swap_status_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_tx_history/my_tx_history_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_tx_history/my_tx_history_v2_request.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/nft/withdraw/withdraw_nft_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/orderbook_depth/orderbook_depth_req.dart';
@@ -56,6 +59,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/validateaddress/validateaddress_request.
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/text_error.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
@@ -64,16 +68,52 @@ class Mm2Api {
   Mm2Api({
     required MM2 mm2,
     required KomodoDefiSdk sdk,
+    WalletOperationGate? operationGate,
     TradingAssetPolicy? tradingPolicy,
+    Future<JsonMap> Function(Object request)? mutationTransport,
     Future<JsonMap> Function(Object request)? tradingTransport,
   }) : _sdk = sdk,
        _tradingPolicy = tradingPolicy,
-       _tradingTransport = tradingTransport ?? mm2.call,
+       _mutationTransport = mutationTransport ?? mm2.call,
+       _tradingTransport = tradingTransport ?? mutationTransport ?? mm2.call,
+       _operationGate = operationGate ?? WalletOperationGate.instance,
        _mm2 = mm2 {
-    nft = Mm2ApiNft(_mm2.call);
+    nft = Mm2ApiNft((request) {
+      if (request is WithdrawNftRequest) {
+        return _callUserMutation(request, request.method);
+      }
+      return _mm2.call(request);
+    });
   }
 
   final MM2 _mm2;
+  final Future<JsonMap> Function(Object request) _mutationTransport;
+
+  final WalletOperationGate _operationGate;
+
+  /// Recheck every engine-reported funding currency for Solana orders, also
+  /// for maker forms and restored entry points which do not use unified quotes.
+
+  Future<JsonMap> _callUserMutation(
+    Object request,
+    String method, {
+    WalletOperationPermit? permit,
+  }) async {
+    final authorization = permit ?? _operationGate.capture();
+    void ensureAllowed() {
+      authorization.ensureCurrent();
+      _checkTradingRequest(request);
+    }
+
+    ensureAllowed();
+    await _checkSolanaFunding(request);
+    ensureAllowed();
+    return RpcDispatchGuard.run(
+      ensureAllowed,
+      () => _mutationTransport(request),
+      methods: {method},
+    );
+  }
 
   final TradingAssetPolicy? _tradingPolicy;
   TradingAssetPolicy? get tradingPolicy => _tradingPolicy;
@@ -243,6 +283,7 @@ class Mm2Api {
   }
 
   Future<JsonMap> _callTradingRequest(Object request) async {
+    final permit = _operationGate.capture();
     try {
       _checkTradingRequest(request);
       await _checkSolanaFunding(request);
@@ -256,7 +297,10 @@ class Mm2Api {
     }
     try {
       return await RpcDispatchGuard.run(
-        () => _checkTradingRequest(request),
+        () {
+          permit.ensureCurrent();
+          _checkTradingRequest(request);
+        },
         () => _tradingTransport(request),
         methods: const {
           'buy',
@@ -362,8 +406,9 @@ class Mm2Api {
   }
 
   Future<Map<String, dynamic>?> withdraw(WithdrawRequest request) async {
+    final permit = _operationGate.capture();
     try {
-      return await _mm2.call(request) as Map<String, dynamic>?;
+      return await _callUserMutation(request, request.method, permit: permit);
     } catch (e, s) {
       log(
         'Error withdrawing ${request.params.coin}: $e',
@@ -378,14 +423,13 @@ class Mm2Api {
   Future<SendRawTransactionResponse> sendRawTransaction(
     SendRawTransactionRequest request,
   ) async {
+    final permit = _operationGate.capture();
     try {
-      final response = await _mm2.call(request) as Map<String, dynamic>?;
-      if (response == null) {
-        return SendRawTransactionResponse(
-          txHash: null,
-          error: TextError(error: 'null response'),
-        );
-      }
+      final response = await _callUserMutation(
+        request,
+        request.method,
+        permit: permit,
+      );
       return SendRawTransactionResponse.fromJson(response);
     } catch (e, s) {
       log(
@@ -523,9 +567,13 @@ class Mm2Api {
     CancelOrderRequest request, {
     Future<void> Function()? beforeMutation,
   }) async {
+    final permit = _operationGate.capture();
     await beforeMutation?.call();
+    permit.ensureCurrent();
     try {
-      return await _mm2.call(request);
+      return await _callUserMutation(request, request.method, permit: permit);
+    } on RpcDispatchRejected {
+      rethrow;
     } catch (e, s) {
       log(
         'Error cancelOrder ${request.uuid}: $e',
@@ -647,9 +695,15 @@ class Mm2Api {
     RecoverFundsOfSwapRequest request, {
     Future<void> Function()? beforeMutation,
   }) async {
+    final permit = _operationGate.capture();
     await beforeMutation?.call();
+    permit.ensureCurrent();
     try {
-      final JsonMap json = await _mm2.call(request);
+      final JsonMap json = await _callUserMutation(
+        request,
+        request.method,
+        permit: permit,
+      );
       if (json['error'] != null) {
         log(
           'Error recovering funds of swap ${request.uuid}: ${json['error']}',
