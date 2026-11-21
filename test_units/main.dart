@@ -46,6 +46,12 @@ import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
 // reachable from here never runs - these 18 were silently skipped.
 import 'bloc/cex_market_data/common/update_frequency_backoff_strategy_test.dart'
     as update_frequency_backoff_strategy_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_calculator_test.dart'
+    as profit_loss_calculator_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_repository_test.dart'
+    as profit_loss_repository_test;
+import 'bloc/assets_overview/asset_overview_bloc_test.dart'
+    as asset_overview_bloc_test;
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
@@ -104,6 +110,7 @@ import 'views/wallets_manager/widgets/wallets_manager_test.dart'
 
 import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
+import 'tests/dex/history_list_test.dart' as history_list_test;
 import 'tests/encryption/encrypt_data_tests.dart';
 import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
     as fiat_checkout_url_allowlist_test;
@@ -472,6 +479,7 @@ import 'tests/wallet/coin_details/coin_addresses_bloc_gasless_revalidation_test.
 import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
+import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -592,6 +600,7 @@ void main() {
 
   group('Dex trading safety:', () {
     testTradingEntitiesGuards();
+    history_list_test.main();
     testOrderModelValidation();
   });
 
@@ -622,6 +631,7 @@ void main() {
   testCoinActivationStateBridge();
   testAuthBloc();
   testWalletOperationIdentity();
+  wallet_data_loader_test.main();
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();
@@ -653,6 +663,9 @@ void main() {
   // Previously unreachable suites. Each declares its own groups inside its
   // `main()`, so calling it here is equivalent to running the file directly.
   update_frequency_backoff_strategy_test.main();
+  profit_loss_calculator_test.main();
+  profit_loss_repository_test.main();
+  asset_overview_bloc_test.main();
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
