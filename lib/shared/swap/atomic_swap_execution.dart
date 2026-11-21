@@ -79,6 +79,7 @@ class AtomicSwapExecutor implements SwapExecutor {
     SwapQuote quote, {
     required SwapExecutionAuthorization authorization,
   }) async {
+    WalletOperationGate.instance.capture().ensureCurrent();
     final plan = quote.payload;
     if (plan is! AtomicSwapPlan) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
@@ -109,7 +110,6 @@ class AtomicSwapExecutor implements SwapExecutor {
     var dispatched = false;
     final SellResponse response;
     try {
-      WalletOperationGate.instance.capture().ensureCurrent();
       response = await _auth.runWithSession(authorization.session, () {
         authorization.beforeDispatch();
         _auth.ensureSessionContextCurrent(authorization.session);
@@ -118,8 +118,6 @@ class AtomicSwapExecutor implements SwapExecutor {
         return _dex.sellOrThrow(request);
       });
     } on WalletOperationDenied {
-      // Read by this start, the registry and the RPC layer alike only on the
-      // way to the request: nothing was sent.
       throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
     } on RpcDispatchRejected {
       throw const SwapStartRejectedException(SwapStartRejection.notAvailable);

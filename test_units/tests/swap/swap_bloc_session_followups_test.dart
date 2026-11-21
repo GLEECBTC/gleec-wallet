@@ -12,7 +12,6 @@ import 'package:web_dex/shared/swap/swap_execution.dart';
 
 import '../../support/legal_documents_fixture.dart';
 import 'swap_bloc_fakes.dart';
-import 'swap_test_fixtures.dart';
 
 /// The harness's wallet, signed in again.
 const _wallet = KdfUser(
@@ -23,10 +22,9 @@ const _wallet = KdfUser(
   isBip39Seed: true,
 );
 
-/// Covers a Start waiting on the provider's terms when its tab is left, a
+/// Covers a Start waiting on the provider's terms when its tab is left, and a
 /// review asked for before the wallet session it would start in is ready,
-/// including a form built before that session arrives, and what a session
-/// that begins mid-preparation or a restored draft leaves on the form.
+/// including a form built before that session arrives.
 void main() {
   test(
     'leaving the tab while Start waits for the terms returns to the form',
@@ -121,177 +119,5 @@ void main() {
     h.auth.sessions.observe(_wallet);
     expect(registry.acceptsSubmissions, isTrue);
     expect(registry.isCurrent(submission), isFalse);
-  });
-
-  group('a wallet session that begins', () {
-    swapBlocTest('while the assets load still prepares a restored pair', (h) {
-      h.catalogGate = Completer<void>();
-      final bloc = h.build()
-        ..add(const UnifiedSwapStarted())
-        ..add(
-          const UnifiedSwapDraftRestored(
-            pay: 'ETH',
-            receive: 'USDC-ERC20',
-            input: '1',
-            amountMode: SwapAmountMode.token,
-            slippage: swapDefaultSlippage,
-          ),
-        );
-      h.settle();
-      expect(bloc.state.loadingAssets, isTrue);
-
-      unawaited(h.registry.reset());
-      h.settle();
-      h.catalogGate!.complete();
-      h.settle();
-
-      expect(bloc.state.loadingAssets, isFalse);
-      expect(bloc.state.preparingAssets, isFalse);
-      expect(bloc.state.canReview, isTrue);
-    });
-
-    swapBlocTest('while the assets load still opens on a default pair', (h) {
-      h
-        ..holdings = [(asset: eth, usdValue: d('6000'))]
-        ..catalogGate = Completer<void>();
-      final bloc = h.build()..add(const UnifiedSwapStarted());
-      h.settle();
-
-      unawaited(h.registry.reset());
-      h.settle();
-      h.catalogGate!.complete();
-      h.settle();
-
-      expect(bloc.state.loadingAssets, isFalse);
-      expect((bloc.state.pay, bloc.state.receive), (eth, usdc));
-      expect(bloc.state.preparingAssets, isFalse);
-    });
-
-    swapBlocTest('while a default pair is chosen chooses it again', (h) {
-      h.holdingsGate = Completer<void>();
-      final bloc = h.build()..add(const UnifiedSwapStarted());
-      h.settle();
-      expect(bloc.state.loadingAssets, isFalse);
-      expect(bloc.state.pay, isNull);
-
-      unawaited(h.registry.reset());
-      h.elapse(const Duration(seconds: 1));
-
-      expect((bloc.state.pay, bloc.state.receive), (eth, usdc));
-      expect(bloc.state.preparingAssets, isFalse);
-    });
-
-    swapBlocTest('while a pair is prepared prepares it for that session', (h) {
-      final bloc = h.open();
-      h.balanceGate = Completer<void>();
-      bloc.add(UnifiedSwapReceiveAssetChanged(btc));
-      h.settle();
-      expect(bloc.state.preparingAssets, isTrue);
-
-      unawaited(h.registry.reset());
-      h.settle();
-      h.balanceGate!.complete();
-      h.settle();
-
-      expect(bloc.state.preparingAssets, isFalse);
-      expect(bloc.state.preparationFailedAsset, isNull);
-      expect(h.routed.requests.last.to, btc);
-      expect(bloc.state.canReview, isTrue);
-    });
-
-    swapBlocTest('just after sign-in still gives an empty field its unit', (h) {
-      final bloc = h.build()
-        ..add(
-          const UnifiedSwapCapabilitiesChanged(
-            tradingEnabled: true,
-            clockValid: true,
-            signedIn: false,
-          ),
-        )
-        ..add(const UnifiedSwapStarted())
-        ..add(
-          const UnifiedSwapIntentApplied(pay: 'ETH', receive: 'USDC-ERC20'),
-        );
-      h.settle();
-      expect(bloc.state.amountMode, SwapAmountMode.token);
-
-      bloc.add(
-        const UnifiedSwapCapabilitiesChanged(
-          tradingEnabled: true,
-          clockValid: true,
-        ),
-      );
-      unawaited(h.registry.reset());
-      h.settle();
-
-      expect(bloc.state.preparingAssets, isFalse);
-      expect(bloc.state.amountMode, SwapAmountMode.fiat);
-    });
-
-    swapBlocTest('while the app is away is priced once it is back', (h) {
-      final bloc = h.open()
-        ..add(const UnifiedSwapForegroundChanged(foreground: false));
-      h.settle();
-      final asked = h.routed.requests.length;
-
-      unawaited(h.registry.reset());
-      h.settle();
-      expect(h.routed.requests, hasLength(asked));
-      expect(bloc.state.preparingAssets, isFalse);
-
-      bloc.add(const UnifiedSwapForegroundChanged(foreground: true));
-      h.settle();
-      expect(bloc.state.canReview, isTrue);
-    });
-
-    swapBlocTest('clears a failed preparation its own reads make good', (h) {
-      final bloc = h.open();
-      h.unreadableBalances.add(eth);
-      bloc.add(const UnifiedSwapBalancesRefreshed());
-      h.settle();
-      expect(bloc.state.preparationFailedAsset, eth);
-
-      h.unreadableBalances.clear();
-      unawaited(h.registry.reset());
-      h.settle();
-
-      expect(bloc.state.preparationFailedAsset, isNull);
-      expect(bloc.state.canReview, isTrue);
-    });
-  });
-
-  group('a session draft', () {
-    UnifiedSwapDraftRestored draft({required String input}) =>
-        UnifiedSwapDraftRestored(
-          pay: 'ETH',
-          receive: 'USDC-ERC20',
-          input: input,
-          amountMode: SwapAmountMode.token,
-          slippage: 0.03,
-        );
-
-    swapBlocTest('left by a submitted swap restores no raised slippage', (h) {
-      final bloc = h.build()
-        ..add(const UnifiedSwapStarted())
-        ..add(draft(input: ''));
-      h.settle();
-
-      expect((bloc.state.pay, bloc.state.receive), (eth, usdc));
-      expect(bloc.state.slippage, swapDefaultSlippage);
-
-      bloc.add(const UnifiedSwapAmountChanged('1'));
-      h.settle();
-      expect(h.routed.requests.last.slippage, swapDefaultSlippage);
-    });
-
-    swapBlocTest('of an amount not yet submitted keeps its slippage', (h) {
-      final bloc = h.build()
-        ..add(const UnifiedSwapStarted())
-        ..add(draft(input: '1'));
-      h.settle();
-
-      expect(bloc.state.slippage, 0.03);
-      expect(h.routed.requests.last.slippage, 0.03);
-    });
   });
 }

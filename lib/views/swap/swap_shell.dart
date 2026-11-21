@@ -155,12 +155,9 @@ class _SwapShellState extends State<SwapShell> {
     if (widget.destinationBuilder != null) return shell;
     // The form reads its catalog and default pair at start, so signing in or
     // out needs a new one.
-    final walletSession = context.select<AuthBloc?, (bool, String?)>(
-      (auth) =>
-          (_isSignedIn(auth), auth?.state.currentUser?.walletId.compoundId),
-    );
+    final signedIn = context.select<AuthBloc?, bool>(_isSignedIn);
     return _SwapScope(
-      key: ValueKey(walletSession),
+      key: ValueKey(signedIn),
       controller: _controller,
       child: shell,
     );
@@ -185,7 +182,6 @@ class _SwapScope extends StatefulWidget {
 
 class _SwapScopeState extends State<_SwapScope> {
   late final SwapServices _services = context.read<SwapServices>();
-  late final Object _draftSession;
   late final UnifiedSwapBloc _swap;
   late final SwapActivityBloc _activity;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -200,7 +196,6 @@ class _SwapScopeState extends State<_SwapScope> {
   @override
   void initState() {
     super.initState();
-    _draftSession = _services.draftSession;
     final tradingStatus = context.read<TradingStatusBloc>();
     final systemHealth = context.read<SystemHealthBloc>();
     final auth = context.read<AuthBloc?>();
@@ -208,11 +203,8 @@ class _SwapScopeState extends State<_SwapScope> {
     _swap =
         UnifiedSwapBloc(
             repository: _services.createRepository(
-              // Whether this location may swap the pair at all. The order
-              // book applies its own wallet-only rule; a route is not bound
-              // by it, and neither rule is about location.
               tradingAllowed: (from, to) =>
-                  tradingStatus.state.isTradingPermitted([from, to]),
+                  tradingStatus.state.canTradeAssets([from, to]),
               clockValid: () => _clockValid(systemHealth.state),
             ),
             registry: _services.registry,
@@ -222,8 +214,6 @@ class _SwapScopeState extends State<_SwapScope> {
             addressOf: _services.addressOf,
             resolveAsset: _services.resolveAsset,
             holdings: _services.holdings,
-            activateAsset: _services.activate,
-            spendDecimalsOf: _services.spendDecimalsOf,
           )
           ..add(_capabilities())
           ..add(const UnifiedSwapStarted());
@@ -236,8 +226,7 @@ class _SwapScopeState extends State<_SwapScope> {
       ..add(tradingStatus.stream.listen((_) => _publishCapabilities()))
       ..add(systemHealth.stream.listen((_) => _publishCapabilities()))
       ..add(_services.intents.listen((_) => _applyPendingIntent()))
-      ..add(_services.openRequests.listen((_) => _openPending()))
-      ..add(_services.activityRequests.listen((_) => _openPendingActivity()));
+      ..add(_services.openRequests.listen((_) => _openPending()));
     if (auth != null) {
       _subscriptions.add(auth.stream.listen((_) => _publishCapabilities()));
     }
@@ -255,11 +244,9 @@ class _SwapScopeState extends State<_SwapScope> {
 
     widget.controller.addListener(_onDestinationChanged);
     routingState.dexState.addListener(_onRouteChanged);
-    final intentApplied = _applyPendingIntent();
-    final routeApplied = _applyRouteIntent(force: false);
-    if (!intentApplied && !routeApplied) _restoreDraft();
+    _applyPendingIntent();
+    _applyRouteIntent(force: false);
     _openPending();
-    _openPendingActivity();
     if (widget.controller.destination == SwapDestination.activity) {
       _showActivity();
     }
@@ -277,18 +264,6 @@ class _SwapScopeState extends State<_SwapScope> {
 
   @override
   void dispose() {
-    final state = _swap.state;
-    final unsigned =
-        state.view != UnifiedSwapView.progress &&
-        state.review?.status != SwapReviewStatus.starting &&
-        state.review?.status != SwapReviewStatus.unconfirmed;
-    _services.rememberDraft(_draftSession, (
-      pay: state.pay?.id,
-      receive: state.receive?.id,
-      input: unsigned ? state.inputText : '',
-      fiat: state.amountMode == SwapAmountMode.fiat,
-      slippage: state.slippage,
-    ));
     _lifecycle.dispose();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
@@ -343,9 +318,9 @@ class _SwapScopeState extends State<_SwapScope> {
     });
   }
 
-  bool _applyPendingIntent() {
+  void _applyPendingIntent() {
     final intent = _services.takePendingIntent();
-    if (intent == null) return false;
+    if (intent == null) return;
     _swap.add(
       UnifiedSwapIntentApplied(
         pay: intent.pay,
@@ -355,33 +330,18 @@ class _SwapScopeState extends State<_SwapScope> {
       ),
     );
     widget.controller.show(SwapDestination.swap);
-    return true;
-  }
-
-  void _restoreDraft() {
-    final draft = _services.draftFor(_draftSession);
-    if (draft == null) return;
-    _swap.add(
-      UnifiedSwapDraftRestored(
-        pay: draft.pay,
-        receive: draft.receive,
-        input: draft.input,
-        amountMode: draft.fiat ? SwapAmountMode.fiat : SwapAmountMode.token,
-        slippage: draft.slippage,
-      ),
-    );
   }
 
   /// Applies `/dex?from_currency=…&to_currency=…&from_amount=…`. On mount the
   /// same link is applied once only; a fresh navigation always applies.
-  bool _applyRouteIntent({required bool force}) {
+  void _applyRouteIntent({required bool force}) {
     final dex = routingState.dexState;
-    if (dex.orderType == 'maker' || dex.isTradingDetails) return false;
+    if (dex.orderType == 'maker' || dex.isTradingDetails) return;
     final pay = dex.fromCurrency;
     final receive = dex.toCurrency;
-    if (pay.isEmpty && receive.isEmpty) return false;
+    if (pay.isEmpty && receive.isEmpty) return;
     final signature = '$pay|$receive|${dex.fromAmount}';
-    if (!force && _services.lastRouteIntent == signature) return false;
+    if (!force && _services.lastRouteIntent == signature) return;
     _services.lastRouteIntent = signature;
     _swap.add(
       UnifiedSwapIntentApplied(
@@ -390,17 +350,12 @@ class _SwapScopeState extends State<_SwapScope> {
         amount: dex.fromAmount.isEmpty ? null : dex.fromAmount,
       ),
     );
-    return true;
   }
 
   void _openPending() {
     final ref = _services.takePendingOpen();
     if (ref == null) return;
     widget.controller.showActivity(swap: ref);
-  }
-
-  void _openPendingActivity() {
-    if (_services.takePendingActivity()) widget.controller.showActivity();
   }
 
   @override

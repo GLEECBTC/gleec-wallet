@@ -19,17 +19,13 @@ class SwapButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final SwapButtonVariant variant;
-
-  /// Shows a spinner and ignores presses until the work is done. It keeps
-  /// its enabled colours, as its label is the status to read, and stays
-  /// focusable: disabling a focused button moves keyboard focus elsewhere.
   final bool busy;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final pressable = onPressed != null && !busy;
+    final enabled = onPressed != null && !busy;
     final (background, foreground, border) = switch (variant) {
       SwapButtonVariant.primary => (
         palette.brand,
@@ -57,15 +53,16 @@ class SwapButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
             color: states.contains(WidgetState.disabled)
-                ? palette.borderStrong
+                ? border.withValues(alpha: 0.4)
                 : border,
           ),
         ),
       ),
       backgroundColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) return palette.disabled;
-        if (pressable &&
-            variant == SwapButtonVariant.primary &&
+        if (states.contains(WidgetState.disabled)) {
+          return background.withValues(alpha: 0.45);
+        }
+        if (variant == SwapButtonVariant.primary &&
             states.contains(WidgetState.pressed)) {
           return palette.brandPressed;
         }
@@ -73,60 +70,52 @@ class SwapButton extends StatelessWidget {
       }),
       foregroundColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.disabled)
-            ? palette.onDisabled
+            ? foreground.withValues(alpha: 0.7)
             : foreground,
       ),
-      overlayColor: WidgetStatePropertyAll(
-        pressable ? foreground.withValues(alpha: 0.08) : Colors.transparent,
-      ),
-      mouseCursor: busy
-          ? const WidgetStatePropertyAll(SystemMouseCursors.basic)
-          : null,
+      overlayColor: WidgetStatePropertyAll(foreground.withValues(alpha: 0.08)),
       elevation: const WidgetStatePropertyAll(0),
       textStyle: WidgetStatePropertyAll(
         SwapText.strong(context).copyWith(fontWeight: FontWeight.w800),
       ),
     );
-    // The two equal slots keep the label centred when work starts. Only the
-    // busy indicator changes; its arrival never moves the button or its text.
     final leading = busy
-        ? SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: foreground,
-              value: SwapMotion.enabled(context) ? null : 0.75,
-            ),
-          )
-        : icon == null
-        ? null
-        : Icon(icon, size: 18);
-    // One node in every state, so a screen reader's focus stays on the
-    // button as it turns busy, and hears it as unavailable until it is done.
-    return SwapButtonSemantics(
-      label: label,
-      onTap: pressable ? onPressed : null,
-      child: SwapPressScale(
-        enabled: pressable,
-        child: TextButton(
-          style: style,
-          onPressed: busy ? () {} : onPressed,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: 26,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  heightFactor: 1,
-                  child: leading ?? const SizedBox(),
+              SwapPop(
+                trigger: busy,
+                onMount: true,
+                from: 0.5,
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: foreground,
+                  ),
                 ),
               ),
-              Flexible(child: Text(label, textAlign: TextAlign.center)),
-              const SizedBox(width: 26),
+              const SizedBox(width: 10),
             ],
-          ),
+          )
+        : icon != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [Icon(icon, size: 18), const SizedBox(width: 8)],
+          )
+        : const SizedBox.shrink();
+    return SwapPressScale(
+      enabled: enabled,
+      child: TextButton(
+        style: style,
+        onPressed: enabled ? onPressed : null,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwapSmoothSize(alignment: Alignment.centerLeft, child: leading),
+            Flexible(child: Text(label, textAlign: TextAlign.center)),
+          ],
         ),
       ),
     );

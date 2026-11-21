@@ -27,14 +27,10 @@ class _Updates extends AppUpdateService {
 }
 
 class _Prompt {
-  _Prompt(this.info, this.accept, this.cancel, this.dismiss);
+  _Prompt(this.info, this.accept, this.cancel);
   final UpdateVersionInfo info;
   final VoidCallback accept;
   final VoidCallback cancel;
-
-  /// The popup leaving the screen, as the system back gesture does it: with
-  /// neither button pressed.
-  final VoidCallback dismiss;
 }
 
 class _Harness {
@@ -42,20 +38,14 @@ class _Harness {
     bloc = UpdateBloc(
       service: updates,
       currentVersion: currentVersion ?? () async => '0.9.6',
-      presentPopup:
-          (info, {required onAccept, required onCancel, required onDismiss}) {
-            if (!canPresent) return false;
-            prompts.add(_Prompt(info, onAccept, onCancel, onDismiss));
-            return true;
-          },
+      presentPopup: (info, {required onAccept, required onCancel}) {
+        prompts.add(_Prompt(info, onAccept, onCancel));
+      },
     );
     addTearDown(bloc.dispose);
   }
   final updates = _Updates();
   final prompts = <_Prompt>[];
-
-  /// False while no scaffold exists to show the popup on.
-  bool canPresent = true;
   late final UpdateBloc bloc;
 }
 
@@ -191,70 +181,6 @@ void main() {
         expect(harness.updates.calls, 1);
       },
     );
-
-    testWidgets(
-      'a popup that could not be shown is offered on the next check',
-      (tester) async {
-        final harness = _Harness()..canPresent = false;
-        await harness.bloc.init();
-        expect(harness.prompts, isEmpty);
-
-        harness.canPresent = true;
-        await tester.pump(const Duration(minutes: 5));
-        expect(harness.prompts, hasLength(1));
-        harness.bloc.dispose();
-      },
-    );
-
-    testWidgets(
-      'a required update returns after the system back gesture closes it',
-      (tester) async {
-        final harness = _Harness();
-        harness.updates.info = _release(status: UpdateStatus.required);
-        await harness.bloc.init();
-        await tester.pump(const Duration(minutes: 5));
-        expect(
-          harness.prompts,
-          hasLength(1),
-          reason: 'an open popup must not be stacked',
-        );
-
-        harness.prompts.single.dismiss();
-        await tester.pump(const Duration(minutes: 5));
-        expect(harness.prompts, hasLength(2));
-        harness.bloc.dispose();
-      },
-    );
-
-    testWidgets(
-      'the back gesture on an optional update is a remind-later, not the end '
-      'of update offers',
-      (tester) async {
-        final harness = _Harness();
-        await harness.bloc.init();
-        harness.prompts.single.dismiss();
-        await tester.pump(const Duration(minutes: 5));
-        expect(harness.prompts, hasLength(1));
-
-        harness.updates.info = _release(version: '0.9.8');
-        await tester.pump(const Duration(minutes: 5));
-        expect(harness.prompts.map((p) => p.info.version), ['0.9.7', '0.9.8']);
-        harness.bloc.dispose();
-      },
-    );
-
-    testWidgets('closing after "update now" keeps the release on offer', (
-      tester,
-    ) async {
-      final harness = _Harness();
-      await harness.bloc.init();
-      harness.prompts.single
-        ..accept()
-        ..dismiss();
-      await tester.pump(const Duration(minutes: 5));
-      expect(harness.prompts, hasLength(2));
-      harness.bloc.dispose();
-    });
 
     testWidgets(
       'dismissal does not suppress the release in a new app session',

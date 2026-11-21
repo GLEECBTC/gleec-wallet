@@ -15,6 +15,7 @@ class WalletImportWrapper extends StatefulWidget {
     required String name,
     required String password,
     required WalletConfig walletConfig,
+    required bool rememberMe,
   })
   onImport;
   final void Function() onCancel;

@@ -185,8 +185,7 @@ void main() {
       ),
       isTrue,
     );
-    // Its cost has no dollar price, so it is given in the fee's own token.
-    expect(find.text('0.001 ETH'), findsOneWidget);
+    expect(find.text('Incomplete'), findsOneWidget);
     expect(find.text('Best net return'), findsNothing);
   });
 
@@ -305,43 +304,23 @@ void main() {
     expect(swapRouteKindLabel(SwapRouteKind.crossChain), 'Across networks');
   });
 
-  testWidgets('the fee breakdown gives the approval\'s share, and a cost '
-      'with no dollar price in its own token', (tester) async {
+  testWidgets('the fee breakdown gives the approval\'s share, and says when '
+      'a cost is unknown', (tester) async {
     final approving = quoteOf(
       approval: SwapApprovalRequirement(
         asset: eth,
         exactAmount: d('1'),
         resetsFirst: false,
       ),
-      fees: [
-        SwapFeeComponent(
-          kind: SwapFeeKind.network,
-          amount: d('0.001'),
-          deductedFromReceive: false,
-          asset: eth,
-          usdValue: d('4.2'),
-        ),
-        SwapFeeComponent(
-          kind: SwapFeeKind.dexFee,
-          amount: d('0.1'),
-          deductedFromReceive: false,
-          asset: gleec,
-        ),
-      ],
-      pricing: pricingOf(
-        network: '4.2',
-        approval: '1.2',
-        swap: null,
-        complete: false,
-      ),
+      pricing: pricingOf(network: '4.2', approval: '1.2', swap: null),
     );
     await pump(tester, swapPricedForm(ranked: [approving]));
     await tapText(tester, 'Fee breakdown');
 
     expect(breakdown('Network costs', r'$4.20'), findsOneWidget);
     expect(breakdown('↳ Approval network cost', r'$1.20'), findsOneWidget);
-    expect(breakdown('Swap costs', '0.1 GLEEC'), findsOneWidget);
-    expect(breakdown('Total cost', '0.001 ETH + 0.1 GLEEC'), findsOneWidget);
+    expect(breakdown('Swap costs', 'Incomplete'), findsOneWidget);
+    expect(breakdown('Total cost', 'Incomplete'), findsOneWidget);
   });
 
   testWidgets('slippage is changed from the comparison, and announced', (

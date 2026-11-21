@@ -294,8 +294,8 @@ void main() {
         await tester.pump();
         app.auth.show(AuthBlocState.initial());
         await tester.pumpAndSettle();
-        expect(find.text('authManagedUnlockCanceled'.tr()), findsNothing);
-        expect(find.text('authManagedUnlockFailed'.tr()), findsNothing);
+        expect(find.textContaining('Unlock canceled'), findsNothing);
+        expect(find.textContaining('Unable to unlock'), findsNothing);
         await tester.tap(find.byKey(const Key('managed-wallet-unlock')));
         await tester.pumpAndSettle();
         expect(requests.map((request) => request.automatic), [true, false]);

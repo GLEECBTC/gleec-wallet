@@ -12,73 +12,16 @@ import 'credential_backend.dart';
 
 CredentialBackend createCredentialBackend() => NativeCredentialBackend();
 
-/// Maps a native channel error code. `interrupted` means the OS dismissed the
-/// prompt (a call, an app switch, the device locking): the user declined
-/// nothing, so an enrolment must fail rather than read it as "set up later".
-WalletAccessFailure credentialChannelFailure(
-  String code, {
-  required bool enrolling,
-}) => switch (code) {
-  'canceled' || 'cancelled' => WalletAccessFailure.canceled,
-  'interrupted' =>
-    enrolling ? WalletAccessFailure.unavailable : WalletAccessFailure.canceled,
-  'unavailable' => WalletAccessFailure.unavailable,
-  'invalidated' => WalletAccessFailure.invalidated,
-  'lockedOut' => WalletAccessFailure.lockedOut,
-  'busy' => WalletAccessFailure.busy,
-  _ => WalletAccessFailure.storageFailed,
-};
-
-/// Whether a Secret Service provider owns, or can be started for, its name on
-/// the session bus. False when the bus cannot be asked: the unattended tier
-/// then stays available exactly as it was before this check existed.
-Future<bool> secretServiceOnSessionBus({
-  Future<ProcessResult> Function(String, List<String>) run = Process.run,
-}) async {
-  const bus = 'org.freedesktop.DBus';
-  const object = '/org/freedesktop/DBus';
-  const provider = 'org.freedesktop.secrets';
-  for (final method in const ['ListNames', 'ListActivatableNames']) {
-    for (final command in [
-      'gdbus call --session --dest $bus --object-path $object --method $bus.$method',
-      'dbus-send --session --print-reply --dest=$bus $object $bus.$method',
-      'busctl --user call $bus $object $bus $method',
-    ]) {
-      final [tool, ...arguments] = command.split(' ');
-      try {
-        final result = await run(
-          tool,
-          arguments,
-        ).timeout(const Duration(seconds: 2));
-        if (result.exitCode != 0) continue;
-        final names = '${result.stdout}';
-        if (names.contains('"$provider"') || names.contains("'$provider'")) {
-          return true;
-        }
-        break;
-      } catch (_) {
-        // Not installed or not answering; the next tool asks the same thing.
-      }
-    }
-  }
-  return false;
-}
-
-enum _LinuxSecretService { present, absent, failed }
-
 /// Native protected reads are performed by the OS, not by a Dart Boolean.
 class NativeCredentialBackend extends CredentialBackend {
   NativeCredentialBackend({
     MethodChannel? channel,
     FlutterSecureStorage? linuxStorage,
     Future<Directory> Function()? supportDirectory,
-    Future<bool> Function()? linuxSecretServicePresent,
   }) : _channel =
            channel ?? const MethodChannel('gleec.wallet/credential_vault'),
        _linuxStorage = linuxStorage ?? const FlutterSecureStorage(),
-       _supportDirectory = supportDirectory ?? getApplicationSupportDirectory,
-       _linuxSecretServicePresent =
-           linuxSecretServicePresent ?? secretServiceOnSessionBus {
+       _supportDirectory = supportDirectory ?? getApplicationSupportDirectory {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'deviceLocked') _deviceLocked.add(null);
     });
@@ -87,26 +30,28 @@ class NativeCredentialBackend extends CredentialBackend {
   final MethodChannel _channel;
   final FlutterSecureStorage _linuxStorage;
   final Future<Directory> Function() _supportDirectory;
-  final Future<bool> Function() _linuxSecretServicePresent;
   final _deviceLocked = StreamController<void>.broadcast();
-  _LinuxSecretService? _linuxSecretService;
+  bool? _linuxHasSecretService;
   @override
   Stream<void> get deviceLocked => _deviceLocked.stream;
 
-  /// [enrolling] marks a call that creates or confirms device protection.
   Future<T?> _invoke<T>(
-    String method, {
+    String method, [
     Map<String, Object?>? arguments,
-    bool enrolling = false,
-  }) async {
+  ]) async {
     try {
       return await _channel.invokeMethod<T>(method, arguments);
     } on MissingPluginException {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     } on PlatformException catch (error) {
-      throw WalletAccessException(
-        credentialChannelFailure(error.code, enrolling: enrolling),
-      );
+      throw WalletAccessException(switch (error.code) {
+        'canceled' || 'cancelled' => WalletAccessFailure.canceled,
+        'unavailable' => WalletAccessFailure.unavailable,
+        'invalidated' => WalletAccessFailure.invalidated,
+        'lockedOut' => WalletAccessFailure.lockedOut,
+        'busy' => WalletAccessFailure.busy,
+        _ => WalletAccessFailure.storageFailed,
+      });
     }
   }
 
@@ -115,20 +60,15 @@ class NativeCredentialBackend extends CredentialBackend {
     if (Platform.isLinux) {
       try {
         await _linuxStorage.read(key: 'gleec.credential.capability');
-        _linuxSecretService = _LinuxSecretService.present;
+        _linuxHasSecretService = true;
       } catch (_) {
-        // The storage plugin reports a missing provider and a dismissed or
-        // failed keyring unlock identically. Only the first may select the
-        // unattended app-local tier.
-        _linuxSecretService = await _linuxSecretServicePresent()
-            ? _LinuxSecretService.failed
-            : _LinuxSecretService.absent;
+        _linuxHasSecretService = false;
       }
       return CredentialCapabilities(
         available: true,
-        protection: _linuxSecretService == _LinuxSecretService.absent
-            ? CredentialProtection.appLocal
-            : CredentialProtection.osAccountProtected,
+        protection: _linuxHasSecretService!
+            ? CredentialProtection.osAccountProtected
+            : CredentialProtection.appLocal,
       );
     }
     final result = await _invoke<Map>('capabilities');
@@ -152,7 +92,7 @@ class NativeCredentialBackend extends CredentialBackend {
         enrolled: false,
       );
     }
-    final result = await _invoke<Map>('metadata', arguments: {'key': key});
+    final result = await _invoke<Map>('metadata', {'key': key});
     if (result == null) return null;
     return CredentialRecordInfo(
       protection: CredentialProtection.parse(result['protection']),
@@ -174,15 +114,11 @@ class NativeCredentialBackend extends CredentialBackend {
       await _linuxStorageOperation(() => _linuxWrite(key, value));
       return;
     }
-    await _invoke<void>(
-      'write',
-      arguments: {
-        'key': key,
-        'value': value,
-        'requireAuthentication': requireAuthentication,
-      },
-      enrolling: requireAuthentication,
-    );
+    await _invoke<void>('write', {
+      'key': key,
+      'value': value,
+      'requireAuthentication': requireAuthentication,
+    });
   }
 
   @override
@@ -200,25 +136,18 @@ class NativeCredentialBackend extends CredentialBackend {
       return (await _linuxStorageOperation(() => _linuxRead(key)))?['value']
           as String?;
     }
-    return _invoke<String>(
-      'read',
-      arguments: {
-        'key': key,
-        'reason': reason,
-        'requireAuthentication': requireAuthentication,
-        if (purpose != null) 'purpose': purpose,
-      },
-      enrolling: purpose == 'verifyWrite',
-    );
+    return _invoke<String>('read', {
+      'key': key,
+      'reason': reason,
+      'requireAuthentication': requireAuthentication,
+      if (purpose != null) 'purpose': purpose,
+    });
   }
 
   @override
   Future<String?> prepareDelete(String key, {required String reason}) async {
     if (Platform.isLinux) return null;
-    return _invoke<String>(
-      'prepareDelete',
-      arguments: {'key': key, 'reason': reason},
-    );
+    return _invoke<String>('prepareDelete', {'key': key, 'reason': reason});
   }
 
   @override
@@ -230,9 +159,8 @@ class NativeCredentialBackend extends CredentialBackend {
         // until every credential copy has been removed and verified.
         final file = await _localFile(key);
         final tier = File('${file.path}.secret-service');
-        if (_linuxSecretService == null) await capabilities();
-        if (await tier.exists() ||
-            _linuxSecretService == _LinuxSecretService.present) {
+        if (_linuxHasSecretService == null) await capabilities();
+        if (await tier.exists() || _linuxHasSecretService == true) {
           await _linuxStorage.delete(key: key);
           if (await _linuxStorage.read(key: key) != null) {
             throw const WalletAccessException(
@@ -247,13 +175,10 @@ class NativeCredentialBackend extends CredentialBackend {
       });
       return;
     }
-    await _invoke<void>(
-      'delete',
-      arguments: {
-        'key': key,
-        if (authorization != null) 'authorization': authorization,
-      },
-    );
+    await _invoke<void>('delete', {
+      'key': key,
+      if (authorization != null) 'authorization': authorization,
+    });
   }
 
   @override
@@ -266,11 +191,11 @@ class NativeCredentialBackend extends CredentialBackend {
     if (Platform.isLinux) {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     }
-    await _invoke<void>(
-      'repairInvalidated',
-      arguments: {'key': key, 'value': value, 'requireAuthentication': true},
-      enrolling: true,
-    );
+    await _invoke<void>('repairInvalidated', {
+      'key': key,
+      'value': value,
+      'requireAuthentication': true,
+    });
   }
 
   @override
@@ -280,10 +205,11 @@ class NativeCredentialBackend extends CredentialBackend {
     required String title,
   }) async {
     if (Platform.isLinux) return PasswordManagerOutcome.unavailable;
-    final result = await _invoke<String>(
-      'savePassword',
-      arguments: {'username': username, 'password': password, 'title': title},
-    );
+    final result = await _invoke<String>('savePassword', {
+      'username': username,
+      'password': password,
+      'title': title,
+    });
     return PasswordManagerOutcome.values.firstWhere(
       (item) => item.name == result,
       orElse: () => PasswordManagerOutcome.unknown,
@@ -311,11 +237,8 @@ class NativeCredentialBackend extends CredentialBackend {
         CredentialProtection.appLocal,
       );
     }
-    if (_linuxSecretService == null) await capabilities();
-    if (_linuxSecretService != _LinuxSecretService.present &&
-        !usesSecretService) {
-      return null;
-    }
+    if (_linuxHasSecretService == null) await capabilities();
+    if (_linuxHasSecretService == false && !usesSecretService) return null;
     final raw = await _linuxStorage.read(key: key);
     return raw == null
         ? null
@@ -356,19 +279,9 @@ class NativeCredentialBackend extends CredentialBackend {
     final file = await _localFile(key);
     final existsLocally = await file.exists();
     final tier = File('${file.path}.secret-service');
-    if (_linuxSecretService == null) await capabilities();
-    final usesSecretService = await tier.exists();
-    if (!usesSecretService &&
-        !existsLocally &&
-        _linuxSecretService == _LinuxSecretService.failed) {
-      // A provider exists but did not answer. Storing this new credential
-      // unattended would make that the key's permanent tier; the next
-      // capabilities() call probes again.
-      throw const WalletAccessException(WalletAccessFailure.unavailable);
-    }
-    if (usesSecretService ||
-        (!existsLocally &&
-            _linuxSecretService == _LinuxSecretService.present)) {
+    if (_linuxHasSecretService == null) await capabilities();
+    if (await tier.exists() ||
+        (!existsLocally && _linuxHasSecretService == true)) {
       try {
         // Preserve the storage policy even if Secret Service later disappears.
         // This marker contains no credential; a failed write never enables a

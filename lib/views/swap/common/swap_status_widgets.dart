@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
@@ -142,34 +140,12 @@ class SwapHelperLine extends StatelessWidget {
     required this.text,
     this.tone = SwapTone.neutral,
     this.icon,
-    this.liveRegion,
     super.key,
   });
 
   final String text;
   final SwapTone tone;
   final IconData? icon;
-
-  /// Whether screen readers announce it as it appears or changes. Null
-  /// announces a warning or an error and leaves a neutral note to be read in
-  /// place: a standing note read aloud on every rebuild talks over the
-  /// screen.
-  final bool? liveRegion;
-
-  /// How tall a line that fits on one line is, with the space above it.
-  static double heightOf(BuildContext context) =>
-      _gap +
-      math.max(
-        _iconSize + 1,
-        SwapText.heightOf(
-          context,
-          const TextSpan(text: '0'),
-          SwapText.small(context),
-        ),
-      );
-
-  static const _gap = 10.0;
-  static const _iconSize = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -187,16 +163,16 @@ class SwapHelperLine extends StatelessWidget {
           _ => Icons.info_outline_rounded,
         };
     return Semantics(
-      liveRegion: liveRegion ?? tone != SwapTone.neutral,
+      liveRegion: true,
       container: true,
       child: Padding(
-        padding: const EdgeInsets.only(top: _gap),
+        padding: const EdgeInsets.only(top: 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 1),
-              child: Icon(glyph, size: _iconSize, color: color),
+              child: Icon(glyph, size: 16, color: color),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -247,8 +223,8 @@ class SwapHeroMotion {
 
 /// A large centred status: an icon tile, a heading and a line of copy.
 ///
-/// With [motion], the icon is the sole animated focus. Status copy and actions
-/// show their current state immediately.
+/// With [motion], a new tone blends in, a new icon pops in and new copy rises
+/// in; without it, the hero is still.
 class SwapStatusHero extends StatelessWidget {
   const SwapStatusHero({
     required this.icon,
@@ -258,7 +234,6 @@ class SwapStatusHero extends StatelessWidget {
     this.liveRegion = true,
     this.action,
     this.motion,
-    this.illustration,
     super.key,
   });
 
@@ -269,7 +244,6 @@ class SwapStatusHero extends StatelessWidget {
   final bool liveRegion;
   final Widget? action;
   final SwapHeroMotion? motion;
-  final Widget? illustration;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +255,7 @@ class SwapStatusHero extends StatelessWidget {
     };
     final body = this.body;
     final motion = this.motion;
-    final glyph = illustration ?? Icon(icon, size: 30, color: foreground);
+    final glyph = Icon(icon, size: 30, color: foreground);
     final Widget titleText = Text(
       title,
       style: SwapText.heading(context),
@@ -295,8 +269,23 @@ class SwapStatusHero extends StatelessWidget {
             textAlign: TextAlign.center,
           );
     final copy = [
-      Semantics(header: true, headingLevel: 1, child: titleText),
-      if (bodyText != null) ...[const SizedBox(height: 8), bodyText],
+      Semantics(
+        header: true,
+        headingLevel: 1,
+        child: motion == null ? titleText : _rise(title, motion, titleText),
+      ),
+      if (bodyText != null) ...[
+        const SizedBox(height: 8),
+        if (motion == null)
+          bodyText
+        else
+          _rise(
+            body,
+            motion,
+            bodyText,
+            delay: const Duration(milliseconds: 40),
+          ),
+      ],
       if (action != null) ...[const SizedBox(height: 16), action!],
     ];
     return Semantics(
@@ -320,12 +309,32 @@ class SwapStatusHero extends StatelessWidget {
             else
               _movingTile(context, motion, palette, background, glyph),
             const SizedBox(height: 14),
-            ...copy,
+            if (motion == null)
+              ...copy
+            else
+              SwapSmoothSize(
+                animate: motion.animate,
+                alignment: Alignment.topCenter,
+                child: Column(children: copy),
+              ),
           ],
         ),
       ),
     );
   }
+
+  static Widget _rise(
+    Object? key,
+    SwapHeroMotion motion,
+    Widget child, {
+    Duration delay = Duration.zero,
+  }) => SwapReveal(
+    revealKey: key,
+    onMount: false,
+    animate: motion.animate,
+    delay: delay,
+    child: child,
+  );
 
   Widget _movingTile(
     BuildContext context,

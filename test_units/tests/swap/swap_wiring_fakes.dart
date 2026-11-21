@@ -25,7 +25,6 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_response.dart';
 import 'package:web_dex/model/stored_settings.dart';
-import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -142,18 +141,10 @@ SwapExecutionRegistry attentionRegistry({String id = 'swap-1'}) {
 
 /// The swap services the app provides, over a real registry.
 class FakeSwapServices implements SwapServices {
-  FakeSwapServices(this.registry) {
-    addTearDown(() => presentation.dispose());
-  }
+  FakeSwapServices(this.registry);
 
   @override
   final SwapExecutionRegistry registry;
-
-  @override
-  late final SwapPresentationSession presentation = SwapPresentationSession(
-    registry: registry,
-    refreshBalances: (_) async => true,
-  );
 
   @override
   final Set<String> viewing = {};

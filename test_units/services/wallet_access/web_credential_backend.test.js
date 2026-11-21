@@ -99,16 +99,7 @@ test('wallet HTML and hosting policy exclude external and arbitrary inline scrip
         assert.ok(script.includes(`'sha256-${hash}'`), 'Inline data/scripts need an exact CSP hash');
       }
     }
-    const sources = name => (policy.split(';').map(value => value.trim())
-      .find(value => value.startsWith(`${name} `)) ?? '').split(/\s+/).slice(1);
-    // Without media-src, video falls back to default-src 'self' and remote NFT videos are blocked.
-    assert.ok(sources('media-src').includes('https:'), 'Remote NFT videos need an explicit media policy');
-    for (const source of sources('media-src')) {
-      assert.ok(sources('img-src').includes(source), 'Media must not be allowed from more places than images');
-    }
   }
-  // frame-ancestors has no effect in a <meta> policy; everything else must match.
-  assert.equal(policies[1], `${policies[0]}; frame-ancestors 'self'`, 'The page and header policies must not drift apart');
   assert.ok(!hosting.ignore.includes('**/.*'), 'Apple association must be deployed');
   assert.equal(hosting.appAssociation, 'NONE', 'Firebase must serve the bundled association, not replace it with generated applinks');
   assert.ok(hosting.headers.find(rule => rule.source === '/')?.headers.some(header =>
@@ -633,97 +624,6 @@ test('persistent storage denial does not create a false backup guarantee or lose
   assert.equal((await api.metadata({ key: 'wallet-1' })).protection, 'browserLocal');
   await api.write({ key: 'wallet-2', value: secret });
   assert.equal(requests, 1);
-});
-
-test('an unanswered persistent-storage prompt never holds the vault', async () => {
-  const { api, env } = await environment();
-  let requests = 0;
-  // Firefox leaves this pending for as long as its permission prompt is ignored.
-  env.navigator.storage = { persist() { requests++; return new Promise(() => {}); } };
-  const written = await Promise.race([
-    api.write({ key: 'wallet-1', value: secret }).then(() => 'written'),
-    new Promise(resolve => setTimeout(() => resolve('blocked'), 200)),
-  ]);
-  assert.equal(written, 'written');
-  assert.equal(requests, 1);
-  assert.equal(await api.read({ key: 'wallet-1' }), secret);
-  await api.write({ key: 'wallet-1', value: changedSecret });
-  assert.equal(await api.read({ key: 'wallet-1' }), changedSecret);
-  const second = await environment();
-  second.env.navigator.storage = { persist() { throw new Error('Canary storage manager failure'); } };
-  await second.api.write({ key: 'wallet-1', value: secret });
-  assert.equal(await second.api.read({ key: 'wallet-1' }), secret);
-});
-
-function closableIndexedDb() {
-  const rows = new Map();
-  const connections = [];
-  const state = { refuseAll: false };
-  const indexedDB = {
-    open() {
-      const request = {};
-      queueMicrotask(() => {
-        const db = {
-          closed: false,
-          close() { this.closed = true; },
-          transaction() {
-            if (this.closed || state.refuseAll) {
-              throw new DOMException('Canary connection details', 'InvalidStateError');
-            }
-            const tx = {
-              abort() { queueMicrotask(() => tx.onabort?.()); },
-              objectStore: () => ({
-                get(slot) {
-                  const read = {};
-                  queueMicrotask(() => {
-                    read.result = rows.get(slot);
-                    read.onsuccess?.();
-                    queueMicrotask(() => tx.oncomplete?.());
-                  });
-                  return read;
-                },
-              }),
-            };
-            return tx;
-          },
-        };
-        connections.push(db);
-        request.result = db;
-        request.onsuccess();
-      });
-      return request;
-    },
-  };
-  return { indexedDB, connections, state };
-}
-
-for (const announced of [true, false]) {
-  test(`a connection the browser closed ${announced ? 'with' : 'without'} a close event is reopened`, async () => {
-    const { indexedDB, connections } = closableIndexedDb();
-    const env = { crypto, indexedDB, location: new URL('https://dex.gleec.com'), isSecureContext: true,
-      navigator: {}, document: new EventTarget() };
-    env.top = env.self = env;
-    const api = createWalletCredentials(env);
-    assert.equal(await api.metadata({ key: 'wallet-1' }), null);
-    assert.equal(connections.length, 1);
-    connections[0].closed = true;
-    if (announced) connections[0].onclose();
-    assert.equal(await api.metadata({ key: 'wallet-1' }), null);
-    assert.equal(connections.length, 2);
-    assert.equal(await api.metadata({ key: 'wallet-1' }), null);
-    assert.equal(connections.length, 2, 'A healthy connection stays cached');
-  });
-}
-
-test('a connection that stays unusable fails once without retrying forever', async () => {
-  const { indexedDB, connections, state } = closableIndexedDb();
-  state.refuseAll = true;
-  const env = { crypto, indexedDB, location: new URL('https://dex.gleec.com'), isSecureContext: true,
-    navigator: {}, document: new EventTarget() };
-  env.top = env.self = env;
-  const api = createWalletCredentials(env);
-  await assert.rejects(api.metadata({ key: 'wallet-1' }), { code: 'storageFailed' });
-  assert.equal(connections.length, 2);
 });
 
 test('deletion-purpose credential verification reuses exactly one fresh ceremony', async () => {

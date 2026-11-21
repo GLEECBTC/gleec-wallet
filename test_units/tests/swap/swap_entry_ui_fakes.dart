@@ -35,9 +35,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
-import 'package:web_dex/views/swap/common/swap_buttons.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -203,11 +201,6 @@ class FakeTradingStatusBloc extends Cubit<TradingStatusState>
   FakeTradingStatusBloc(Set<AssetId> blocked)
     : super(TradingStatusLoadSuccess(disallowedAssets: blocked));
 
-  final List<TradingStatusEvent> events = [];
-
-  @override
-  void add(TradingStatusEvent event) => events.add(event);
-
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -230,8 +223,9 @@ class FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
 class FakeSettingsBloc extends Cubit<SettingsState> implements SettingsBloc {
   FakeSettingsBloc({required bool testCoins})
     : super(
-        SettingsState.fromStored(StoredSettings.initial())
-            .copyWith(testCoinsEnabled: testCoins),
+        SettingsState.fromStored(
+          StoredSettings.initial(),
+        ).copyWith(testCoinsEnabled: testCoins),
       );
 
   @override
@@ -277,9 +271,6 @@ UnifiedSwapState swapPricedForm({
     failures: failures,
   );
   return swapBaseForm().copyWith(
-    payAddress: '0xPAY',
-    receiveAddress: '0xRECEIVE',
-    feeBalance: d('2'),
     evaluation: evaluation,
     quotes: quotes,
     selectedId: selectedId ?? quotes.preselected?.id,
@@ -475,24 +466,14 @@ List<String> recordClipboard(WidgetTester tester) {
   return copied;
 }
 
-/// Whether the button showing [text] can be pressed. A busy swap button
-/// stays focusable, so its press does nothing rather than being null.
+/// Whether the button showing [text] can be pressed.
 bool swapButtonEnabled(WidgetTester tester, Finder text) =>
     tester
-            .widget<TextButton>(
-              find.ancestor(of: text, matching: find.byType(TextButton)).first,
-            )
-            .onPressed !=
-        null &&
-    find
-        .ancestor(
-          of: text,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is SwapButton && widget.busy,
-          ),
+        .widget<TextButton>(
+          find.ancestor(of: text, matching: find.byType(TextButton)).first,
         )
-        .evaluate()
-        .isEmpty;
+        .onPressed !=
+    null;
 
 final Finder swapPrimaryAction = find.byKey(const Key('swap-primary-action'));
 

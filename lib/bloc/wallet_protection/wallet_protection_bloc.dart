@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
-import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 
 part 'wallet_protection_event.dart';
 part 'wallet_protection_state.dart';
@@ -60,12 +59,10 @@ class WalletProtectionBloc
     Emitter<WalletProtectionState> emit,
   ) async {
     try {
-      final pending = access.isPasswordManagerPending;
-      if (event.manual || state.waitingForPasswordManager != pending) {
+      if (state.waitingForPasswordManager != access.isPasswordManagerPending) {
         emit(
           state.copyWith(
-            loading: event.manual ? true : null,
-            waitingForPasswordManager: pending,
+            waitingForPasswordManager: access.isPasswordManagerPending,
           ),
         );
       }
@@ -80,19 +77,18 @@ class WalletProtectionBloc
           capabilities: capabilities,
           loading: false,
           graceSeconds: access.unlockCoordinator.backgroundGrace.inSeconds,
-          clearCheckFailure: true,
         ),
       );
     } on WalletAccessException catch (error) {
       if (!emit.isDone) {
-        emit(state.copyWith(loading: false, checkFailure: error.failure));
+        emit(state.copyWith(loading: false, failure: error.failure));
       }
     } catch (_) {
       if (!emit.isDone) {
         emit(
           state.copyWith(
             loading: false,
-            checkFailure: WalletAccessFailure.unavailable,
+            failure: WalletAccessFailure.unavailable,
           ),
         );
       }
@@ -112,12 +108,6 @@ class WalletProtectionBloc
       );
       return;
     }
-    // Choosing the interval already in force changes nothing, so it must not
-    // cost the user an authentication.
-    if (event.action == WalletProtectionAction.grace &&
-        event.graceSeconds == state.graceSeconds) {
-      return;
-    }
     final allowed = switch (event.action) {
       WalletProtectionAction.passkey => state.canCreatePasskey,
       WalletProtectionAction.device => state.canEnableDevice,
@@ -126,17 +116,10 @@ class WalletProtectionBloc
             state.capabilities?.passkeyCandidate == true,
       WalletProtectionAction.grace =>
         state.status?.requiresAuthentication == true &&
-            walletLockGraceOptions.any(
-              (option) => option.inSeconds == event.graceSeconds,
-            ),
+            const [0, 30].contains(event.graceSeconds),
     };
     if (!allowed) {
-      emit(
-        state.copyWith(
-          failure: WalletAccessFailure.unavailable,
-          failedAction: event.action,
-        ),
-      );
+      emit(state.copyWith(failure: WalletAccessFailure.unavailable));
       return;
     }
     emit(
@@ -197,22 +180,12 @@ class WalletProtectionBloc
       );
     } on WalletAccessException catch (error) {
       if (!emit.isDone) {
-        emit(
-          state.copyWith(
-            busy: false,
-            failure: error.failure,
-            failedAction: event.action,
-          ),
-        );
+        emit(state.copyWith(busy: false, failure: error.failure));
       }
     } catch (_) {
       if (!emit.isDone) {
         emit(
-          state.copyWith(
-            busy: false,
-            failure: WalletAccessFailure.unavailable,
-            failedAction: event.action,
-          ),
+          state.copyWith(busy: false, failure: WalletAccessFailure.unavailable),
         );
       }
     }

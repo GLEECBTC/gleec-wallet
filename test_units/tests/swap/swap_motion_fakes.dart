@@ -5,30 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The platform inserts hidden between inactive and paused on mobile.
-void pauseMotionApp(WidgetTester tester) {
-  resumeMotionApp(tester);
-  for (final state in [
-    AppLifecycleState.inactive,
-    AppLifecycleState.hidden,
-    AppLifecycleState.paused,
-  ]) {
-    tester.binding.handleAppLifecycleStateChanged(state);
-  }
-}
-
-void resumeMotionApp(WidgetTester tester) {
-  if (tester.binding.lifecycleState == AppLifecycleState.paused) {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-  }
-  if (tester.binding.lifecycleState == AppLifecycleState.hidden) {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-  }
-  if (tester.binding.lifecycleState != AppLifecycleState.resumed) {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-  }
-}
-
 /// [child] centred, with only what the motion primitives read around it.
 Widget motionApp(
   Widget child, {

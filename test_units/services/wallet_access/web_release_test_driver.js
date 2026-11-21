@@ -12,13 +12,11 @@ const { createHash } = require('node:crypto');
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 class LocalBrowser {
-  constructor(root, { port = 18768, debugPort = 9223 } = {}) {
+  constructor(root, { port = 18768, debugPort = 0 } = {}) {
     this.root = root;
     this.port = port;
     this.debugPort = debugPort;
     this.base = `http://localhost:${port}/`;
-    this.webCompiler = process.env.GLEEC_TEST_WEB_COMPILER ?? 'javascript';
-    assert.ok(['javascript','wasm'].includes(this.webCompiler), 'Select javascript or wasm for browser acceptance');
     this.profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gleec-browser-release-'));
     this.events = new Set();
     this.pending = new Map();
@@ -30,7 +28,6 @@ class LocalBrowser {
   async serve() {
     const hosted = process.env.GLEEC_TEST_HOSTED_URL;
     if (hosted) {
-      assert.equal(this.webCompiler, 'javascript', 'Hosted acceptance requires the deployed JavaScript build');
       const target = new URL(hosted);
       assert.equal(target.protocol, 'https:');
       assert.match(target.hostname, /^(?:walletrc|gleec-wallet-official)--pull-\d+-merge-(?:[a-f0-9]{7,40}-)?[a-z0-9]{6,40}\.web\.app$/);
@@ -46,11 +43,8 @@ class LocalBrowser {
       this.buildFingerprint = actual;
       return;
     }
-    const isWasm = this.webCompiler === 'wasm';
-    const source = path.join(this.root, isWasm ? 'build/web-wasm' : 'build/web');
-    const entrypoint = isWasm ? 'main.dart.wasm' : 'main.dart.js';
+    const source = path.join(this.root, 'build/web');
     assert.ok(fs.existsSync(path.join(source, 'main.dart.js')), 'Build the release app first');
-    assert.ok(fs.existsSync(path.join(source, entrypoint)), 'Build the selected release compiler first');
     assert.equal(fs.existsSync(path.join(source, 'assets/assets/debug_data.json')),false,
       'Stop: rebuild with the explicit public asset manifest before browser validation');
     for(const name of ['AssetManifest.bin','AssetManifest.json','AssetManifest.bin.json']){
@@ -62,20 +56,20 @@ class LocalBrowser {
         'Stop: the compiled asset manifest still advertises a private fixture');
     }
     const digest = filename => createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-    this.buildFingerprint = digest(path.join(source, entrypoint));
+    this.buildFingerprint = digest(path.join(source, 'main.dart.js'));
     if(process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256){
       assert.equal(this.buildFingerprint,process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256,
         'Use only the exact release build approved for this regression round');
     }
     const build = path.join(this.profile, 'compiled-fixture');
     fs.cpSync(source, build, {recursive:true,dereference:true});
-    assert.equal(digest(path.join(source, entrypoint)),this.buildFingerprint,
+    assert.equal(digest(path.join(source, 'main.dart.js')),this.buildFingerprint,
       'Wait for the shared Flutter build to finish before taking a fixture snapshot');
-    assert.equal(digest(path.join(build, entrypoint)),this.buildFingerprint);
+    assert.equal(digest(path.join(build, 'main.dart.js')),this.buildFingerprint);
     const hosting = JSON.parse(fs.readFileSync(path.join(this.root, 'firebase.json'))).hosting;
     const headers = Object.fromEntries(hosting.headers.find(item => item.source === '**').headers
       .map(item => [item.key, item.value]));
-    const mime = { '.html':'text/html', '.js':'text/javascript', '.mjs':'text/javascript', '.json':'application/json',
+    const mime = { '.html':'text/html', '.js':'text/javascript', '.json':'application/json',
       '.wasm':'application/wasm', '.svg':'image/svg+xml', '.png':'image/png', '.webp':'image/webp',
       '.jpg':'image/jpeg', '.ttf':'font/ttf', '.otf':'font/otf', '.woff2':'font/woff2', '.css':'text/css' };
     this.server = http.createServer((request, response) => {
@@ -100,17 +94,62 @@ class LocalBrowser {
     const binary = process.env.GLEEC_TEST_CHROME ?? (process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome');
     assert.ok(fs.existsSync(binary), 'Set GLEEC_TEST_CHROME to an installed Chrome executable');
-    this.process = spawn(binary, ['--headless=new', '--no-first-run', '--no-default-browser-check',
+    // Chrome chooses a free port and reports it in this disposable profile.
+    const activePortFile = path.join(this.profile, 'DevToolsActivePort');
+    if (this.debugPort === 0) fs.rmSync(activePortFile, {force:true});
+    const flags = ['--headless=new', '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-component-update', '--disable-sync',
-      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`, 'about:blank'],
-    { stdio:'ignore' });
-    let version;
-    for (let count=0;count<100;count++) {
-      if (this.process.exitCode != null) throw new Error('Isolated Chrome exited during startup');
-      try { version=await (await fetch(`http://127.0.0.1:${this.debugPort}/json/version`)).json(); break; }
-      catch (_) { await delay(100); }
+      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`];
+    // Match Flutter's web driver for the local fixture on the hosted Linux runner.
+    if (process.platform === 'linux' && process.env.GLEEC_TEST_CHROME_NO_SANDBOX === 'true' &&
+        !process.env.GLEEC_TEST_HOSTED_URL) {
+      flags.push('--no-sandbox');
     }
-    assert.ok(version, 'Isolated Chrome must expose its local debugging endpoint');
+    this.process = spawn(binary, [...flags, 'about:blank'], {stdio:['ignore', 'ignore', 'pipe']});
+    let launchError;
+    this.process.once('error', error => { launchError = error; });
+    let version;
+    let startupStderr = '';
+    this.process.stderr.on('data', chunk => {
+      if (!version) startupStderr = (startupStderr + chunk).slice(-4096);
+    });
+    this.process.stderr.unref?.();
+    const startupFailure = message => {
+      const causes = [
+        [/No usable sandbox|Failed to move to new namespace|SUID sandbox helper/i, 'sandbox initialization'],
+        [/error while loading shared libraries|cannot open shared object file/i, 'missing shared library'],
+        [/Address already in use|bind\(\) failed/i, 'debug port binding'],
+        [/crashpad_handler.*(?:Permission denied|requires --database)/i, 'crash reporter initialization'],
+      ];
+      const cause = causes.find(([pattern]) => pattern.test(startupStderr))?.[1];
+      return new Error(cause ? `${message}. Chrome reported ${cause}.` : message);
+    };
+    const deadline = performance.now() + 30000;
+    for (let port = this.debugPort; performance.now() < deadline; await delay(100)) {
+      if (launchError) throw startupFailure(`Could not start isolated Chrome (${launchError.code ?? launchError.name})`);
+      const exit = this.process.exitCode ?? this.process.signalCode;
+      if (exit != null) throw startupFailure(`Isolated Chrome exited during startup (${exit})`);
+
+      try {
+        if (port === 0) {
+          const value = Number(fs.readFileSync(activePortFile, 'utf8').split('\n')[0]);
+          if (!Number.isInteger(value) || value < 1 || value > 65535) continue;
+          port = value;
+        }
+        const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (!response.ok) continue;
+        const candidate = await response.json();
+        if (typeof candidate?.webSocketDebuggerUrl === 'string') {
+          version = candidate;
+          break;
+        }
+      } catch (_) {
+        // Chrome may still be writing the marker or opening its endpoint.
+      }
+    }
+    if (!version) throw startupFailure('Isolated Chrome did not expose a local debugging endpoint within 30 seconds');
     this.version = version.Browser;
     this.socket = new WebSocket(version.webSocketDebuggerUrl);
     this.socket.addEventListener('message', ({data}) => {
@@ -192,24 +231,7 @@ class LocalBrowser {
 
   async semantics(page) {
     await this.wait(page,"document.querySelector('flt-semantics-placeholder')||document.querySelector('[role=button]')",{label:'Flutter semantics'});
-    if (this.webCompiler === 'wasm') {
-      const loaded = await page.evaluate("performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname)");
-      assert.ok(loaded.includes('/main.dart.wasm'), 'The acceptance flow must load the Dart2Wasm application');
-      assert.equal(loaded.includes('/main.dart.js'), false, 'JavaScript fallback must not satisfy Wasm acceptance');
-    }
     await page.evaluate("document.querySelector('flt-semantics-placeholder')?.click(); true");
-  }
-
-  // Reports the document as hidden (or restores the real state) and fires
-  // 'visibilitychange', which Flutter web and the credential bridge read as
-  // leaving or returning to the app. The renderer keeps painting, so the
-  // privacy cover can be observed; a real background tab stops drawing frames.
-  // A window blur alone no longer covers the wallet on desktop or web.
-  async visibility(page, state) {
-    assert.ok(['hidden','visible'].includes(state),'Select hidden or visible');
-    await page.evaluate(state==='hidden'
-      ? "(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'hidden'});Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));return true;})()"
-      : "(()=>{delete document.visibilityState;delete document.hidden;if(document.visibilityState!=='visible')throw new Error('The fixture tab is not in front');document.dispatchEvent(new Event('visibilitychange'));return true;})()");
   }
 
   async buttons(page) {
@@ -217,7 +239,12 @@ class LocalBrowser {
   }
 
   async click(page, label, {pointer=false}={}) {
-    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).find(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
+    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>{
+      const bounds=el.getBoundingClientRect();
+      return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}
+        &&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')
+        &&bounds.width>0&&bounds.height>0;
+    })`;
     // A semantics node can precede the route's painted, interactive frame.
     // Navigate and activate like a real user: settle the painted target and
     // scroll it into view, then click exactly once. Never retry the action or
@@ -258,7 +285,17 @@ class LocalBrowser {
     }
     // Report only public control shape. Field values, page text and wallet
     // credentials must never enter browser acceptance logs.
-    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}).map(el=>{const r=el.getBoundingClientRect();return {disabled:el.getAttribute('aria-disabled')==='true',hidden:!!el.closest('[aria-hidden=true]'),hasArea:r.width>0&&r.height>0,inViewport:r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};})`);
+    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]'))
+      .filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})
+      .map(el=>{
+        const bounds=el.getBoundingClientRect();
+        return {
+          disabled:el.getAttribute('aria-disabled')==='true',
+          hidden:!!el.closest('[aria-hidden=true]'),
+          hasArea:bounds.width>0&&bounds.height>0,
+          inViewport:bounds.bottom>0&&bounds.top<innerHeight&&bounds.right>0&&bounds.left<innerWidth,
+        };
+      })`);
     console.error('Fixture control shape',JSON.stringify(shape));
     throw new Error(`Timed out waiting for painted button ${label}`);
   }
@@ -267,8 +304,13 @@ class LocalBrowser {
     // Flutter 3.50 can retain a zero-sized editing node with the same label.
     // Choose the rendered input before focusing or editing; a stale node's
     // value is not evidence that the user-visible form accepted the text.
-    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>{const r=el.getBoundingClientRect();return (
-      (el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n').some(part=>part.trim()===${JSON.stringify(label)})&&!el.readOnly&&!el.disabled&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0);})`;
+    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>{
+      const bounds=el.getBoundingClientRect();
+      const labels=(el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n');
+      return labels.some(part=>part.trim()===${JSON.stringify(label)})
+        &&!el.readOnly&&!el.disabled&&!el.closest('[aria-hidden=true]')
+        &&bounds.width>0&&bounds.height>0;
+    })`;
     try {
       await this.wait(page,`(()=>{const field=${selector};if(!field)return false;field.focus();return true;})()`,{label:`editable fixture field: ${label}`});
     } catch (error) {

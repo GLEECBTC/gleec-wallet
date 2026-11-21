@@ -6,10 +6,6 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/password_dialog_content.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
-// Wide enough for the title on one line; the dialog still narrows to fit a
-// small screen.
-const double _authorizationDialogWidth = 320;
-
 // Shows wallet password dialog and
 // returns password value or null (if wrong or cancelled)
 Future<String?> walletPasswordDialog(
@@ -30,7 +26,6 @@ Future<String?> walletPasswordDialog(
 
   popupManager = PopupDispatcher(
     context: context,
-    width: _authorizationDialogWidth,
     onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContent(
@@ -83,7 +78,6 @@ Future<bool> walletPasswordDialogWithLoading(
 
   popupManager = PopupDispatcher(
     context: context,
-    width: _authorizationDialogWidth,
     onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContentWithLoading(

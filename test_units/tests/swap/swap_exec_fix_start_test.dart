@@ -7,7 +7,6 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
-import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -36,25 +35,9 @@ void main() {
     );
 
     test('the strict sell throws what the call threw, where the legacy one '
-        'answers with it as text', () async {
+        'answers with it', () async {
       await expectLater(api.sellOrThrow(request()), throwsStateError);
-      expect((await api.sell(request()))['error'], startsWith('Bad state'));
-    });
-
-    test('the legacy form is told why a sell was refused before it was '
-        'sent', () async {
-      final locked = Mm2Api(
-        mm2: MM2(),
-        sdk: KomodoDefiSdk(),
-        operationGate: WalletOperationGate()
-          ..attachWallet('wallet', allowOperations: true)
-          ..block(),
-      );
-
-      final response = await DexRepository(locked).sell(request());
-
-      expect(response.result, isNull);
-      expect(response.error!.message, 'WalletOperationDenied(locked)');
+      expect((await api.sell(request()))['error'], isStateError);
     });
 
     test('the strict order status read throws what the call threw', () async {

@@ -27,22 +27,15 @@ import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
-import 'package:web_dex/services/storage/base_storage.dart';
-import 'package:web_dex/services/wallet_access/password_rotation_envelope.dart';
-import 'package:web_dex/services/wallet_access/platform/credential_backend.dart';
-import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
-import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 
 part 'auth_bloc_managed_cases.dart';
-part 'auth_bloc_session_cases.dart';
 part 'auth_bloc_trezor_cases.dart';
 
 /// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
   _trezorSignInCases();
-  _engineSessionCases();
   _managedSignInCases();
 
   group('AuthBloc asynchronous access observation', () {

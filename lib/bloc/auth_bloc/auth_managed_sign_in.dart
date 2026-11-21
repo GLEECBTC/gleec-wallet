@@ -24,17 +24,11 @@ extension _ManagedSignIn on AuthBloc {
       if (!_ownsAuthOperation(operation, emit)) return;
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
-    } catch (error, stackTrace) {
+    } catch (error) {
+      if (!_ownsAuthOperation(operation, emit)) return;
       final canceled =
           error is WalletAccessException &&
           error.failure == WalletAccessFailure.canceled;
-      _logManagedSignInFailure(
-        error,
-        stackTrace,
-        canceled: canceled,
-        automatic: event.automatic,
-      );
-      if (!_ownsAuthOperation(operation, emit)) return;
       if (canceled && event.automatic) {
         // The browser cancels an automatic attempt it cannot prompt for, not
         // the user. Reset quietly; the sheet's unlock is still there.
@@ -45,8 +39,8 @@ extension _ManagedSignIn on AuthBloc {
         AuthBlocState.error(
           AuthException(
             canceled
-                ? 'authManagedUnlockCanceled'.tr()
-                : 'authManagedUnlockFailed'.tr(),
+                ? 'Unlock canceled. Try again or use your wallet password.'
+                : 'Unable to unlock. Try your wallet password or recovery phrase.',
             type: AuthExceptionType.generalAuthError,
           ),
         ),

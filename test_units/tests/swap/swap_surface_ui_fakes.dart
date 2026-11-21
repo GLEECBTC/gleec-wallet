@@ -22,7 +22,6 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
-import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -30,11 +29,9 @@ import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
-import 'package:web_dex/shared/swap/swap_session_draft.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -85,7 +82,6 @@ Future<void> pumpSurface(
   List<SurfaceWrap> wrap = const [],
   Size size = const Size(420, 1600),
   bool settle = true,
-  bool expandProgressDetails = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -126,16 +122,6 @@ Future<void> pumpSurface(
   } else {
     await tester.pump();
   }
-  if (expandProgressDetails) await expandSurfaceDetails(tester);
-}
-
-/// Opens the optional execution timeline before checking its detailed facts.
-Future<void> expandSurfaceDetails(WidgetTester tester) async {
-  final details = find.text('Swap details');
-  if (details.evaluate().isEmpty) return;
-  await tester.ensureVisible(details.first);
-  await tester.tap(details.first);
-  await tester.pumpAndSettle();
 }
 
 /// Every text under [finder], in order.
@@ -148,34 +134,7 @@ List<String> textsOf(WidgetTester tester, Finder finder) => tester
 /// open-request hand-offs.
 class SurfaceServices implements SwapServices {
   SurfaceServices(this.registry, {SwapHistoryRepository? history})
-    : history = history ?? ScriptedHistory() {
-    presentation = SwapPresentationSession(
-      registry: registry,
-      refreshBalances: (snapshot) => refreshBalances(snapshot),
-    );
-  }
-
-  Future<bool> Function(SwapExecutionSnapshot) refreshBalances = (_) async =>
-      true;
-
-  @override
-  late final SwapPresentationSession presentation;
-  final _draft = SwapSessionDraft();
-
-  @override
-  Object get draftSession => _draft.session;
-
-  @override
-  SwapDraft? draftFor(Object session) => _draft.read(session);
-
-  @override
-  void rememberDraft(Object session, SwapDraft? draft) {
-    _draft.remember(session, draft);
-  }
-
-  void resetDraftSession() => _draft.reset();
-  final Map<String, AssetId> resolvedAssets = {};
-  FakeQuoteSource? quoteSource;
+    : history = history ?? ScriptedHistory();
 
   @override
   final SwapExecutionRegistry registry;
@@ -218,25 +177,6 @@ class SurfaceServices implements SwapServices {
       StreamController<SwapExecutionRef>.broadcast();
   SwapIntent? _pendingIntent;
   SwapExecutionRef? _pendingOpen;
-  final _activityRequests = StreamController<void>.broadcast();
-  bool _pendingActivity = false;
-
-  @override
-  Stream<void> get activityRequests => _activityRequests.stream;
-
-  @override
-  void requestActivity() {
-    _pendingOpen = null;
-    _pendingActivity = true;
-    _activityRequests.add(null);
-  }
-
-  @override
-  bool takePendingActivity() {
-    final pending = _pendingActivity;
-    _pendingActivity = false;
-    return pending;
-  }
 
   @override
   void requestIntent(SwapIntent intent) {
@@ -256,7 +196,6 @@ class SurfaceServices implements SwapServices {
 
   @override
   void requestOpen(SwapExecutionRef ref) {
-    _pendingActivity = false;
     _pendingOpen = ref;
     _openRequests.add(ref);
   }
@@ -279,10 +218,7 @@ class SurfaceServices implements SwapServices {
     this.tradingAllowed = tradingAllowed;
     this.clockValid = clockValid;
     return UnifiedSwapRepository(
-      sources: [
-        quoteSource ??
-            FakeQuoteSource(SwapLiquiditySource.routed, tradable: {}),
-      ],
+      sources: [FakeQuoteSource(SwapLiquiditySource.routed, tradable: {})],
       pricing: SwapPricingService(FakePriceSource({eth: d('3000')})),
     );
   }
@@ -303,10 +239,7 @@ class SurfaceServices implements SwapServices {
   Future<String?> addressOf(AssetId id) async => null;
 
   @override
-  AssetId? resolveAsset(String ticker) => resolvedAssets[ticker];
-
-  @override
-  bool isWalletOnly(AssetId id) => false;
+  AssetId? resolveAsset(String ticker) => null;
 
   @override
   Future<List<SwapHolding>> holdings() async => const [];
@@ -331,10 +264,8 @@ class SurfaceServices implements SwapServices {
 
   @override
   Future<void> dispose() async {
-    await presentation.dispose();
     await _intents.close();
     await _openRequests.close();
-    await _activityRequests.close();
   }
 
   @override

@@ -1,30 +1,5 @@
 import 'views/common/wallet_access/auth_setup_flow_test.dart'
     as auth_setup_flow_test;
-import 'views/common/wallet_access/wallet_protection_states_test.dart'
-    as wallet_protection_states_test;
-import 'views/settings/security_recovery_flow_test.dart'
-    as security_recovery_flow_test;
-import 'views/settings/recovery_plates_test.dart' as recovery_plates_test;
-import 'services/wallet_access/native_credential_backend_channel_test.dart'
-    as native_credential_backend_channel_test;
-import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
-    as portfolio_growth_repository_test;
-import 'views/wallet/portfolio_profit_loss_views_test.dart'
-    as portfolio_profit_loss_views_test;
-import 'tests/wallet/coin_details/withdraw_solana_unknown_status_test.dart'
-    as withdraw_solana_unknown_status_test;
-import 'tests/swap/swap_review_commit_test.dart' as swap_review_commit_test;
-import 'tests/swap/swap_review_changes_test.dart' as swap_review_changes_test;
-import 'tests/swap/swap_surface_ui_waiting_test.dart'
-    as swap_surface_ui_waiting_test;
-import 'views/common/wallet_access/wallet_lock_screen_test.dart'
-    as wallet_lock_screen_test;
-import 'views/common/wallet_access/wallet_authorization_form_test.dart'
-    as wallet_authorization_form_test;
-import 'views/wallets_manager/widgets/wallet_list_item_test.dart'
-    as wallet_list_item_test;
-import 'tests/swap/swap_entry_ui_stability_test.dart'
-    as swap_entry_ui_stability_test;
 import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
 import 'services/wallet_access/swap_submission_lock_test.dart'
     as swap_submission_lock_test;
@@ -78,7 +53,6 @@ import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
 import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
 import 'tests/swap/solana_atomic_lifecycle_test.dart'
     as solana_atomic_lifecycle_test;
-
 import 'package:flutter_test/flutter_test.dart';
 
 import 'services/file_loader/diagnostic_artifacts_test.dart'
@@ -97,7 +71,6 @@ import 'services/security/private_key_export_delivery_test.dart'
     as private_key_export_delivery_test;
 import 'services/security/private_key_export_service_test.dart'
     as private_key_export_service_test;
-
 import 'views/settings/private_key_export_password_dialog_test.dart'
     as private_key_export_password_dialog_test;
 import 'views/settings/private_key_export_flow_test.dart'
@@ -163,6 +136,7 @@ import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/fiat/fiat_provider_failure_test.dart'
     as fiat_provider_failure_test;
 import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
 import 'tests/mm2/sdk_build_manifest_test.dart' as sdk_build_manifest_test;
 import 'tests/ci/lifi_workflow_contract_test.dart'
     as lifi_workflow_contract_test;
@@ -229,15 +203,6 @@ import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
 import 'tests/router/swap_route_alias_test.dart' as swap_route_alias_test;
 import 'tests/swap/swap_accessibility_test.dart' as swap_accessibility_test;
-import 'tests/swap/swap_quote_stream_test.dart' as swap_quote_stream_test;
-import 'tests/swap/swap_entry_delight_test.dart' as swap_entry_delight_test;
-import 'tests/swap/swap_ux_capture_test.dart' as swap_ux_capture_test;
-import 'tests/swap/swap_bloc_preparation_test.dart'
-    as swap_bloc_preparation_test;
-import 'tests/swap/swap_bloc_stream_test.dart' as swap_bloc_stream_test;
-import 'tests/swap/swap_preferences_mode_test.dart'
-    as swap_preferences_mode_test;
-import 'tests/swap/wallet_swap_status_test.dart' as wallet_swap_status_test;
 import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
 import 'tests/swap/swap_copy_test.dart' as swap_copy_test;
@@ -610,34 +575,6 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 /// ```
 void main() {
   auth_setup_flow_test.main();
-  // Each of these keeps set-up at the top of its `main`; a group stops that
-  // set-up from running for every other test in this file.
-  group('wallet_protection_states_test', wallet_protection_states_test.main);
-  group('security_recovery_flow_test', security_recovery_flow_test.main);
-  group('recovery_plates_test', recovery_plates_test.main);
-  group(
-    'native_credential_backend_channel_test',
-    native_credential_backend_channel_test.main,
-  );
-  group(
-    'portfolio_growth_repository_test',
-    portfolio_growth_repository_test.main,
-  );
-  group(
-    'portfolio_profit_loss_views_test',
-    portfolio_profit_loss_views_test.main,
-  );
-  group(
-    'withdraw_solana_unknown_status_test',
-    withdraw_solana_unknown_status_test.main,
-  );
-  group('swap_review_commit_test', swap_review_commit_test.main);
-  group('swap_review_changes_test', swap_review_changes_test.main);
-  group('swap_surface_ui_waiting_test', swap_surface_ui_waiting_test.main);
-  group('wallet_lock_screen_test', wallet_lock_screen_test.main);
-  group('wallet_authorization_form_test', wallet_authorization_form_test.main);
-  group('wallet_list_item_test', wallet_list_item_test.main);
-  group('swap_entry_ui_stability_test', swap_entry_ui_stability_test.main);
   wallet_protection_bloc_test.main();
   swap_submission_lock_test.main();
   wallet_credential_cleanup_test.main();
@@ -862,13 +799,6 @@ void main() {
   swap_route_alias_test.main();
   swap_widgets_test.main();
   swap_accessibility_test.main();
-  swap_quote_stream_test.main();
-  swap_entry_delight_test.main();
-  swap_ux_capture_test.main();
-  swap_bloc_preparation_test.main();
-  swap_bloc_stream_test.main();
-  swap_preferences_mode_test.main();
-  wallet_swap_status_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
   swap_shell_backup_notice_button_test.main();
@@ -899,6 +829,7 @@ void main() {
   swap_routed_funding_test.main();
   swap_release_integration_test.main();
   lifi_integrator_policy_test.main();
+  prefetch_native_kdf_test.main();
   sdk_build_manifest_test.main();
   lifi_workflow_contract_test.main();
   swap_routed_payout_test.main();

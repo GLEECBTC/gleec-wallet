@@ -1,7 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 
 /// Shown while the export runs.
 ///
@@ -13,13 +12,23 @@ class PrivateKeyExportLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Center(
-        child: WalletAccessProgress(
-          label: LocaleKeys.privateKeyExportLoading.tr(),
-          showLabel: true,
-        ),
+      child: Column(
+        children: [
+          const SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            LocaleKeys.privateKeyExportLoading.tr(),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

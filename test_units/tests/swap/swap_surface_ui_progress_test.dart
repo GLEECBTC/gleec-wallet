@@ -5,7 +5,6 @@ import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
-import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -57,7 +56,6 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
-        expandProgressDetails: true,
       );
     }
 
@@ -111,7 +109,7 @@ void main() {
         );
 
         expect(find.text('Activity'), findsOneWidget);
-        expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
+        expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
         expect(find.text('View in Activity'), findsNothing);
 
         await tester.tap(find.byTooltip('Back'));
@@ -142,40 +140,6 @@ void main() {
         expect(launcher.launched, ['https://route.example/status/1']);
       });
 
-      testWidgets('is the first action and the only primary one while the '
-          'swap waits on the user', (tester) async {
-        await follow(tester, linked(SwapProgressStage.actionRequired));
-
-        final route = find.byKey(const Key('swap-open-route'));
-        final wallet = find.byKey(const Key('swap-back-to-wallet'));
-        expect(
-          tester.getBottomLeft(route).dy,
-          lessThanOrEqualTo(tester.getTopLeft(wallet).dy),
-        );
-        expect(
-          [
-            for (final button in tester.widgetList<SwapButton>(
-              find.byType(SwapButton),
-            ))
-              if (button.variant == SwapButtonVariant.primary) button.label,
-          ],
-          ['Open route page'],
-        );
-      });
-
-      testWidgets('leaves the wallet as the primary action otherwise', (
-        tester,
-      ) async {
-        await follow(tester, linked(SwapProgressStage.bridging));
-
-        expect(
-          tester
-              .widget<SwapButton>(find.byKey(const Key('swap-back-to-wallet')))
-              .variant,
-          SwapButtonVariant.primary,
-        );
-      });
-
       testWidgets('is not offered while the swap needs nothing', (
         tester,
       ) async {
@@ -184,29 +148,13 @@ void main() {
         expect(find.text('Open route page'), findsNothing);
       });
 
-      testWidgets('without a link to open, support is the way on instead', (
-        tester,
-      ) async {
+      testWidgets('is not offered without a link to open', (tester) async {
         await follow(
           tester,
           snapshotOf(stage: SwapProgressStage.actionRequired),
         );
 
         expect(find.text('Open route page'), findsNothing);
-        final support = find.byKey(const Key('swap-action-support'));
-        expect(
-          tester.widget<SwapButton>(support).variant,
-          SwapButtonVariant.primary,
-        );
-        expect(
-          tester
-              .widget<SwapButton>(find.byKey(const Key('swap-back-to-wallet')))
-              .variant,
-          SwapButtonVariant.secondary,
-        );
-        await tester.tap(support);
-        await tester.pumpAndSettle();
-        expect(find.text('Swap evidence'), findsOneWidget);
       });
     });
 
@@ -229,8 +177,6 @@ void main() {
           tester,
           snapshotOf(outcome: completed(), finishedAt: finished),
         );
-        await tester.tap(find.text('Receipt details'));
-        await tester.pumpAndSettle();
 
         expect(find.text(SwapFormat.time(finished)), findsOneWidget);
       });

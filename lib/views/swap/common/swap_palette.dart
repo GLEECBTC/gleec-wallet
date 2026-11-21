@@ -13,8 +13,6 @@ class SwapPalette {
     required this.brandHover,
     required this.brandPressed,
     required this.onBrand,
-    required this.disabled,
-    required this.onDisabled,
     required this.success,
     required this.successBg,
     required this.warning,
@@ -45,8 +43,6 @@ class SwapPalette {
     brandHover: Color(0xFFA162FF),
     brandPressed: Color(0xFF7530E3),
     onBrand: Color(0xFFFFFFFF),
-    disabled: Color(0xFF24273D),
-    onDisabled: Color(0xFFAEB5CF),
     success: Color(0xFF62DD98),
     successBg: Color(0xFF0B3B26),
     warning: Color(0xFFF3C95F),
@@ -77,8 +73,6 @@ class SwapPalette {
     brandHover: Color(0xFF6F22DC),
     brandPressed: Color(0xFF6821D3),
     onBrand: Color(0xFFFFFFFF),
-    disabled: Color(0xFFEBEDF5),
-    onDisabled: Color(0xFF4E5575),
     success: Color(0xFF006B32),
     successBg: Color(0xFFDFF8EA),
     warning: Color(0xFF745000),
@@ -112,12 +106,6 @@ class SwapPalette {
   final Color brandHover;
   final Color brandPressed;
   final Color onBrand;
-
-  /// A control that cannot be used yet, and its label. The label is often
-  /// the form's status, so the pair keeps text contrast (4.5:1) in both
-  /// themes rather than fading the enabled colours.
-  final Color disabled;
-  final Color onDisabled;
   final Color success;
   final Color successBg;
   final Color warning;
@@ -259,33 +247,6 @@ abstract final class SwapText {
     TextStyle style, {
     bool longestWord = false,
   }) {
-    final painter = _painter(context, TextSpan(text: text), style)..layout();
-    final width = longestWord
-        ? painter.minIntrinsicWidth
-        : painter.maxIntrinsicWidth;
-    painter.dispose();
-    return width;
-  }
-
-  /// How tall a [Text] of [span] in [style] sets here when it wraps at
-  /// [maxWidth], for reserving its room before it is shown.
-  static double heightOf(
-    BuildContext context,
-    InlineSpan span,
-    TextStyle style, {
-    double maxWidth = double.infinity,
-  }) {
-    final painter = _painter(context, span, style)..layout(maxWidth: maxWidth);
-    final height = painter.height;
-    painter.dispose();
-    return height;
-  }
-
-  static TextPainter _painter(
-    BuildContext context,
-    InlineSpan span,
-    TextStyle style,
-  ) {
     // The adjustments Text.build makes before it lays the text out.
     var effective = style.inherit
         ? DefaultTextStyle.of(context).style.merge(style)
@@ -297,12 +258,17 @@ abstract final class SwapText {
       letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
       wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
     );
-    return TextPainter(
-      text: TextSpan(style: effective, children: [span]),
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effective),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       locale: Localizations.maybeLocaleOf(context),
-    );
+    )..layout();
+    final width = longestWord
+        ? painter.minIntrinsicWidth
+        : painter.maxIntrinsicWidth;
+    painter.dispose();
+    return width;
   }
 }
 

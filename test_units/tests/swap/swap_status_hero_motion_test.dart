@@ -7,7 +7,9 @@ import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'swap_common_ui_fakes.dart';
 import 'swap_motion_fakes.dart';
 
-/// The icon is the sole animated focus; status copy is immediately readable.
+/// Covers the status hero following a swap: tone, icon and copy move in on a
+/// change, one of each on screen at every frame, and nothing moves unless
+/// asked.
 void main() {
   group('status hero motion', () {
     useSwapUi();
@@ -91,40 +93,17 @@ void main() {
       expect(find.byIcon(Icons.route_outlined), findsOneWidget);
     });
 
-    testWidgets('shows new copy immediately without a second transition', (
-      tester,
-    ) async {
+    testWidgets('raises new copy in, never two titles at once', (tester) async {
       await show(tester, settle: true);
       final still = opacityLayers(tester).length;
       await show(tester, title: 'Arriving on Ethereum');
       expect(find.text('Arriving on Ethereum'), findsOneWidget);
       expect(find.text('Confirming on Ethereum'), findsNothing);
       await tester.pump(SwapMotion.reveal ~/ 3);
-      expect(opacityLayers(tester).length, still);
-      expect(tester.hasRunningAnimations, isFalse);
+      expect(opacityLayers(tester).length, greaterThan(still));
 
       await tester.pumpAndSettle();
       expect(opacityLayers(tester).length, still);
-    });
-
-    testWidgets('can show the received asset in the status tile', (
-      tester,
-    ) async {
-      await pumpSwapUi(
-        tester,
-        const SwapStatusHero(
-          icon: Icons.check,
-          illustration: SizedBox(
-            key: Key('received-asset'),
-            width: 32,
-            height: 32,
-          ),
-          title: 'You received 3,001 USDC',
-          motion: SwapHeroMotion(),
-        ),
-      );
-      expect(find.byKey(const Key('received-asset')), findsOneWidget);
-      expect(find.byIcon(Icons.check), findsNothing);
     });
 
     testWidgets('shows a change at once when it did not happen live', (

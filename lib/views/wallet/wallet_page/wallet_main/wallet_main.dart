@@ -1,6 +1,5 @@
 import 'package:web_dex/bloc/wallet_protection/wallet_protection_bloc.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_protection_panel.dart';
-
 import 'dart:async';
 
 import 'package:app_theme/app_theme.dart';
@@ -32,9 +31,10 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/model/settings_menu_value.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_setup_card.dart';
-import 'package:web_dex/views/settings/widgets/security_settings/security_settings_entry.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -44,7 +44,6 @@ import 'package:web_dex/views/dex/dex_helpers.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
-import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_swap_status.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/assets_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_handler.dart'
     show ZhtlcConfigurationHandler;
@@ -218,7 +217,6 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                             onAssetsPressed: () => _tabController.animateTo(0),
                           ),
                         ),
-                        const SliverToBoxAdapter(child: WalletSwapStatus()),
                         if (authState.currentUser?.wallet.isHW == false)
                           SliverToBoxAdapter(
                             child: _WalletSetupReminder(
@@ -688,6 +686,11 @@ class _WalletSetupReminder extends StatelessWidget {
   const _WalletSetupReminder({required this.wallet});
   final Wallet wallet;
 
+  void _openSecurity() {
+    routingState.selectedMenu = MainMenuValue.settings;
+    routingState.settingsState.selectedMenu = SettingsMenuValue.security;
+  }
+
   @override
   Widget build(BuildContext context) {
     final access = context.read<WalletAccessService?>();
@@ -721,38 +724,18 @@ class _WalletSetupReminder extends StatelessWidget {
                 ),
               ),
             ),
-        builder: (context, state) {
-          // A wallet marked as backed up before confirmation existed, or one
-          // with only a file export, is asked to confirm rather than told it
-          // has no backup.
-          final unconfirmed = switch (wallet.config.recoveryEvidence) {
-            RecoveryEvidence.legacyUnknown => 'authRecoveryLegacyUnconfirmed',
-            RecoveryEvidence.encryptedFileExported => 'authRecoveryFileOnly',
-            _ => null,
-          };
-          return WalletSetupCard(
-            hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
-            hasDeviceProtection: state.status?.requiresAuthentication ?? false,
-            // Straight to the phrase, not to the list it is offered in.
-            onBackup: () => openSecuritySettings(
-              entry: SecuritySettingsEntry.recoveryPhrase,
-            ),
-            onProtect: openSecuritySettings,
-            recoveryDescription: unconfirmed?.tr(),
-            backupActionLabel: unconfirmed == null
-                ? null
-                : 'authConfirmRecoveryPhrase'.tr(),
-            // Where the lock cannot be turned on in one step, backing up is
-            // the main thing left to do.
-            backupLeads: !(state.canCreatePasskey || state.canEnableDevice),
-            protectionSetup: WalletProtectionPanel(
-              onOpenSettings: openSecuritySettings,
-              onSetPassword: () => openSecuritySettings(
-                entry: SecuritySettingsEntry.walletPassword,
-              ),
-            ),
-          );
-        },
+        builder: (context, state) => WalletSetupCard(
+          hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
+          hasDeviceProtection: state.status?.requiresAuthentication ?? false,
+          onBackup: _openSecurity,
+          onProtect: _openSecurity,
+          recoveryDescription:
+              state.canCreatePasskey ||
+                  state.status?.protection == CredentialProtection.passkey
+              ? 'authRecoveryIndependent'.tr()
+              : null,
+          protectionSetup: WalletProtectionPanel(onOpenSettings: _openSecurity),
+        ),
       ),
     );
   }

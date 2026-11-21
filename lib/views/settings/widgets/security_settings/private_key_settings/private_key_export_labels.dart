@@ -16,7 +16,7 @@ String privateKeyExportErrorText(PrivateKeyExportError error) =>
 String privateKeyExportCoverageText(PrivateKeyExportCoverage coverage) =>
     switch (coverage.kind) {
       PrivateKeyExportCoverageKind.activeWallet =>
-        'privateKeyExportActiveWalletCoverage'.tr(),
+        LocaleKeys.privateKeyExportActiveWalletCoverage.tr(),
       PrivateKeyExportCoverageKind.legacyWallet =>
         LocaleKeys.privateKeyExportLegacyCoverage.tr(),
       PrivateKeyExportCoverageKind.offlineAccount =>

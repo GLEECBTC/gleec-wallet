@@ -1,15 +1,28 @@
 part of 'swap_execution_view.dart';
 
+/// What sits below the timeline: controls while running, the answers once it
+/// has stopped, and the evidence either way.
+/// When the sections below the timeline start arriving after a live change:
+/// once the hero has begun to settle.
+const _sectionDelay = Duration(milliseconds: 160);
+
 extension _ExecutionSections on _ExecutionBodyState {
-  /// Controls remain immediately available while the status icon settles.
-  Widget _arrive(Widget child, {required bool live, int order = 0}) => child;
+  /// Brings in the [order]th section that arrived with a live change.
+  Widget _arrive(Widget child, {required bool live, int order = 0}) =>
+      SwapReveal(
+        onMount: live,
+        animate: live,
+        delay: _sectionDelay + SwapMotion.stagger * order,
+        child: child,
+      );
 
   List<Widget> _running(
     BuildContext context,
     SwapExecutionState state,
     SwapExecutionSnapshot snapshot,
-    SwapExecutionDisplay copy,
+    SwapExecutionCopy copy,
   ) {
+    final routePage = swapRoutePage(snapshot.evidence.providerExplorerUrl);
     final cancelMessage = switch (state.cancelStatus) {
       SwapCancelStatus.refusedAlreadySent =>
         LocaleKeys.swapCancelRefusedSent.tr(),
@@ -19,38 +32,8 @@ extension _ExecutionSections on _ExecutionBodyState {
       _ => null,
     };
     final note = copy.leaveNote(web: kIsWeb);
-    // What the swap waits on the user for comes first and is the one
-    // primary action; leaving is always there, second to it.
-    final routePage = snapshot.stage == SwapProgressStage.actionRequired
-        ? copy.routePage
-        : null;
-    final needed = routePage != null
-        ? SwapButton(
-            key: const Key('swap-open-route'),
-            label: LocaleKeys.swapOpenRoutePage.tr(),
-            icon: Icons.open_in_new_rounded,
-            onPressed: () => openSwapLink(context, '$routePage'),
-          )
-        : copy.actionNeedsSupport
-        ? SwapButton(
-            key: const Key('swap-action-support'),
-            label: LocaleKeys.swapActionContactSupport.tr(),
-            icon: Icons.support_agent_rounded,
-            onPressed: () => showSwapEvidenceSheet(
-              context,
-              snapshot: snapshot,
-              services: _services,
-            ),
-          )
-        : null;
     return [
-      // A swap waiting on the user is not one that carries on by itself.
-      if (snapshot.stage != SwapProgressStage.actionRequired)
-        SwapCallout(
-          tone: SwapTone.info,
-          icon: note.icon,
-          message: note.message,
-        ),
+      SwapCallout(tone: SwapTone.info, icon: note.icon, message: note.message),
       if (cancelMessage != null) ...[
         const SizedBox(height: 12),
         // Only a cancel pressed on this screen gets an answer here.
@@ -64,16 +47,29 @@ extension _ExecutionSections on _ExecutionBodyState {
         ),
       ],
       const SizedBox(height: 16),
-      if (needed != null) ...[needed, const SizedBox(height: 10)],
-      SwapButton(
-        key: const Key('swap-back-to-wallet'),
-        label: 'swapBackToWallet'.tr(),
-        variant: needed == null
-            ? SwapButtonVariant.primary
-            : SwapButtonVariant.secondary,
-        onPressed: _backToWallet,
-      ),
-      const SizedBox(height: 10),
+      if (snapshot.stage == SwapProgressStage.actionRequired &&
+          routePage != null) ...[
+        // The swap is waiting on the user: two pulses say so, then stop.
+        _arrive(
+          SwapPulse(
+            trigger: SwapProgressStage.actionRequired,
+            active: state.live,
+            onMount: true,
+            beats: 2,
+            delay: SwapMotion.screen,
+            color: SwapPalette.of(context).warning,
+            spread: 10,
+            borderRadius: BorderRadius.circular(16),
+            child: SwapButton(
+              label: LocaleKeys.swapOpenRoutePage.tr(),
+              icon: Icons.open_in_new_rounded,
+              onPressed: () => openSwapLink(context, '$routePage'),
+            ),
+          ),
+          live: state.live,
+        ),
+        const SizedBox(height: 10),
+      ],
       if (snapshot.canCancel) ...[
         SwapButton(
           key: const Key('swap-cancel'),
@@ -98,7 +94,7 @@ extension _ExecutionSections on _ExecutionBodyState {
   List<Widget> _recovery(
     BuildContext context,
     SwapExecutionSnapshot snapshot,
-    SwapExecutionDisplay copy, {
+    SwapExecutionCopy copy, {
     required bool live,
   }) {
     final hero = copy.hero;
@@ -107,50 +103,6 @@ extension _ExecutionSections on _ExecutionBodyState {
     var order = 0;
     Widget arrive(Widget child) => _arrive(child, live: live, order: order++);
     return [
-      if (success) ...[
-        _receiptBalance(context, snapshot),
-        const SizedBox(height: 4),
-        // Without an asset to open, the wallet is where the funds are.
-        if (copy.presentation.canViewReceivedAsset)
-          SwapButton(
-            key: const Key('swap-view-asset'),
-            label: 'swapViewAsset'.tr(),
-            onPressed: () => _backToWallet(received: snapshot),
-          )
-        else
-          SwapButton(
-            key: const Key('swap-back-to-wallet'),
-            label: 'swapBackToWallet'.tr(),
-            onPressed: _backToWallet,
-          ),
-        const SizedBox(height: 10),
-        SwapButton(
-          label: 'swapReceiptDetails'.tr(),
-          variant: SwapButtonVariant.secondary,
-          onPressed: () => showSwapEvidenceSheet(
-            context,
-            snapshot: snapshot,
-            services: _services,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          children: [
-            for (final action in actions)
-              SwapLinkButton(
-                label: _ExecutionBodyState._actionLabel(action, copy),
-                onPressed: () => _onAction(action, snapshot),
-              ),
-            if (copy.presentation.canViewReceivedAsset)
-              SwapLinkButton(
-                label: 'swapBackToWallet'.tr(),
-                onPressed: _backToWallet,
-              ),
-          ],
-        ),
-      ],
       if (!success) ...[
         arrive(
           SwapQuestion(
@@ -174,82 +126,30 @@ extension _ExecutionSections on _ExecutionBodyState {
         ),
       ],
       const SizedBox(height: 8),
-      if (!success)
-        for (final (index, action) in actions.indexed) ...[
-          arrive(
-            SwapButton(
-              label: _ExecutionBodyState._actionLabel(action, copy),
-              variant: index == 0
-                  ? SwapButtonVariant.primary
-                  : SwapButtonVariant.secondary,
-              onPressed: () => _onAction(action, snapshot),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-      if (_inFlow && !success)
+      for (final (index, action) in actions.indexed) ...[
         arrive(
           SwapButton(
-            label: LocaleKeys.swapViewInActivity.tr(),
+            label: _ExecutionBodyState._actionLabel(action, copy),
+            variant: index == 0
+                ? SwapButtonVariant.primary
+                : SwapButtonVariant.secondary,
+            onPressed: () => _onAction(action, snapshot),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      if (_inFlow)
+        arrive(
+          SwapButton(
+            label: success
+                ? LocaleKeys.done.tr()
+                : LocaleKeys.swapViewInActivity.tr(),
             variant: SwapButtonVariant.secondary,
-            onPressed: () => _viewInActivity(snapshot),
+            onPressed: success ? _leave : () => _viewInActivity(snapshot),
           ),
         ),
     ];
   }
-
-  /// Whether the wallet's balance shows what arrived yet. One slot of one
-  /// height whatever the refresh is doing, so its answer never moves the
-  /// action under it.
-  Widget _receiptBalance(
-    BuildContext context,
-    SwapExecutionSnapshot snapshot,
-  ) => StreamBuilder<int>(
-    stream: _services.presentation.changes,
-    builder: (context, _) {
-      final status = _services.presentation.balanceStatus(snapshot.id);
-      final unavailable = status == SwapReceiptBalanceStatus.unavailable;
-      return Semantics(
-        container: true,
-        liveRegion: true,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: SwapGeometry.touchTarget,
-          ),
-          child: Center(
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              children: [
-                Text(
-                  switch (status) {
-                    SwapReceiptBalanceStatus.current =>
-                      'swapBalanceUpdated'.tr(),
-                    SwapReceiptBalanceStatus.unavailable =>
-                      'swapBalanceNotRefreshed'.tr(),
-                    _ => 'swapUpdatingBalance'.tr(),
-                  },
-                  key: const Key('swap-receipt-balance'),
-                  style: SwapText.small(context),
-                  textAlign: TextAlign.center,
-                ),
-                if (unavailable)
-                  SwapLinkButton(
-                    key: const Key('swap-receipt-balance-retry'),
-                    label: LocaleKeys.tryAgain.tr(),
-                    onPressed: () => _services.presentation.refreshReceipt(
-                      snapshot,
-                      retry: true,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
-  );
 
   Widget _evidence(
     BuildContext context,

@@ -318,7 +318,6 @@ void main() {
         ),
       );
 
-      await tapText(tester, 'All');
       final eths = find.text('ETH');
       expect(above(tester, find.text('BTC').first, eths.first), isTrue);
       // Ethereum sorts after Arbitrum, but the native coin comes first.
@@ -330,7 +329,7 @@ void main() {
     });
   });
 
-  testWidgets('an inactive asset returns immediately without activation', (
+  testWidgets('an activation that fails says so on its row, and can retry', (
     tester,
   ) async {
     services
@@ -338,9 +337,14 @@ void main() {
       ..activationError = StateError('offline');
     final popped = await open(tester);
 
-    expect(find.text('Not active'), findsNothing);
+    expect(find.text('Not active'), findsOneWidget);
     await tapText(tester, 'BTC');
-    expect(services.activations, isEmpty);
+    expect(find.text("Couldn't activate BTC. Try again."), findsOneWidget);
+    expect(popped, isEmpty);
+
+    services.activationError = null;
+    await tapText(tester, 'BTC');
+    expect(services.activations, [btc, btc]);
     expect(popped, [btc]);
   });
 
