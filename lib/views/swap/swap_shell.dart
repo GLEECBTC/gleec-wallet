@@ -204,7 +204,7 @@ class _SwapScopeState extends State<_SwapScope> {
         UnifiedSwapBloc(
             repository: _services.createRepository(
               tradingAllowed: (from, to) =>
-                  tradingStatus.state.canTradeAssets([from, to]),
+                  tradingStatus.state.isTradingPermitted([from, to]),
               clockValid: () => _clockValid(systemHealth.state),
             ),
             registry: _services.registry,
@@ -214,6 +214,8 @@ class _SwapScopeState extends State<_SwapScope> {
             addressOf: _services.addressOf,
             resolveAsset: _services.resolveAsset,
             holdings: _services.holdings,
+            activateAsset: _services.activate,
+            spendDecimalsOf: _services.spendDecimalsOf,
           )
           ..add(_capabilities())
           ..add(const UnifiedSwapStarted());

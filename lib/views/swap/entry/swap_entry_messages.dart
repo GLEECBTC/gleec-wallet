@@ -6,6 +6,17 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
+    if (state.preparingAssets) return const [];
+    if (state.preparationFailedAsset case final asset?) {
+      return [
+        SwapHelperLine(
+          text: 'swapAssetPreparationUnavailable'.tr(
+            args: [SwapFormat.ticker(asset)],
+          ),
+          tone: SwapTone.warning,
+        ),
+      ];
+    }
     if (issue == SwapFormIssue.noOffers) return _noOffersLines(state);
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(

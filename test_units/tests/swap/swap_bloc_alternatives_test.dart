@@ -60,15 +60,12 @@ void main() {
   });
 
   swapBlocTest(
-    'a late quiet refresh preserves the newly selected fastest route',
+    'a late source preserves the separately fetched and selected fastest route',
     (h) {
       offerAsked(h);
-      final bloc = h.open();
       final pending = h.atomic.gate = Completer<void>();
-      bloc.add(const UnifiedSwapEvaluationRequested(quiet: true));
-      h.settle();
-      expect(h.routed.requests.last.orders, {SwapQuoteOrder.cheapest});
-
+      final bloc = h.open();
+      expect(bloc.state.quotesPending, isTrue);
       bloc.add(const UnifiedSwapAlternativesRequested());
       h.settle();
       bloc.add(const UnifiedSwapOptionSelected('fastest'));
@@ -78,6 +75,7 @@ void main() {
       pending.complete();
       h.settle();
 
+      expect(bloc.state.quotesPending, isFalse);
       expect(bloc.state.options.map((quote) => quote.id), [
         'cheapest',
         'fastest',

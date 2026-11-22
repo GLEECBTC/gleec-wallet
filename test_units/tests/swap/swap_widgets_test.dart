@@ -35,6 +35,7 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -167,6 +168,8 @@ void main() {
       receive: usdc,
       inputText: input,
       balance: d('2'),
+      payAddress: 'own-pay',
+      receiveAddress: 'own-receive',
       issue: issue,
       evaluation: evaluation,
       quotes: ready

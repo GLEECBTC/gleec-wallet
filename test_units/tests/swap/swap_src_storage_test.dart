@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
@@ -148,6 +151,70 @@ void main() {
         terms(store: _RefusingStorage()).recordAcceptance(),
         throwsStateError,
       );
+    });
+
+    test(
+      'a delayed identity read cannot attribute consent to another wallet',
+      () async {
+        final gate = WalletOperationGate()
+          ..attachWallet('w1', allowOperations: true);
+        final permit = gate.capture();
+        final identity = Completer<String?>();
+        final reading = Completer<void>();
+        final repository = SwapTermsRepository(
+          legalDocuments: legalFixtureRepository(),
+          storage: storage,
+          walletKey: () {
+            reading.complete();
+            return identity.future;
+          },
+        );
+        final writing = repository.recordAcceptance(
+          snapshot: legalFixtureSnapshot(),
+          stillCurrent: () {
+            permit.ensureCurrent();
+            return true;
+          },
+        );
+        final refused = expectLater(
+          writing,
+          throwsA(isA<WalletOperationDenied>()),
+        );
+        await reading.future;
+        gate.attachWallet('w2', allowOperations: true);
+        identity.complete('w2');
+        await refused;
+        expect(storage.values, isEmpty);
+      },
+    );
+
+    test('revoked confirmation uses its captured key and never resolves a replacement', () async {
+      final gate = WalletOperationGate()
+        ..attachWallet('w1', allowOperations: true);
+      final permit = gate.capture();
+      gate.attachWallet('w2', allowOperations: true);
+      var reads = 0;
+      final repository = SwapTermsRepository(
+        legalDocuments: legalFixtureRepository(),
+        storage: storage,
+        walletKey: () async {
+          reads++;
+          return 'w2';
+        },
+      );
+      await expectLater(
+        repository.recordAcceptance(
+          snapshot: legalFixtureSnapshot(),
+          walletKey: 'w1',
+          stillCurrent: () {
+            permit.ensureCurrent();
+            return true;
+          },
+        ),
+        throwsA(isA<WalletOperationDenied>()),
+      );
+      expect(reads, 0);
+      expect(storage.values, isEmpty);
     });
 
     test(

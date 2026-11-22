@@ -1960,5 +1960,6 @@
   "authDeviceUnlockOffTitle": "Device unlock is off",
   "authDeviceUnlockOffDescription": "Device unlock stopped working for this wallet, so it now opens with its password. Set it up again to open the wallet with your screen lock or biometrics.",
   "authPasskeyOffTitle": "Passkey is off",
-  "authPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Create a new passkey to open the wallet without typing it."
+  "authPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Create a new passkey to open the wallet without typing it.",
+  "swapAssetPreparationUnavailable": "We couldn't prepare {} for this swap. Try again."
 }

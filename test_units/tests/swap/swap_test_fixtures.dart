@@ -488,6 +488,8 @@ class FakeExecutor implements SwapExecutor {
 /// Storage in memory.
 class MemoryStorage implements BaseStorage {
   final Map<String, dynamic> values = {};
+  Object? writeError;
+  bool writeSucceeds = true;
 
   @override
   Future<bool> delete(String key) async => values.remove(key) != null;
@@ -497,6 +499,8 @@ class MemoryStorage implements BaseStorage {
 
   @override
   Future<bool> write(String key, dynamic data) async {
+    if (writeError case final error?) throw error;
+    if (!writeSucceeds) return false;
     values[key] = data;
     return true;
   }

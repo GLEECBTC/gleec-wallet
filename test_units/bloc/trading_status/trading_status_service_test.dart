@@ -6,8 +6,10 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
 import 'package:web_dex/bloc/trading_status/disallowed_feature.dart';
+import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_repository.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 class _Repository implements TradingStatusRepository {
   late Future<AppGeoStatus> Function() answer;
@@ -221,6 +223,51 @@ void main() {
         unawaited(subscription.cancel());
         clock.flushMicrotasks();
       });
+    });
+  });
+
+  group('what the status permits', () {
+    // The coins config marks the child wallet-only, which the order book
+    // will not trade; nothing about that restricts a location.
+    final policy = TradingAssetPolicy(
+      assetOf: (id) => id == _parent.id.id
+          ? _parent
+          : Asset(
+              id: _child.id,
+              protocol: _child.protocol,
+              isWalletOnly: true,
+              signMessagePrefix: null,
+            ),
+    );
+
+    test('a wallet-only asset is permitted here, and not on the order '
+        'book', () {
+      final state = TradingStatusLoadSuccess(tradingPolicy: policy);
+
+      expect(state.isTradingPermitted([_parent.id, _child.id]), isTrue);
+      expect(state.canTradeAssets([_parent.id]), isTrue);
+      expect(state.canTradeAssets([_parent.id, _child.id]), isFalse);
+    });
+
+    test('an asset restricted here is permitted nowhere', () {
+      final state = TradingStatusLoadSuccess(
+        tradingPolicy: policy,
+        disallowedAssets: {_parent.id},
+      );
+
+      expect(state.isTradingPermitted([_parent.id]), isFalse);
+      expect(state.isTradingPermitted([null, _child.id]), isTrue);
+      expect(state.canTradeAssets([_parent.id]), isFalse);
+    });
+
+    test('nothing is permitted while trading is off or unknown', () {
+      final off = TradingStatusLoadSuccess(
+        disallowedFeatures: {DisallowedFeature.trading},
+      );
+
+      expect(off.isTradingPermitted([_parent.id]), isFalse);
+      expect(TradingStatusLoadInProgress().isTradingPermitted([]), isFalse);
+      expect(TradingStatusLoadFailure().isTradingPermitted([]), isFalse);
     });
   });
 }

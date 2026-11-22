@@ -20,6 +20,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       state.hasPair &&
       !_catalogLoading &&
       !state.checkingMax &&
+      !state.preparingAssets &&
       state.tradingEnabled &&
       (state.issue?.stillPriced ?? true) &&
       (amountOf(state) ?? Decimal.zero) > Decimal.zero;
@@ -37,6 +38,15 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     final version = ++_evaluationVersion;
     _evaluationAlternatives = const [];
     final quiet = event.quiet && state.quotes != null;
+    if (state.amountMode == SwapAmountMode.fiat && state.pay != null) {
+      // Price enrichment must not change the concrete principal underneath
+      // a quote. Editing the amount clears this conversion snapshot.
+      emit(
+        state.copyWith(
+          converted: (asset: state.pay!, text: state.inputText, amount: amount),
+        ),
+      );
+    }
     if (!quiet) {
       // The structural notice survives this: it explains why fresh options
       // are being checked, and clears when the user edits or reviews.
@@ -49,69 +59,120 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     }
 
     final request = _request(state, amount, automatic: event.quiet);
-    UnifiedSwapQuotes result;
-    try {
-      result = await _repository
-          .quote(request)
-          .timeout(
-            request.maxSource != null
-                ? _evaluationTimeout * 3
-                : _evaluationTimeout,
+    _stopQuoteWatch();
+    final done = Completer<void>();
+    _finishQuoteWatch = () {
+      if (!done.isCompleted) done.complete();
+    };
+    _quoteSubscription = _repository
+        .watchQuotes(request, timeout: _evaluationTimeout, scope: _quoteScope)
+        .listen(
+          (update) {
+            if (emit.isDone || version != _evaluationVersion || _closing) {
+              return;
+            }
+            _applyQuoteUpdate(emit, update, request: request, quiet: quiet);
+          },
+          onError: (Object error) {
+            if (!emit.isDone && version == _evaluationVersion && !_closing) {
+              _failEvaluation(
+                emit,
+                SwapQuoteFailure(
+                  source: SwapLiquiditySource.routed,
+                  kind: error is TimeoutException
+                      ? SwapQuoteFailureKind.timeout
+                      : SwapQuoteFailureKind.unknown,
+                ),
+                quiet: quiet || state.selectedQuote != null,
+              );
+            }
+            if (!done.isCompleted) done.complete();
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete();
+          },
+          cancelOnError: true,
+        );
+    await done.future;
+    if (version == _evaluationVersion) {
+      _quoteSubscription = null;
+      _finishQuoteWatch = null;
+    }
+  }
+
+  void _applyQuoteUpdate(
+    Emitter<UnifiedSwapState> emit,
+    SwapQuoteUpdate update, {
+    required SwapQuoteRequest request,
+    required bool quiet,
+  }) {
+    final received = update.quotes;
+    final result = _evaluationAlternatives.isEmpty || request.maxSource != null
+        ? received
+        : UnifiedSwapRepository.rank(
+            [
+              ...received.options,
+              for (final alternative in _evaluationAlternatives)
+                if (received.byId(alternative.id) == null &&
+                    alternative.from == request.from &&
+                    alternative.to == request.to &&
+                    alternative.sellAmount == request.amount &&
+                    !alternative.isExpiredAt(_now()))
+                  _repository.pricing.price(alternative),
+            ],
+            received.failures,
+            comparisonComplete: received.comparisonComplete,
           );
-    } on TimeoutException {
-      if (version != _evaluationVersion) return;
-      _failEvaluation(
-        emit,
-        const SwapQuoteFailure(
-          source: SwapLiquiditySource.routed,
-          kind: SwapQuoteFailureKind.timeout,
-        ),
-        quiet: quiet,
-      );
-      return;
-    }
-
-    // The intent moved on while this was in flight. Emitting now would show a
-    // price for an amount or pair the user has already left behind.
-    if (version != _evaluationVersion) return;
-
-    // Max may have resolved a new principal; its own request prices all
-    // compared orders at that amount. Only retain ordinary-input additions.
-    if (_evaluationAlternatives.isNotEmpty && request.maxSource == null) {
-      result = UnifiedSwapRepository.rank([
-        ...result.options,
-        for (final alternative in _evaluationAlternatives)
-          if (result.byId(alternative.id) == null &&
-              alternative.from == request.from &&
-              alternative.to == request.to &&
-              alternative.sellAmount == request.amount &&
-              !alternative.isExpiredAt(_now()))
-            _repository.pricing.price(alternative),
-      ], result.failures);
-    }
-
+    emit(
+      state.copyWith(
+        quotesPending: !update.sourcesComplete,
+        pricingPending: !update.pricingComplete,
+      ),
+    );
     if (result.isEmpty) {
-      _failEvaluation(
-        emit,
-        result.primaryFailure ??
-            const SwapQuoteFailure(
-              source: SwapLiquiditySource.routed,
-              kind: SwapQuoteFailureKind.unknown,
-            ),
-        quiet: quiet,
-        all: result.failures,
-      );
+      if (update.sourcesComplete) {
+        _failEvaluation(
+          emit,
+          result.primaryFailure ??
+              const SwapQuoteFailure(
+                source: SwapLiquiditySource.routed,
+                kind: SwapQuoteFailureKind.unknown,
+              ),
+          quiet: quiet,
+          all: result.failures,
+        );
+      }
       return;
     }
 
-    // Keep the user's pick across a refresh when it is still on offer.
+    // Once shown, an offer stays selected while another source/pricing read
+    // arrives. A later better offer is an explicit choice, never a switch.
     final previous = state.selectedId;
-    final keep =
+    final keep = previous != null && result.byId(previous) != null;
+    // Max clears the old quotes while retaining an explicit option choice.
+    // A faster competing source must not erase that still-pending choice.
+    if (state.manuallySelected &&
         previous != null &&
-        state.manuallySelected &&
-        result.byId(previous) != null;
+        !keep &&
+        !update.sourcesComplete) {
+      return;
+    }
+    // During quiet refresh the chosen source may still be outstanding. Keep
+    // that known quote until its source settles rather than switching early,
+    // and until it expires if that source fails: as when every source does,
+    // a failed refresh never hands the choice to another kind of swap.
+    final selectedBefore = state.selectedQuote;
+    if (quiet && !keep && selectedBefore != null) {
+      final status = update.sources[selectedBefore.source];
+      if (status == SwapQuoteSourceStatus.pending) return;
+      if (status == SwapQuoteSourceStatus.unavailable &&
+          !selectedBefore.isExpiredAt(_now())) {
+        final limit = result.failures.rateLimit;
+        if (limit != null) _pauseForRateLimit(emit, limit);
+        return;
+      }
+    }
     final selected = keep ? result.byId(previous) : result.preselected;
-
     final maximum = request.maxSource == null
         ? null
         : result.options
@@ -144,19 +205,18 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           quotes: result,
           selectedId: selected?.id,
           clearSelectedId: selected == null,
-          manuallySelected: keep,
+          manuallySelected: keep && state.manuallySelected,
           clearFailure: true,
-          // Kept although options exist: the best option may be missing.
           failures: result.failures,
-          clearRateLimit: true,
+          clearRateLimit: result.failures.rateLimit == null,
         ),
       ),
     );
-    if (selected != null && state.signedIn) {
-      await _loadBalances(emit);
-      if (version != _evaluationVersion || emit.isDone) return;
-    }
+    _requestMissingFunding();
     _armTimers(selected);
+    if (result.failures.rateLimit case final limit?) {
+      _pauseForRateLimit(emit, limit);
+    }
   }
 
   void _failEvaluation(
@@ -173,6 +233,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     // replacing a working quote with an error because one re-price blipped
     // would punish the user for waiting.
     if (quiet && state.selectedQuote != null) {
+      emit(state.copyWith(quotesPending: false, pricingPending: false));
       if (limit != null) _pauseForRateLimit(emit, limit);
       return;
     }
@@ -293,10 +354,11 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           checkingAlternatives: false,
           quotes: added.isEmpty
               ? current
-              : UnifiedSwapRepository.rank([
-                  ...current.options,
-                  ...added,
-                ], current.failures),
+              : UnifiedSwapRepository.rank(
+                  [...current.options, ...added],
+                  current.failures,
+                  comparisonComplete: current.comparisonComplete,
+                ),
         ),
       ),
     );
@@ -422,8 +484,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         ),
       ),
     );
-    if (state.signedIn) await _loadBalances(emit);
-    if (emit.isDone) return;
+    _requestMissingFunding();
     if (state.maxRequested) {
       if (previousSource != state.selectedQuote?.source) {
         add(const UnifiedSwapMaxRequested());
