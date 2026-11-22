@@ -216,6 +216,8 @@ void main() {
       loadingAssets: false,
       pay: eth,
       receive: usdc,
+      payAddress: '0xpay',
+      receiveAddress: '0xreceive',
       inputText: '1',
       balance: d('2'),
       evaluation: SwapEvaluationStatus.ready,
@@ -298,6 +300,10 @@ void main() {
       swap.emit(progress);
       await tester.pumpAndSettle();
 
+      expect(_focusedHeading(), isNull);
+      final tabFocus = FocusManager.instance.primaryFocus;
+      await moveTo(tester, form);
+      expect(FocusManager.instance.primaryFocus, same(tabFocus));
       expect(_focusedHeading(), isNull);
     });
   });

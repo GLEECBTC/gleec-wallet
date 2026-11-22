@@ -4,6 +4,7 @@ import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -81,16 +82,11 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    bool pressable(WidgetTester tester) =>
-        tester
-            .widget<TextButton>(
-              find.descendant(
-                of: cancelButton(),
-                matching: find.byType(TextButton),
-              ),
-            )
-            .onPressed !=
-        null;
+    // A busy button keeps its place and its focus, and drops presses.
+    bool pressable(WidgetTester tester) {
+      final button = tester.widget<SwapButton>(cancelButton());
+      return button.onPressed != null && !button.busy;
+    }
 
     testWidgets('asks first, and keeping the swap cancels nothing', (
       tester,
@@ -159,6 +155,9 @@ void main() {
         findsOneWidget,
       );
       expect(pressable(tester), isFalse);
+      await tester.tap(cancelButton());
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
 
       handle.cancelGate.complete();
       await tester.pumpAndSettle();

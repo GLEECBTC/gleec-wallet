@@ -99,21 +99,47 @@ void main() {
         await gesture.up();
       });
 
-      testWidgets('without an action it is faded and inert', (tester) async {
+      testWidgets('without an action it is neutral, readable and inert', (
+        tester,
+      ) async {
+        var presses = 0;
         await pumpSwapUi(
           tester,
-          const SwapButton(label: 'Go', onPressed: null),
+          const SwapButton(label: 'Enter amount', onPressed: null),
         );
 
         final material = materialOf(tester, SwapButton);
-        expect(material.color, dark.brand.withValues(alpha: 0.45));
-        expect(material.textStyle!.color, dark.onBrand.withValues(alpha: 0.7));
-        expect(borderOf(material), dark.brand.withValues(alpha: 0.4));
+        expect(material.color, dark.disabled);
+        expect(material.textStyle!.color, dark.onDisabled);
+        expect(borderOf(material), dark.borderStrong);
+        await tester.tap(find.text('Enter amount'), warnIfMissed: false);
+        expect(presses, 0);
       });
 
-      testWidgets('busy, it spins instead of its icon and cannot be pressed', (
+      // The label of a disabled or busy button is the form's status.
+      test('its label keeps text contrast when it cannot be pressed', () {
+        double contrast(Color a, Color b) {
+          final (la, lb) = (a.computeLuminance(), b.computeLuminance());
+          return (la > lb ? la + 0.05 : lb + 0.05) /
+              (la > lb ? lb + 0.05 : la + 0.05);
+        }
+
+        for (final palette in [SwapPalette.light, SwapPalette.dark]) {
+          expect(
+            contrast(palette.onDisabled, palette.disabled),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(
+            contrast(palette.onBrand, palette.brand),
+            greaterThanOrEqualTo(4.5),
+          );
+        }
+      });
+
+      testWidgets('busy, it spins in its own colours and ignores presses', (
         tester,
       ) async {
+        final semantics = tester.ensureSemantics();
         var presses = 0;
         await pumpSwapUi(
           tester,
@@ -135,12 +161,36 @@ void main() {
           const Size.square(16),
         );
         expect(find.byIcon(Icons.bolt), findsNothing);
-        expect(
-          tester.widget<TextButton>(find.byType(TextButton)).onPressed,
-          isNull,
-        );
+        final material = materialOf(tester, SwapButton);
+        expect(material.color, dark.brand);
+        expect(material.textStyle!.color, dark.onBrand);
         await tester.tap(find.text('Starting'), warnIfMissed: false);
         expect(presses, 0);
+        final data = tester
+            .getSemantics(find.byType(SwapButton))
+            .getSemanticsData();
+        expect(data.label, 'Starting');
+        expect(data.flagsCollection.isEnabled, Tristate.isFalse);
+        expect(data.hasAction(SemanticsAction.tap), isFalse);
+        semantics.dispose();
+      });
+
+      testWidgets('keeps keyboard focus as it turns busy and back', (
+        tester,
+      ) async {
+        Widget button({required bool busy}) =>
+            SwapButton(label: 'Confirm swap', busy: busy, onPressed: () {});
+        await pumpSwapUi(tester, button(busy: false));
+        Focus.of(tester.element(find.text('Confirm swap'))).requestFocus();
+        await tester.pump();
+        bool focused() =>
+            Focus.of(tester.element(find.text('Confirm swap'))).hasFocus;
+        expect(focused(), isTrue);
+
+        await pumpSwapUi(tester, button(busy: true), settle: false);
+        expect(focused(), isTrue);
+        await pumpSwapUi(tester, button(busy: false), settle: false);
+        expect(focused(), isTrue);
       });
 
       testWidgets('an icon leads the label', (tester) async {

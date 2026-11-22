@@ -127,7 +127,14 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('Incomplete'), findsOneWidget);
+      // No fees are known before a wallet connects: a dash, not a figure.
+      expect(
+        find.descendant(
+          of: find.widgetWithText(MergeSemantics, 'Total cost'),
+          matching: find.text(SwapFormat.unknown),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Review swap'), findsNothing);
       expect(swapPrimaryLabel(tester), 'Connect wallet');
 

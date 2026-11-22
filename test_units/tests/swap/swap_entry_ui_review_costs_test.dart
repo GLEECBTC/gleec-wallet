@@ -2,10 +2,12 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
@@ -47,9 +49,20 @@ void main() {
   }
 
   Future<void> expandCosts(WidgetTester tester) async {
-    await tester.tap(find.text('Costs & protection'));
+    await tester.tap(find.text(LocaleKeys.swapReviewCostsProtection.tr()));
     await tester.pumpAndSettle();
   }
+
+  /// The label, old value and new value of the changed figure [id].
+  List<String?> changed(WidgetTester tester, String id) => [
+    for (final text in tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(Key('swap-review-change-$id')),
+        matching: find.byType(Text),
+      ),
+    ))
+      text.data,
+  ];
 
   String detail(WidgetTester tester, String label) {
     final row = find.widgetWithText(SwapDetailRow, label);
@@ -65,18 +78,28 @@ void main() {
 
   final unpriced = pricingOf(network: null, swap: null, complete: false);
 
-  testWidgets('fees the engine could not read are incomplete, not free', (
-    tester,
-  ) async {
+  testWidgets('fees the engine could not read are a dash with a reason, '
+      'never free', (tester) async {
     await pump(
       tester,
       quoteOf(fees: const [], feesKnown: false, pricing: unpriced),
     );
     await expandCosts(tester);
 
-    expect(detail(tester, 'Network costs'), 'Incomplete');
-    expect(detail(tester, 'Swap costs'), 'Incomplete');
+    expect(detail(tester, 'Network costs'), '—');
+    expect(detail(tester, 'Swap costs'), '—');
+    // The figures above the details: total and network cost.
+    expect(find.text('—'), findsNWidgets(4));
+    expect(find.text('swapReviewCostsUnknownNote'.tr()), findsOneWidget);
     expect(find.text(r'$0.00'), findsNothing);
+    expect(find.text(LocaleKeys.swapCostIncomplete.tr()), findsNothing);
+  });
+
+  testWidgets('known fees carry no such note', (tester) async {
+    await pump(tester, quoteOf());
+
+    expect(find.text('swapReviewCostsUnknownNote'.tr()), findsNothing);
+    expect(find.text('—'), findsNothing);
   });
 
   testWidgets('approval gas reads as part of the network costs', (
@@ -136,13 +159,13 @@ void main() {
         previous: quoteOf(fees: const [], feesKnown: false, pricing: unpriced),
       );
 
-      expect(
-        find.text(
-          r'Minimum changed from 2,985 USDC to 2,900 USDC. Total cost is now '
-          r'known: $3.00.',
-        ),
-        findsOneWidget,
-      );
+      expect(changed(tester, 'minimum').skip(1), ['2,985 USDC', '2,900 USDC']);
+      // Nothing to compare with: a dash, then what they are now.
+      expect(changed(tester, 'cost'), [
+        LocaleKeys.swapTotalCost.tr(),
+        '—',
+        r'$3.00',
+      ]);
     });
 
     testWidgets('compares costs with no dollar price in their tokens', (
@@ -155,10 +178,11 @@ void main() {
         previous: quoteOf(fees: [fee('2', gleec)], pricing: unpriced),
       );
 
-      expect(
-        find.text('Total cost changed from 2 GLEEC to 2.5 GLEEC.'),
-        findsOneWidget,
-      );
+      expect(changed(tester, 'cost'), [
+        LocaleKeys.swapTotalCost.tr(),
+        '2 GLEEC',
+        '2.5 GLEEC',
+      ]);
     });
   });
 }

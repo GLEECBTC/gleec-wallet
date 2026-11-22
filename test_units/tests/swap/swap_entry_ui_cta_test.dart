@@ -2,8 +2,7 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'dart:async';
-
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,8 +14,10 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
+import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
@@ -75,7 +76,7 @@ void main() {
       expect(swapPrimaryLabel(tester), 'Select asset');
       // Both pills and the action say the same.
       expect(find.text('Select asset'), findsNWidgets(3));
-      expect(find.text(r'$0.00'), findsNWidgets(2));
+      expect(find.text(r'$0.00'), findsNothing);
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, false);
       expect(
         tester.getSemantics(find.byType(SwapAssetPill).first),
@@ -114,50 +115,36 @@ void main() {
       catalog: SwapCatalog(sources: swapTestCatalog.sources, activated: {eth}),
     );
 
-    testWidgets('is activated from the button, then reported to the bloc', (
+    testWidgets('prepares in place without blocking another asset choice', (
       tester,
     ) async {
-      services.activationGate = Completer<void>();
-      await pump(tester, inactive);
-
-      expect(swapPrimaryLabel(tester), 'Activate USDC');
-      expect(
-        find.text(
-          "USDC isn't active in this wallet yet. Activate it to see its "
-          'balance and prices.',
-        ),
-        findsOneWidget,
+      await pump(
+        tester,
+        inactive.copyWith(preparingAssets: true),
+        settle: false,
       );
 
-      await tester.tap(swapPrimaryAction);
-      await tester.pump();
-      expect(services.activations, [usdc]);
+      expect(swapPrimaryLabel(tester), 'Preparing your assets…');
       expect(swapPrimaryBusy(), isTrue);
       expect(enabled(tester), isFalse);
-      expect(swap.events, isEmpty);
-
-      services.activationGate!.complete();
-      await tester.pumpAndSettle();
-      expect(swap.events, [UnifiedSwapAssetActivated(usdc)]);
-      expect(swapPrimaryBusy(), isFalse);
-      expect(enabled(tester), isTrue);
+      expect(find.byType(SwapAssetPill).first.hitTestable(), findsOneWidget);
+      expect(services.activations, isEmpty);
     });
 
-    testWidgets('that fails to activate says so, and can be tried again', (
+    testWidgets('a failed preparation retries through the bloc', (
       tester,
     ) async {
-      services.activationError = StateError('offline');
-      await pump(tester, inactive);
+      await pump(tester, inactive.copyWith(preparationFailedAsset: usdc));
 
-      await press(tester);
-      expect(find.text("Couldn't activate USDC. Try again."), findsOneWidget);
-      expect(swap.events, isEmpty);
+      expect(
+        find.text('swapAssetPreparationUnavailable'.tr(args: ['USDC'])),
+        findsOneWidget,
+      );
+      expect(swapPrimaryLabel(tester), 'Try again');
       expect(swapPrimaryBusy(), isFalse);
-
-      services.activationError = null;
       await press(tester);
-      expect(services.activations, [usdc, usdc]);
-      expect(swap.events, [UnifiedSwapAssetActivated(usdc)]);
+      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
+      expect(services.activations, isEmpty);
     });
   });
 
@@ -289,8 +276,8 @@ void main() {
       expect(swapPrimaryBusy(), isTrue);
       expect(enabled(tester), isFalse);
       expect(find.text('Checking swap options…'), findsOneWidget);
-      // Two under the cards, one for the amount to receive.
-      expect(find.byType(SwapSkeleton), findsNWidgets(3));
+      expect(find.byType(SwapSkeleton), findsNothing);
+      expect(find.text('swapEstimateUpdating'.tr()), findsOneWidget);
     });
 
     testWidgets('a re-price keeps the current option on screen', (
@@ -393,7 +380,14 @@ void main() {
     );
 
     expect(swapPrimaryLabel(tester), 'Select an option');
-    expect(find.text('Minimum received'), findsNothing);
+    // Until one is chosen its figures stay placeholders.
+    expect(
+      find.descendant(
+        of: find.byType(SwapQuoteStrip),
+        matching: find.text(SwapFormat.unknown),
+      ),
+      findsNWidgets(3),
+    );
     await press(tester);
     expect(swap.events, [const UnifiedSwapAlternativesRequested()]);
     expect(find.text('Choose manually'), findsOneWidget);

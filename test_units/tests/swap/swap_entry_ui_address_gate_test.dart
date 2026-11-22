@@ -2,6 +2,7 @@
 // members read as violations here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,11 +11,13 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import '../../helpers/runtime_auth_fixture.dart';
@@ -61,8 +64,7 @@ class _Sdk implements KomodoDefiSdk {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// Covers the wallet's own addresses on the swap surface, under the amount
-/// cards and in the review. Anyone could pay the wallet at them, so copying
+/// Covers the wallet's own addresses in review; ordinary entry has none. Anyone could pay the wallet at them, so copying
 /// one, or showing one in full, warns first while the seed is not backed up,
 /// as across the wallet.
 void main() {
@@ -140,7 +142,7 @@ void main() {
       );
 
   /// Shows the review of [quote], both addresses unless given one, with
-  /// "Route & identities" open, and returns the sign-in.
+  /// its route section open, and returns the sign-in.
   Future<FakeAuthBloc> showReview(
     WidgetTester tester, {
     KdfUser? user,
@@ -163,7 +165,7 @@ void main() {
       size: size,
       textScale: textScale,
     );
-    final section = find.text('Route & identities');
+    final section = find.text(LocaleKeys.swapReviewRouteIdentities.tr());
     await tester.ensureVisible(section);
     await tester.pumpAndSettle();
     await tester.tap(section);
@@ -186,55 +188,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('the address under each card', () {
-    for (final (side, shown, address) in [
-      ('you pay from', 'From 0x5520…7B91', payAddress),
-      ('you receive at', 'To 0x80A1…42F0', receiveAddress),
-    ]) {
-      testWidgets('$side waits for the backup warning before copying', (
-        tester,
-      ) async {
-        final copied = recordClipboard(tester);
-        await showForm(tester, user: _user(hasBackup: false));
-
-        await tapAndSettle(tester, find.text(shown));
-        expect(notice, findsOneWidget);
-        expect(copied, isEmpty);
-
-        await tapAndSettle(tester, continueAnyway);
-        expect(copied, [address]);
-        expect(find.text('Address copied'), findsOneWidget);
-      });
-    }
-
-    for (final (name, user) in [
-      ('signed out', null),
-      ('once the seed is backed up', _user(hasBackup: true)),
-    ]) {
-      testWidgets('copies at once $name', (tester) async {
-        final copied = recordClipboard(tester);
-        await showForm(tester, user: user);
-
-        await tapAndSettle(tester, find.text('From 0x5520…7B91'));
-        await tapAndSettle(tester, find.text('To 0x80A1…42F0'));
-        expect(notice, findsNothing);
-        expect(copied, [payAddress, receiveAddress]);
-      });
-    }
-
-    testWidgets('only a test network\'s copies at once', (tester) async {
-      services.testnets = {eth};
-      final copied = recordClipboard(tester);
-      await showForm(tester, user: _user(hasBackup: false));
-
-      await tapAndSettle(tester, find.text('From 0x5520…7B91'));
-      expect(notice, findsNothing);
-      expect(copied, [payAddress]);
-
-      await tapAndSettle(tester, find.text('To 0x80A1…42F0'));
-      expect(notice, findsOneWidget);
-      expect(copied, [payAddress]);
-    });
+  testWidgets('ordinary entry exposes no receiving address before review', (
+    tester,
+  ) async {
+    final copied = recordClipboard(tester);
+    await showForm(tester, user: _user(hasBackup: false));
+    expect(find.textContaining('0x'), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('Copy address')), findsNothing);
+    expect(notice, findsNothing);
+    expect(copied, isEmpty);
   });
 
   group('the review', () {

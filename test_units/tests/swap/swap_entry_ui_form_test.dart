@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -53,9 +54,8 @@ void main() {
       tester.widget<TextField>(field).controller!;
 
   // Waiting for an amount: the only unpriced state whose action is still.
-  final empty = swapBaseForm(
-    input: '',
-  ).copyWith(issue: SwapFormIssue.amountMissing);
+  final empty = swapBaseForm(input: '')
+      .copyWith(issue: SwapFormIssue.amountMissing);
   // The receive side worth $2,990, so the pay side's $3,000 is the only one.
   final priced = swapPricedForm(
     ranked: [quoteOf(pricing: pricingOf(expected: '2990'))],
@@ -151,7 +151,7 @@ void main() {
 
       await tester.tap(field);
       await tester.pumpAndSettle();
-      expect(card().boxShadow, isNotEmpty);
+      expect(card().boxShadow, isNull);
       expect(border(), SwapPalette.dark.brand);
 
       swap.emit(
@@ -351,7 +351,7 @@ void main() {
     });
 
     testWidgets('is not offered before the balance is known', (tester) async {
-      await pump(tester, priced.copyWith(clearBalance: true));
+      await pump(tester, priced.copyWith(clearBalance: true), settle: false);
 
       expect(find.text('Max'), findsNothing);
       expect(find.textContaining('Balance'), findsNothing);
