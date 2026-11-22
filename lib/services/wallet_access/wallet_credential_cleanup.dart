@@ -53,6 +53,17 @@ class WalletCredentialCleanup {
 
   void revokeAuthorizations() => _authorizations.clear();
 
+  /// Drops an intent whose deletion the engine never committed, so it cannot
+  /// later be mistaken for an interrupted deletion of a wallet that exists.
+  Future<void> withdraw(String entryId) => withWalletAccessRecordLock(() async {
+    _authorizations.remove(entryId);
+    final journal = await _read(journalKey);
+    final intent = journal[entryId];
+    if (intent is! Map || intent['engineDeleted'] == true) return;
+    journal.remove(entryId);
+    await _write(journalKey, journal);
+  });
+
   /// Called after SDK deletion, including after a previously swallowed hook
   /// error. A failed cleanup remains journaled and is reported to the caller.
   Future<void> complete(
@@ -63,10 +74,12 @@ class WalletCredentialCleanup {
   }) => withWalletAccessRecordLock(() async {
     final journal = await _read(journalKey);
     final records = await _read(recordsKey);
-    for (final raw in discoverRecords ? records.values : const <dynamic>[]) {
-      final record = WalletAccessRecord.fromJson(
-        Map<String, dynamic>.from(raw as Map),
-      );
+    for (final entry
+        in discoverRecords
+            ? records.entries
+            : const <MapEntry<String, dynamic>>[]) {
+      final record = WalletAccessRecord.tryParse(entry.key, entry.value);
+      if (record == null) continue;
       if (record.walletName == name && record.pubkeyHash == pubkeyHash) {
         journal.putIfAbsent(
           record.entryId,
@@ -105,6 +118,13 @@ class WalletCredentialCleanup {
         for (final id in journal.keys.toList()) {
           final intent = Map<String, dynamic>.from(journal[id] as Map);
           if (existingEntryIds.contains(id)) {
+            // No deletion is in flight at startup, so an uncommitted intent
+            // for a wallet that still exists is a leftover. Kept, it would
+            // purge that wallet's credential if the catalog ever missed it.
+            if (intent['engineDeleted'] != true) {
+              journal.remove(id);
+              await _write(journalKey, journal);
+            }
             continue;
           }
           intent['engineDeleted'] = true;
@@ -120,9 +140,9 @@ class WalletCredentialCleanup {
       });
 
   Future<bool> get hasIntents async => (await _read(journalKey)).isNotEmpty;
-  Future<bool> get hasPending async => (await _read(
-    journalKey,
-  )).values.any((value) => value is Map && value['engineDeleted'] == true);
+  Future<bool> get hasPending async =>
+      (await _read(journalKey)).values
+          .any((value) => value is Map && value['engineDeleted'] == true);
 
   /// Explicit repair action; it is safe to retry after another process death.
   Future<void> retry(Future<String?> Function(String key) authorize) async {

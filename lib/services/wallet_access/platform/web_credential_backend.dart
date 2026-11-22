@@ -16,23 +16,25 @@ class WebCredentialBackend extends CredentialBackend {
   late final JSFunction _changeListener = ((web.Event event) {
     final detail = (event as web.CustomEvent).detail.dartify();
     if (detail is Map && detail['external'] == true) {
-      _changes.add(null);
+      final key = detail['key'];
+      _changes.add(key is String ? key : null);
     }
   }).toJS;
 
-  late final StreamController<void> _changes = StreamController<void>.broadcast(
-    onListen: () => web.window.addEventListener(
-      'gleecWalletProtectionChanged',
-      _changeListener,
-    ),
-    onCancel: () => web.window.removeEventListener(
-      'gleecWalletProtectionChanged',
-      _changeListener,
-    ),
-  );
+  late final StreamController<String?> _changes =
+      StreamController<String?>.broadcast(
+        onListen: () => web.window.addEventListener(
+          'gleecWalletProtectionChanged',
+          _changeListener,
+        ),
+        onCancel: () => web.window.removeEventListener(
+          'gleecWalletProtectionChanged',
+          _changeListener,
+        ),
+      );
 
   @override
-  Stream<void> get protectionChanged => _changes.stream;
+  Stream<String?> get protectionChanged => _changes.stream;
 
   Future<Object?> _call(
     String method, [

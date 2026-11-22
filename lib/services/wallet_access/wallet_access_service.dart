@@ -17,8 +17,15 @@ import 'wallet_access_lock.dart';
 import 'wallet_access_record.dart';
 import 'wallet_access_types.dart';
 import 'wallet_credential_cleanup.dart';
+import 'wallet_lock_policy.dart';
 
 export 'wallet_access_types.dart';
+
+part 'wallet_access_deletion.dart';
+part 'wallet_access_records.dart';
+part 'wallet_engine_session.dart';
+part 'wallet_password_recovery.dart';
+part 'wallet_password_rotation.dart';
 
 /// Coordinates the wallet engine, credential vault and non-secret journal.
 /// The engine session remains independent of the app's interaction lock.
@@ -40,7 +47,15 @@ class WalletAccessService {
       _cleanup.revokeAuthorizations();
       unawaited(_backend.cancel().catchError((Object _) {}));
     });
-    _protectionSubscription = _backend.protectionChanged.listen((_) {
+    _protectionSubscription = _backend.protectionChanged.listen((key) {
+      // Other tabs report every wallet's changes. One that names another
+      // credential leaves this session's protection exactly as it was.
+      final active = _sessionUser;
+      if (key != null &&
+          active != null &&
+          key != WalletAccessRecord.credentialKeyFor(entryId(active))) {
+        return;
+      }
       _revision++;
       this.unlockCoordinator.protectionChanged();
       _cleanup.revokeAuthorizations();
@@ -75,7 +90,7 @@ class WalletAccessService {
   final WalletUnlockCoordinator unlockCoordinator;
   final _changes = StreamController<void>.broadcast();
   late final StreamSubscription<void> _deviceLockSubscription;
-  late final StreamSubscription<void> _protectionSubscription;
+  late final StreamSubscription<String?> _protectionSubscription;
   final Object _operationOwner = Object();
   int _revision = 0;
   int _passwordManagerOperations = 0;
@@ -98,14 +113,17 @@ class WalletAccessService {
   Future<void> initialize() async {
     final grace = await _storage.read(_graceKey);
     unlockCoordinator.setBackgroundGrace(
-      immediateLockRequired || grace == 0
-          ? Duration.zero
-          : const Duration(seconds: 30),
+      immediateLockRequired ? Duration.zero : walletLockGraceFromSeconds(grace),
     );
     unlockCoordinator.operationGate.attachWallet(null);
-    if (await _cleanup.hasIntents) {
-      final users = await _sdk.auth.getUsers();
-      await _cleanup.resume(users.map(entryId).toSet());
+    try {
+      if (await _cleanup.hasIntents) {
+        final users = await _sdk.auth.getUsers();
+        await _cleanup.resume(users.map(entryId).toSet());
+      }
+    } on Object {
+      // Leftover credential cleanup stays journaled for the next launch or an
+      // explicit retry. It must never stand between the user and the app.
     }
   }
 
@@ -121,9 +139,11 @@ class WalletAccessService {
   }
 
   Future<void> setBackgroundGrace(Duration duration) async {
-    final seconds = immediateLockRequired || duration == Duration.zero ? 0 : 30;
-    await _writeChecked(_graceKey, seconds);
-    unlockCoordinator.setBackgroundGrace(Duration(seconds: seconds));
+    final grace = immediateLockRequired
+        ? Duration.zero
+        : walletLockGraceFromSeconds(duration.inSeconds);
+    await _writeChecked(_graceKey, grace.inSeconds);
+    unlockCoordinator.setBackgroundGrace(grace);
     _changes.add(null);
   }
 
@@ -133,32 +153,6 @@ class WalletAccessService {
     // Compatibility only; SDK catalog migrations establish real entry IDs.
     return 'legacy-${sha256.convert(utf8.encode(jsonEncode(user.walletId.toJson())))}';
   }
-
-  Future<Map<String, WalletAccessRecord>> _records() async {
-    final raw = await _storage.read(_recordsKey);
-    if (raw == null) return {};
-    final map = raw is String ? jsonDecode(raw) : raw;
-    if (map is! Map) {
-      throw const WalletAccessException(WalletAccessFailure.invalidResponse);
-    }
-    return map.map(
-      (key, value) => MapEntry(
-        key as String,
-        WalletAccessRecord.fromJson(Map<String, dynamic>.from(value as Map)),
-      ),
-    );
-  }
-
-  Future<void> _saveRecord(WalletAccessRecord record) =>
-      withWalletAccessRecordLock(() async {
-        final records = await _records();
-        records[record.entryId] = record;
-        await _writeChecked(
-          _recordsKey,
-          records.map((key, value) => MapEntry(key, value.toJson())),
-        );
-        _changes.add(null);
-      });
 
   Future<void> _writeChecked(String key, Object value) async {
     if (!await _storage.write(key, value) ||
@@ -175,11 +169,13 @@ class WalletAccessService {
     throw const WalletAccessException(WalletAccessFailure.walletUnavailable);
   }
 
+  /// Name and verified identity select the wallet. Its derivation mode does
+  /// not: the type a [Wallet] carries comes from metadata or a login toggle,
+  /// and need not be the mode the engine last opened it in.
   Future<KdfUser> _resolveWallet(Wallet wallet) async {
     final users = await _sdk.auth.getUsers();
     for (final user in users) {
       if (user.walletId.name == wallet.name &&
-          user.walletId.isHd == (wallet.config.type == WalletType.hdwallet) &&
           (wallet.config.pubKey == null ||
               wallet.config.pubKey == user.walletId.pubkeyHash)) {
         return user;
@@ -202,7 +198,21 @@ class WalletAccessService {
 
   Future<WalletAccessStatus> _status(KdfUser user) async {
     final id = entryId(user);
-    final record = (await _records())[id];
+    final passwordVerified = _passwordOnlyEntries.contains(id);
+    final WalletAccessRecord? record;
+    try {
+      record = await _recordFor(id);
+    } on WalletAccessException {
+      if (!passwordVerified) rethrow;
+      // This build cannot read what is stored for the wallet. The password
+      // the engine just accepted is the only protection it can vouch for.
+      return WalletAccessStatus(
+        entryId: id,
+        protection: CredentialProtection.password,
+        hasManagedCredential: false,
+        requiresAuthentication: true,
+      );
+    }
     if (record == null) {
       return WalletAccessStatus(
         entryId: id,
@@ -213,18 +223,13 @@ class WalletAccessService {
     }
     if (record.pubkeyHash != null &&
         record.pubkeyHash != user.walletId.pubkeyHash) {
-      throw const WalletAccessException(WalletAccessFailure.invalidResponse);
+      if (!passwordVerified) {
+        throw const WalletAccessException(WalletAccessFailure.invalidResponse);
+      }
+      return _passwordFallbackStatus(record);
     }
-    // A pending password change always needs explicit input, never autologin.
-    if (record.rotationEnvelope != null) {
-      return WalletAccessStatus(
-        entryId: id,
-        protection: CredentialProtection.password,
-        hasManagedCredential: false,
-        requiresAuthentication: true,
-        passwordManager: record.manager,
-      );
-    }
+    // A pending password change does not hide the stored credential: using it
+    // proves which password the engine holds and settles the change.
     CredentialRecordInfo? actual;
     try {
       actual = record.managed
@@ -257,10 +262,12 @@ class WalletAccessService {
     );
   }
 
+  /// What protects a wallet whose stored credential is lost or unusable: the
+  /// password alone. Reporting that is what offers device unlock again.
   WalletAccessStatus _passwordFallbackStatus(WalletAccessRecord record) =>
       WalletAccessStatus(
         entryId: record.entryId,
-        protection: record.protection,
+        protection: CredentialProtection.password,
         hasManagedCredential: false,
         requiresAuthentication: true,
         generatedPassword: record.generated,
@@ -283,11 +290,22 @@ class WalletAccessService {
     }
     final records = await _records();
     WalletAccessRecord? record = pending is String ? records[pending] : null;
-    if (pending != null && record == null) {
-      throw const WalletAccessException(WalletAccessFailure.invalidResponse);
+    final resumed = record == null
+        ? null
+        : await _resumeProvisioningCredential(record, revision);
+    if (pending != null && resumed == null) {
+      // Without a readable record and credential that creation would fail
+      // the same way forever. Its record stays for any wallet the engine did
+      // create; only its claim on the next creation is released.
+      _ensureRevision(revision);
+      await _storage.delete(_pendingKey);
+      if (await _storage.read(_pendingKey) != null) {
+        throw const WalletAccessException(WalletAccessFailure.storageFailed);
+      }
+      record = null;
     }
-    String password;
-    if (record == null) {
+    final String password;
+    if (record == null || resumed == null) {
       final users = await _sdk.auth.getUsers();
       final name = _nextWalletName(users);
       final id = const Uuid().v4();
@@ -318,8 +336,20 @@ class WalletAccessService {
           throw const WalletAccessException(WalletAccessFailure.storageFailed);
         }
       } on WalletAccessException catch (error) {
-        _ensureRevision(revision);
-        if (!protected || error.failure != WalletAccessFailure.canceled) {
+        final declinedProtection =
+            protected &&
+            error.failure == WalletAccessFailure.canceled &&
+            _isRevisionCurrent(revision);
+        if (!declinedProtection) {
+          // The write may have landed before its confirmation failed. No
+          // record or engine wallet refers to this new key yet, so nothing
+          // else would ever remove it.
+          try {
+            await unlockCoordinator.runSystemPrompt(() => _backend.delete(key));
+          } on Object {
+            // The failure being reported is the one that matters.
+          }
+          _ensureRevision(revision);
           rethrow;
         }
         // This is an explicitly new wallet with no previous protection.
@@ -349,11 +379,7 @@ class WalletAccessService {
       await _saveRecord(record);
       await _writeChecked(_pendingKey, id);
     } else {
-      password = await _readManaged(
-        record,
-        reason: 'Continue creating your wallet',
-        revision: revision,
-      );
+      password = resumed;
     }
     _ensureRevision(revision);
     KdfUser? created;
@@ -415,13 +441,29 @@ class WalletAccessService {
       ),
     );
     await _didAuthenticate(user, expectedRevision: revision);
-    // Last-wallet and sign-out metadata are part of the commit. Keep the
-    // resume journal until they are durable: a reported failure must resume
-    // this same wallet. Cleanup after publication cannot turn success into an
-    // error, even if a storage adapter throws after actually deleting the key.
-    await _clearCompletedProvisioning(completedRecord.entryId);
     return user;
   });
+
+  /// The credential of an interrupted creation, or null when it can never be
+  /// read again.
+  Future<String?> _resumeProvisioningCredential(
+    WalletAccessRecord record,
+    _AccessRevision revision,
+  ) async {
+    try {
+      return await _readManaged(
+        record,
+        reason: 'Continue creating your wallet',
+        revision: revision,
+      );
+    } on WalletAccessException catch (error) {
+      if (error.failure != WalletAccessFailure.missingCredential &&
+          error.failure != WalletAccessFailure.invalidated) {
+        rethrow;
+      }
+      return null;
+    }
+  }
 
   Future<bool> _clearCompletedProvisioning(String id) async {
     try {
@@ -492,45 +534,53 @@ class WalletAccessService {
     return value;
   }
 
-  Future<KdfUser> signInManaged(
-    Wallet wallet, {
-    bool automatic = false,
-  }) => _runAccessOperation((revision) async {
-    final user = await _resolveWallet(wallet);
-    final record = (await _records())[entryId(user)];
-    if (record == null || !record.managed || record.rotationEnvelope != null) {
-      throw const WalletAccessException(WalletAccessFailure.missingCredential);
-    }
-    final password = await _readManaged(
-      record,
-      reason: 'Unlock your wallet',
-      automatic: automatic,
-      revision: revision,
-    );
-    _ensureRevision(revision);
-    // The engine refuses a second sign-in, so a repeated unlock would fail for
-    // as long as a session it already holds for this wallet stays open. The
-    // credential is still verified against that session below.
-    final current = await _sdk.auth.currentUser;
-    final signedIn = current != null && current.walletId == user.walletId
-        ? current
-        : await _sdk.auth.signIn(
-            walletName: user.walletId.name,
-            password: password,
-            options: user.walletId.authOptions,
+  Future<KdfUser> signInManaged(Wallet wallet, {bool automatic = false}) =>
+      _runAccessOperation((revision) async {
+        final user = await _resolveWallet(wallet);
+        final record = await _recordFor(entryId(user));
+        if (record == null || !record.managed) {
+          throw const WalletAccessException(
+            WalletAccessFailure.missingCredential,
           );
-    await _sdk.auth.verifyPassword(
-      password: password,
-      expectedWalletId: signedIn.walletId,
-    );
-    _ensureRevision(revision);
-    if (entryId(signedIn) != record.entryId ||
-        signedIn.walletId != user.walletId) {
-      throw const WalletAccessException(WalletAccessFailure.staleOperation);
-    }
-    await _didAuthenticate(signedIn, expectedRevision: revision);
-    return signedIn;
-  });
+        }
+        final password = await _readManaged(
+          record,
+          reason: 'Unlock your wallet',
+          automatic: automatic,
+          revision: revision,
+        );
+        _ensureRevision(revision);
+        final KdfUser signedIn;
+        try {
+          signedIn = await _openEngineSession(user, password);
+        } on AuthException catch (error) {
+          // The stored credential predates a password change the engine did
+          // complete. Only the new password can finish that change.
+          if (record.rotationEnvelope != null &&
+              error.type == AuthExceptionType.incorrectPassword) {
+            throw const WalletAccessException(
+              WalletAccessFailure.missingCredential,
+            );
+          }
+          rethrow;
+        }
+        return _settleEngineSignIn(signedIn, revision, () async {
+          await _sdk.auth.verifyPassword(
+            password: password,
+            expectedWalletId: signedIn.walletId,
+          );
+          if (entryId(signedIn) != record.entryId ||
+              signedIn.walletId != user.walletId) {
+            return false;
+          }
+          _ensureRevision(revision);
+          // The engine accepted the stored credential, so any password change
+          // still journaled for it never took effect.
+          if (record.rotationEnvelope != null) await _withdrawRotation(record);
+          await _didAuthenticate(signedIn, expectedRevision: revision);
+          return true;
+        });
+      });
 
   Future<String> authorize({
     required WalletId walletId,
@@ -621,11 +671,10 @@ class WalletAccessService {
     final user = await _resolve(walletId);
     final session = await _sdk.auth.captureSessionContext();
     await _ensureUserCurrent(user, session, revision);
+    WalletAccessRecord? pendingRotation;
     if (password == null) {
-      final record = (await _records())[entryId(user)];
-      if (record == null ||
-          !record.managed ||
-          record.rotationEnvelope != null) {
+      final record = await _recordFor(entryId(user));
+      if (record == null || !record.managed) {
         throw const WalletAccessException(
           WalletAccessFailure.missingCredential,
         );
@@ -637,6 +686,7 @@ class WalletAccessService {
         revision: revision,
         waitForForeground: !forUnlock,
       );
+      if (record.rotationEnvelope != null) pendingRotation = record;
     } else {
       ensurePreparationCurrent?.call();
     }
@@ -649,18 +699,33 @@ class WalletAccessService {
       expectedWalletId: walletId,
       expectedSession: session,
     );
-    if (ensureCurrent == null) {
-      await verify();
-    } else {
-      await RpcDispatchGuard.run(
-        ensureCurrent,
-        verify,
-        methods: const {'get_mnemonic'},
-      );
-      ensureCurrent();
+    try {
+      if (ensureCurrent == null) {
+        await verify();
+      } else {
+        await RpcDispatchGuard.run(
+          ensureCurrent,
+          verify,
+          methods: const {'get_mnemonic'},
+        );
+        ensureCurrent();
+      }
+    } on AuthException catch (error) {
+      // The stored credential predates a password change the engine did
+      // complete. Only the new password can finish that change.
+      if (pendingRotation != null &&
+          error.type == AuthExceptionType.incorrectPassword) {
+        throw const WalletAccessException(
+          WalletAccessFailure.missingCredential,
+        );
+      }
+      rethrow;
     }
     await _ensureUserCurrent(user, session, revision);
     ensureCurrent?.call();
+    // The engine accepted the stored credential, so any password change still
+    // journaled for it never took effect.
+    if (pendingRotation != null) await _withdrawRotation(pendingRotation);
     return password;
   }
 
@@ -802,100 +867,11 @@ class WalletAccessService {
   }
 
   Future<String> credentialForDeletion(Wallet wallet, {String? password}) =>
-      _runAccessOperation((revision) async {
-        final user = await _resolveWallet(wallet);
-        final record = (await _records())[entryId(user)];
-        var value = password;
-        if (value == null) {
-          if (record == null ||
-              !record.managed ||
-              record.rotationEnvelope != null) {
-            throw const WalletAccessException(
-              WalletAccessFailure.missingCredential,
-            );
-          }
-          value = await _readManaged(
-            record,
-            reason: 'Remove this wallet from this device',
-            revision: revision,
-            purpose: 'delete',
-          );
-        }
-        _ensureRevision(revision);
-        if (entryId(await _resolveWallet(wallet)) != entryId(user)) {
-          throw const WalletAccessException(WalletAccessFailure.staleOperation);
-        }
-        final preparationStartedAt = _monotonicNow();
-        if (record != null) {
-          _ensureRevision(revision);
-          String? token;
-          final actual = record.managed && password != null
-              ? await _backend.metadata(record.credentialKey)
-              : null;
-          if (actual?.protection == CredentialProtection.passkey) {
-            // A lost provider need not prevent removal after genuine password
-            // proof. Verification is for the active wallet only: never switch
-            // the engine silently to authorize deletion of another entry.
-            final current = await _sdk.auth.currentUser;
-            if (current == null ||
-                entryId(current) != entryId(user) ||
-                current.walletId != user.walletId) {
-              throw const WalletAccessException(
-                WalletAccessFailure.walletMustBeUnlocked,
-              );
-            }
-            final session = await _sdk.auth.captureSessionContext();
-            await _authorize(
-              user.walletId,
-              password: value,
-              reason: 'Remove this wallet from this device',
-              revision: revision,
-            );
-            await _ensureUserCurrent(user, session, revision);
-            token = await _backend.prepareDeleteAfterPasswordVerification(
-              record.credentialKey,
-              expectedRevision: actual!.revision,
-            );
-            await _ensureUserCurrent(user, session, revision);
-          } else if (record.managed) {
-            final requiresAuthentication =
-                record.requiresAuthentication || actual?.enrolled == true;
-            token = await unlockCoordinator.runSystemPrompt(() async {
-              final token = await _backend.prepareDelete(
-                record.credentialKey,
-                reason: 'Remove this wallet from this device',
-              );
-              if (token == null && requiresAuthentication) {
-                throw const WalletAccessException(
-                  WalletAccessFailure.invalidResponse,
-                );
-              }
-              return token;
-            }, waitForForeground: requiresAuthentication);
-          }
-          _ensureRevision(revision);
-          await _cleanup.prepare(
-            record.copyWith(
-              walletName: user.walletId.name,
-              pubkeyHash: user.walletId.pubkeyHash,
-            ),
-            token,
-          );
-        }
-        _ensureRevision(revision);
-        final id = entryId(user);
-        _preparedDeletionIds[jsonEncode([
-              user.walletId.name,
-              user.walletId.pubkeyHash,
-            ])] =
-            id;
-        _preparedDeletionScopes[id] = _PreparedDeletionAuthorization(
-          revision,
-          unlockCoordinator.state.generation,
-          preparationStartedAt + const Duration(seconds: 60),
-        );
-        return value;
-      });
+      _credentialForDeletion(wallet, password);
+
+  /// Repository calls this when a prepared deletion did not commit, so
+  /// neither its proof nor its journaled intent outlives the attempt.
+  Future<void> abandonDeletion(Wallet wallet) => _abandonDeletion(wallet);
 
   /// Carries the just-prepared proof to SDK pre-stop and RPC dispatch checks.
   /// Capturing another proof, locking, switching or backgrounding revokes it.
@@ -1010,7 +986,10 @@ class WalletAccessService {
     _ensureRevision(expectedRevision);
     final session = await _sdk.auth.captureSessionContext();
     await _ensureUserCurrent(user, session, expectedRevision);
-    if (passwordVerified) _passwordOnlyEntries.add(entryId(user));
+    if (passwordVerified) {
+      _passwordOnlyEntries.add(entryId(user));
+      await _followVerifiedIdentity(user);
+    }
     final status = await _status(user);
     ensureAuthorized?.call();
     _ensureRevision(expectedRevision);
@@ -1038,6 +1017,25 @@ class WalletAccessService {
       sessionIdentity: _sessionIdentity,
     );
     _completedProvisioning.add(entryId(user));
+    // Last-wallet and sign-out metadata are part of a creation's commit, so
+    // its resume journal is kept until here. Clearing it for every sign-in
+    // stops a later "create wallet" from resuming into a wallet already in
+    // use. A failed cleanup is retried and never turns success into an error.
+    await _clearCompletedProvisioning(entryId(user));
+  }
+
+  /// For a sign-in the engine completed after the attempt's authorization
+  /// expired, for example because the app lost focus while the engine was
+  /// starting. The session exists, so the app has to show it; it is attached
+  /// like an observed session and stays covered until a fresh unlock.
+  Future<void> attachCoveredSession(KdfUser user) async {
+    final current = await _sdk.auth.currentUser;
+    if (current == null ||
+        entryId(current) != entryId(user) ||
+        current.walletId != user.walletId) {
+      throw const WalletAccessException(WalletAccessFailure.staleOperation);
+    }
+    await _attachCovered(user);
   }
 
   /// SDK lifecycle repair must never renew an existing app unlock lease.
@@ -1066,7 +1064,14 @@ class WalletAccessService {
       requiresAuthentication: !user.wallet.isHW,
       sessionIdentity: identity,
     );
-    final status = await _status(user);
+    final WalletAccessStatus status;
+    try {
+      status = await _status(user);
+    } on WalletAccessException {
+      // The session stays covered as attached above. A password the engine
+      // accepts settles what protects it.
+      return;
+    }
     if (!_isRevisionCurrent(revision) ||
         !identical(_sessionIdentity, identity)) {
       return;
@@ -1120,14 +1125,10 @@ class WalletAccessService {
       for (var attempt = 0; ; attempt++) {
         try {
           await withWalletAccessLock(() async {
-            if (_revision != revision) {
-              if (_signOutOwner == revision) {
-                _signOutPending = false;
-                _signOutOwner = null;
-                _recoveringFailedSignOut = true;
-              }
-              return;
-            }
+            // Only a newer sign-in or sign-out withdraws this one. A revision
+            // moved by anything else, such as another tab, must not leave the
+            // next launch entering this wallet automatically.
+            if (_signOutOwner != revision) return;
             await _writeChecked(_signedOutKey, true);
           });
           break;
@@ -1214,8 +1215,8 @@ class WalletAccessService {
     );
     final ensureCurrent = captureSensitiveOperation(walletId);
     await _ensureUserCurrent(user, session, revision);
-    final record = (await _records())[entryId(user)];
-    if (record == null || !record.managed || record.rotationEnvelope != null) {
+    final record = await _recordFor(entryId(user));
+    if (record == null || !record.managed) {
       throw const WalletAccessException(WalletAccessFailure.missingCredential);
     }
     final actual = await _backend.metadata(record.credentialKey);
@@ -1247,10 +1248,14 @@ class WalletAccessService {
     }
     // The backend verified the staged envelope with a new PRF assertion before
     // promotion. Do not issue a second challenge or extend the app unlock lease.
+    // The vault now holds the password the engine just verified, which
+    // settles any password change still journaled for the old credential.
     await _saveRecord(
       record.copyWith(
+        phase: 'ready',
         protection: CredentialProtection.passkey,
         requiresAuthentication: true,
+        clearRotation: true,
       ),
     );
     await _ensureUserCurrent(user, session, revision);
@@ -1274,7 +1279,7 @@ class WalletAccessService {
       revision: revision,
     );
     final ensureCurrent = captureSensitiveOperation(walletId);
-    final prior = (await _records())[entryId(user)];
+    final prior = await _recordFor(entryId(user));
     final record =
         prior ??
         WalletAccessRecord(
@@ -1346,11 +1351,14 @@ class WalletAccessService {
       methods: const {'get_mnemonic'},
     );
     ensureReadbackCurrent();
+    // As for a replaced passkey: the vault now holds the verified password.
     await _saveRecord(
       record.copyWith(
+        phase: 'ready',
         managed: true,
         requiresAuthentication: true,
         protection: info.protection,
+        clearRotation: true,
       ),
     );
     await _didAuthenticate(
@@ -1360,188 +1368,42 @@ class WalletAccessService {
     );
   });
 
+  /// Completes normally whenever the engine accepted [newPassword].
+  /// [changePasswordWithOutcome] also reports whether device unlock survived.
   Future<void> changePassword({
     required WalletId walletId,
     String? currentPassword,
     required String newPassword,
-  }) => _runAccessOperation((revision) async {
-    if (!SecurityUtils.checkPasswordRequirements(newPassword).isValid) {
-      throw const WalletAccessException(WalletAccessFailure.incorrectPassword);
-    }
-    final user = await _resolve(walletId);
-    final session = await _sdk.auth.captureSessionContext();
-    final oldPassword = await _authorize(
-      walletId,
-      password: currentPassword,
-      reason: 'Change wallet password',
-      revision: revision,
-    );
-    final ensureCurrent = captureSensitiveOperation(walletId);
-    var record = (await _records())[entryId(user)];
-    if (record != null && record.managed) {
-      final envelope = await PasswordRotationEnvelope.seal(
-        newPassword,
-        oldPassword,
-        record.entryId,
-      );
-      record = record.copyWith(phase: 'rotating', rotationEnvelope: envelope);
-      await _saveRecord(record);
-    }
-    _ensureRevision(revision);
-    _sdk.auth.ensureSessionContextCurrent(session);
-    await RpcDispatchGuard.run(
-      ensureCurrent,
-      () => _sdk.auth.updatePassword(
-        currentPassword: oldPassword,
-        newPassword: newPassword,
-        expectedWalletId: walletId,
-        expectedSession: session,
-      ),
-      methods: const {'change_mnemonic_password'},
-    );
-    await _sdk.auth.verifyPassword(
-      password: newPassword,
-      expectedWalletId: walletId,
-    );
-    _ensureRevision(revision);
-    var ensureCompletionCurrent = ensureCurrent;
-    if (record != null) {
-      ensureCompletionCurrent = (await _finishRotation(
-        record,
-        newPassword,
-        revision,
-        waitForForeground: true,
-        interactiveWalletId: walletId,
-        ensureAuthorized: ensureCurrent,
-      ))!;
-    }
-    await _didAuthenticate(
-      user,
-      expectedRevision: revision,
-      ensureAuthorized: ensureCompletionCurrent,
-    );
-  });
+  }) => changePasswordWithOutcome(
+    walletId: walletId,
+    currentPassword: currentPassword,
+    newPassword: newPassword,
+  );
 
-  Future<void Function()?> _finishRotation(
-    WalletAccessRecord record,
-    String newPassword,
-    _AccessRevision revision, {
-    bool waitForForeground = false,
-    WalletId? interactiveWalletId,
-    void Function()? ensureAuthorized,
-  }) async {
-    _ensureRevision(revision);
-    ensureAuthorized?.call();
-    if (record.requiresAuthentication && record.managed) {
-      await _writeProtectedVerified(
-        record.credentialKey,
-        newPassword,
-        revision,
-        waitForForeground: waitForForeground,
-      );
-      if (await _readManaged(
-            record,
-            reason: 'Confirm updated wallet protection',
-            purpose: 'verifyWrite',
-            revision: revision,
-            waitForForeground: waitForForeground,
-            expectedCredential: newPassword,
-          ) !=
-          newPassword) {
-        throw const WalletAccessException(WalletAccessFailure.storageFailed);
-      }
-    } else {
-      await _backend.delete(record.credentialKey);
-      if (await _backend.metadata(record.credentialKey) != null) {
-        throw const WalletAccessException(WalletAccessFailure.storageFailed);
-      }
-    }
-    final ensureCurrent = waitForForeground
-        ? record.requiresAuthentication && record.managed
-              ? captureSensitiveOperation(interactiveWalletId!)
-              : ensureAuthorized
-        : null;
-    final keepsManaged = record.requiresAuthentication && record.managed;
-    await _saveRecord(
-      record.copyWith(
-        phase: 'ready',
-        generated: false,
-        managed: keepsManaged,
-        requiresAuthentication: true,
-        protection: keepsManaged
-            ? record.protection
-            : CredentialProtection.password,
-        manager: PasswordManagerOutcome.offered,
-        clearRotation: true,
-      ),
-    );
-    ensureCurrent?.call();
-    return ensureCurrent;
-  }
+  /// Throws only while the engine still uses the former password, which then
+  /// keeps working everywhere it did. Once the engine has accepted the new
+  /// one the result is an outcome, never a failed or canceled change.
+  Future<PasswordChangeOutcome> changePasswordWithOutcome({
+    required WalletId walletId,
+    String? currentPassword,
+    required String newPassword,
+  }) => _changePassword(
+    walletId: walletId,
+    currentPassword: currentPassword,
+    newPassword: newPassword,
+  );
 
   /// Called before ordinary password sign-in. A new password can recover an
   /// interrupted rotation even if KDF still uses the former generated one.
-  Future<void> recoverPasswordRotation(
+  ///
+  /// Returns the user it signed in, or null when there was nothing to recover
+  /// and ordinary sign-in should proceed. [options] is the derivation mode
+  /// the user asked for; it defaults to the one last used.
+  Future<KdfUser?> recoverPasswordRotation(
     Wallet wallet,
-    String password,
-  ) => _runAccessOperation((revision) async {
-    final user = await _resolveWallet(wallet);
-    final record = (await _records())[entryId(user)];
-    if (record?.rotationEnvelope == null) return;
-    final previous = await PasswordRotationEnvelope.open(
-      password,
-      record!.rotationEnvelope!,
-      record.entryId,
-    );
-    _ensureRevision(revision);
-    if (previous == null) {
-      return; // Ordinary sign-in will check a supplied old password.
-    }
-    try {
-      final active = await _sdk.auth.signIn(
-        walletName: user.walletId.name,
-        password: password,
-        options: user.walletId.authOptions,
-      );
-      await _sdk.auth.verifyPassword(
-        password: password,
-        expectedWalletId: active.walletId,
-      );
-    } on AuthException catch (error) {
-      if (error.type != AuthExceptionType.incorrectPassword) rethrow;
-      final active = await _sdk.auth.signIn(
-        walletName: user.walletId.name,
-        password: previous,
-        options: user.walletId.authOptions,
-      );
-      await _sdk.auth.verifyPassword(
-        password: previous,
-        expectedWalletId: active.walletId,
-      );
-      final session = await _sdk.auth.captureSessionContext();
-      _ensureRevision(revision);
-      await _sdk.auth.updatePassword(
-        currentPassword: previous,
-        newPassword: password,
-        expectedWalletId: user.walletId,
-        expectedSession: session,
-      );
-    }
-    await _sdk.auth.verifyPassword(
-      password: password,
-      expectedWalletId: user.walletId,
-    );
-    _ensureRevision(revision);
-    try {
-      await _finishRotation(record, password, revision);
-    } on WalletAccessException catch (error) {
-      _ensureRevision(revision);
-      if (error.failure == WalletAccessFailure.staleOperation) rethrow;
-      // KDF has verified the supplied new password. A failed device-vault
-      // repair must not prevent password-only access; retain the journal and
-      // require explicit password entry until protection can be repaired.
-    }
-  });
+    String password, {
+    AuthOptions? options,
+  }) => _recoverPasswordRotation(wallet, password, options);
 
   Future<PasswordManagerOutcome> saveToPasswordManager({
     required WalletId walletId,

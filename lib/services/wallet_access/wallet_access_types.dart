@@ -43,6 +43,17 @@ class WalletAccessException implements Exception {
   String toString() => 'WalletAccessException(${failure.name})';
 }
 
+/// How a password change that the engine accepted left this device.
+enum PasswordChangeOutcome {
+  /// Every credential stored on this device follows the new password.
+  completed,
+
+  /// The engine uses the new password, but the device credential could not
+  /// follow it. The wallet opens with the password until device unlock is set
+  /// up again.
+  deviceUnlockNeedsSetup,
+}
+
 enum PasswordManagerOutcome {
   offered,
   accepted,

@@ -23,6 +23,7 @@ import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
+import androidx.lifecycle.Lifecycle;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -45,6 +46,7 @@ import org.json.JSONObject;
  * attached to an already stored key. No secret is written to preferences. */
 final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
     private static final int CONFIRM_CREDENTIAL = 4821;
+    private static final long CANCEL_SETTLE_TIMEOUT_MS = 2000;
     private static final String PREFIX = "gleec.wallet.credential.v1.";
     private static final Object STORAGE_LOCK = new Object();
     private final FragmentActivity activity;
@@ -73,6 +75,7 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
         final ArrayList<String> newAliases = new ArrayList<>();
         boolean committed;
         boolean cancellationRequested;
+        String cancellationCode = "canceled";
         Pending(MethodChannel.Result result) { this.result = result; }
     }
     private static final class CredentialRequest {
@@ -104,7 +107,7 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
         channel.setMethodCallHandler(this);
         lockReceiver = new BroadcastReceiver() {
             @Override public void onReceive(Context context, Intent intent) {
-                cancel();
+                cancel("interrupted");
                 channel.invokeMethod("deviceLocked", null);
             }
         };
@@ -113,7 +116,7 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
     }
 
     @Override public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
-        if (call.method.equals("cancel")) { cancel(); result.success(null); return; }
+        if (call.method.equals("cancel")) { cancel("canceled"); result.success(null); return; }
         if (call.method.equals("capabilities")) {
             boolean canAuthenticate = keyguard != null && keyguard.isDeviceSecure();
             Map<String, Object> value = new HashMap<>();
@@ -395,6 +398,12 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
     private void authenticateCipher(Pending operation, Cipher cipher, String reason, boolean legacy,
                                     CipherCallback callback, Runnable fallback) {
         if (pending != operation) return;
+        // BiometricPrompt drops a request made after onSaveInstanceState
+        // without any callback, which would leave this operation pending.
+        if (activity.getSupportFragmentManager().isStateSaved()
+            || !activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+            fail(operation, new Failure("interrupted")); return;
+        }
         Object ceremony = new Object();
         biometricCeremony = ceremony;
         prompt = new BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), new BiometricPrompt.AuthenticationCallback() {
@@ -405,7 +414,7 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
                 mainHandler.post(() -> {
                     if (pending != operation || biometricCeremony != ceremony) return;
                     biometricCeremony = null; prompt = null;
-                    if (operation.cancellationRequested) { fail(operation, new Failure("canceled")); return; }
+                    if (operation.cancellationRequested) { fail(operation, new Failure(operation.cancellationCode)); return; }
                     try {
                         if (authentication.getCryptoObject() == null || authentication.getCryptoObject().getCipher() != cipher) throw new Failure("invalidated");
                         callback.accept(cipher);
@@ -416,12 +425,14 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
                 mainHandler.post(() -> {
                     if (pending != operation || biometricCeremony != ceremony) return;
                     biometricCeremony = null; prompt = null;
-                    if (operation.cancellationRequested) { fail(operation, new Failure("canceled")); return; }
+                    if (operation.cancellationRequested) { fail(operation, new Failure(operation.cancellationCode)); return; }
                     if (fallback != null && (code == BiometricPrompt.ERROR_NEGATIVE_BUTTON || code == BiometricPrompt.ERROR_LOCKOUT || code == BiometricPrompt.ERROR_LOCKOUT_PERMANENT || code == BiometricPrompt.ERROR_HW_UNAVAILABLE || code == BiometricPrompt.ERROR_NO_BIOMETRICS)) {
                         fallback.run(); return;
                     }
                     String safe = code == BiometricPrompt.ERROR_LOCKOUT || code == BiometricPrompt.ERROR_LOCKOUT_PERMANENT ? "lockedOut"
-                        : code == BiometricPrompt.ERROR_CANCELED || code == BiometricPrompt.ERROR_USER_CANCELED || code == BiometricPrompt.ERROR_NEGATIVE_BUTTON ? "canceled" : "unavailable";
+                        : code == BiometricPrompt.ERROR_USER_CANCELED || code == BiometricPrompt.ERROR_NEGATIVE_BUTTON ? "canceled"
+                        // The system dismissed the prompt; the user declined nothing.
+                        : code == BiometricPrompt.ERROR_CANCELED ? "interrupted" : "unavailable";
                     fail(operation, new Failure(safe));
                 });
             }
@@ -546,7 +557,7 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
         }
         operation.result.error(code, "Credential operation could not be completed", null);
     }
-    private void cancel() {
+    private void cancel(String code) {
         deletionAuthorizations.clear();
         deletionReadAuthorizations.clear();
         Pending operation = pending;
@@ -556,16 +567,22 @@ final class WalletCredentialVault implements MethodChannel.MethodCallHandler {
             // Do not publish completion while AndroidX still owns this prompt.
             // An immediate new challenge would otherwise receive its stale
             // cancellation. A success already queued cannot authorize data.
-            operation.cancellationRequested = true;
+            if (!operation.cancellationRequested) {
+                operation.cancellationRequested = true;
+                operation.cancellationCode = code;
+                // AndroidX reports nothing when its prompt fragment is absent,
+                // so the drain above is bounded rather than awaited forever.
+                mainHandler.postDelayed(() -> fail(operation, new Failure(operation.cancellationCode)), CANCEL_SETTLE_TIMEOUT_MS);
+            }
             activePrompt.cancelAuthentication();
-        } else if (operation != null) fail(operation, new Failure("canceled"));
+        } else if (operation != null) fail(operation, new Failure(code));
         if (activeCancellation != null) activeCancellation.cancel();
     }
     void dispose() {
-        cancel();
+        cancel("interrupted");
         // There is no next ceremony after disposal; the Activity may never
         // deliver a terminal callback, so settle the outstanding result now.
-        if (pending != null) fail(pending, new Failure("canceled"));
+        if (pending != null) fail(pending, new Failure("interrupted"));
         activity.unregisterReceiver(lockReceiver); channel.setMethodCallHandler(null);
     }
 

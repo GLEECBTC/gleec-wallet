@@ -44,6 +44,9 @@ class RollbackBackend extends CredentialBackend {
   final infos = <String, CredentialRecordInfo>{};
   int authorizations = 0;
   bool failWrite = false;
+
+  /// Runs at a refused write, the point a dying process would not get past.
+  void Function()? onFailedWrite;
   @override
   Future<CredentialCapabilities> capabilities() async =>
       const CredentialCapabilities(
@@ -61,6 +64,7 @@ class RollbackBackend extends CredentialBackend {
     required bool requireAuthentication,
   }) async {
     if (failWrite) {
+      onFailedWrite?.call();
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
     values[key] = value;
@@ -133,6 +137,9 @@ class RollbackAuth extends Fake implements KomodoDefiLocalAuth {
   KdfUser? active;
   String? creationFailure;
   String? rotationFailure;
+
+  /// Runs where a password change is interrupted, before the failure.
+  void Function()? onRotationFailure;
   int registrations = 0;
   void activate(KdfUser user) {
     active = user;
@@ -247,12 +254,20 @@ class RollbackAuth extends Fake implements KomodoDefiLocalAuth {
     final failure = rotationFailure;
     rotationFailure = null;
     if (failure == 'before') {
+      onRotationFailure?.call();
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
     passwords[WalletAccessService.entryId(active!)] = newPassword;
     if (failure == 'after') {
+      onRotationFailure?.call();
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
+  }
+
+  @override
+  Future<void> signOut() async {
+    active = null;
+    sessions.observe(null);
   }
 
   @override

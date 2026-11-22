@@ -19,8 +19,12 @@ unlock credential, not its recovery phrase. Device unlock is not a backup.
 | `savePassword` | `username`, `password`; optional `title` | `accepted`, `unknown`, `declined`, `unavailable` |
 
 Native lock notifications invoke `deviceLocked` on the same channel. Errors
-have a closed code (`canceled`, `unavailable`, `invalidated`, `lockedOut`,
-`storageFailed`, `busy`), generic text and no platform details or credentials.
+have a closed code (`canceled`, `interrupted`, `unavailable`, `invalidated`,
+`lockedOut`, `storageFailed`, `busy`), generic text and no platform details or
+credentials. `canceled` means the user dismissed the prompt; `interrupted`
+means the system did (app switch, call, screen lock, stopped Activity). Dart
+maps `interrupted` to unavailable for enrollment writes and their readback, so
+an interruption never downgrades a new wallet, and to canceled elsewhere.
 An Android Keystore authorization that has expired is reported unavailable;
 only explicit biometric lockout results are classified as `lockedOut`.
 Unknown methods return not-implemented. A protected record cannot become
@@ -74,8 +78,11 @@ delete the previous value before attempting the new write. Work runs on a
 serial queue, with completion delivered on Flutter's main thread. Cancellation
 and durable mutation share an operation-generation lock. A canceled queued write
 or delete cannot later commit. After authorization, the commit checks the same
-metadata and persistent Keychain reference and uses a conditional, noninteractive
-update/delete, rejecting records changed during the prompt. Cancellation also
+metadata and persistent Keychain reference under the operation lock, then runs
+a conditional, noninteractive update/delete matched on service, account and
+the record's random identifier, rejecting records changed during the prompt.
+The update/delete query carries no item-list match key, which the
+data-protection keychain does not accept for those calls. Cancellation also
 invalidates the context and ignores stale completions. Mutable native buffers
 are wiped where practical; Swift/Dart string zeroization is not guaranteed.
 
@@ -106,8 +113,11 @@ Android 11/API 30+ uses a per-operation key and `BiometricPrompt.CryptoObject`
 with strong biometrics or device credentials. The key's policy, rather than an
 application Boolean, controls decryption. No assertion of StrongBox or hardware
 backing is made solely from this capability.
+A prompt requested while the Activity is stopped or its state is saved fails
+at once as `interrupted`, because AndroidX would drop it without a callback.
 Canceling a live biometric ceremony retains its pending operation until the
-terminal AndroidX callback has drained. Terminal handling is deferred to the
+terminal AndroidX callback has drained, for at most two seconds; after that
+the operation is settled so later calls are not left busy. Terminal handling is deferred to the
 next main-loop turn and bound to that particular ceremony; a queued success
 after cancellation cannot decrypt, commit or invoke a fallback. This prevents
 the dismissed prompt's cancellation from being delivered to an immediately

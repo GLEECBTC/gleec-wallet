@@ -110,27 +110,24 @@ void main() {
       },
     );
 
-    test(
-      'tokens never persist or survive restart; protected cleanup stays pending',
-      () async {
-        seed(protected: true);
-        await cleanup.prepare(original, _token);
-        expect(jsonEncode(storage.values), isNot(contains(_token)));
-        final restarted = WalletCredentialCleanup(storage, backend);
-        await restarted.resume({});
-        expect(await restarted.hasPending, isTrue);
-        expect(backend.deletions, isEmpty);
-        final prompts = <String>[];
-        await restarted.retry((key) async {
-          prompts.add(key);
-          return _token;
-        });
-        expect(prompts, [original.credentialKey]);
-        expect(backend.deletions.single.authorization, _token);
-        expect(jsonEncode(storage.values), isNot(contains(_token)));
-        await expectRemoved();
-      },
-    );
+    test('tokens never persist or survive restart; protected cleanup stays pending', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, _token);
+      expect(jsonEncode(storage.values), isNot(contains(_token)));
+      final restarted = WalletCredentialCleanup(storage, backend);
+      await restarted.resume({});
+      expect(await restarted.hasPending, isTrue);
+      expect(backend.deletions, isEmpty);
+      final prompts = <String>[];
+      await restarted.retry((key) async {
+        prompts.add(key);
+        return _token;
+      });
+      expect(prompts, [original.credentialKey]);
+      expect(backend.deletions.single.authorization, _token);
+      expect(jsonEncode(storage.values), isNot(contains(_token)));
+      await expectRemoved();
+    });
 
     test(
       'revoked authorization never opens a protected cleanup path',
@@ -151,21 +148,18 @@ void main() {
       },
     );
 
-    test(
-      'a prepared token can purge an invalidated wrapper without probing it first',
-      () async {
-        seed(protected: true);
-        backend.invalidated.add(original.credentialKey);
-        await cleanup.prepare(original, _token);
-        await cleanup.complete(
-          original.walletName,
-          original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        expect(backend.deletions.single.authorization, _token);
-        await expectRemoved();
-      },
-    );
+    test('a prepared token can purge an invalidated wrapper without probing it first', () async {
+      seed(protected: true);
+      backend.invalidated.add(original.credentialKey);
+      await cleanup.prepare(original, _token);
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      expect(backend.deletions.single.authorization, _token);
+      await expectRemoved();
+    });
 
     test(
       'failed native purge remains visible and needs a new authorization',
@@ -190,45 +184,104 @@ void main() {
       },
     );
 
-    test(
-      'same-name same-seed replacement keeps its credential and last-wallet identity',
-      () async {
-        final replacement = _record('replacement-entry');
-        await storage.write(WalletCredentialCleanup.recordsKey, {
-          original.entryId: original.toJson(),
-          replacement.entryId: replacement.toJson(),
-        });
-        await storage.write(_pendingKey, replacement.entryId);
-        await storage.write(_lastKey, {'entryId': replacement.entryId});
-        backend.add(replacement);
-        await cleanup.prepare(original, null);
-        await cleanup.prepare(replacement, null);
+    test('same-name same-seed replacement keeps its credential and last-wallet identity', () async {
+      final replacement = _record('replacement-entry');
+      await storage.write(WalletCredentialCleanup.recordsKey, {
+        original.entryId: original.toJson(),
+        replacement.entryId: replacement.toJson(),
+      });
+      await storage.write(_pendingKey, replacement.entryId);
+      await storage.write(_lastKey, {'entryId': replacement.entryId});
+      backend.add(replacement);
+      await cleanup.prepare(original, null);
+      await cleanup.prepare(replacement, null);
 
-        await cleanup.complete(
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      // A late duplicate completion cannot discover and delete the replacement.
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      await WalletCredentialCleanup(
+        storage,
+        backend,
+      ).resume({replacement.entryId});
+      expect(backend.deletions.map((call) => call.key), [
+        original.credentialKey,
+      ]);
+      expect(await backend.metadata(replacement.credentialKey), isNotNull);
+      expect(await storage.read(_pendingKey), replacement.entryId);
+      expect(await storage.read(_lastKey), {'entryId': replacement.entryId});
+      expect(await cleanup.hasPending, isFalse);
+      // Startup found the replacement alive, so the intent prepared for a
+      // deletion that never committed does not outlive it.
+      expect(await cleanup.hasIntents, isFalse);
+    });
+
+    test('an uncommitted intent can be withdrawn with its token', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, _token);
+      await cleanup.withdraw(original.entryId);
+      expect(await cleanup.hasIntents, isFalse);
+      // A later engine deletion finds no leftover authorization to spend.
+      await expectLater(
+        cleanup.complete(
           original.walletName,
           original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        // A late duplicate completion cannot discover and delete the replacement.
-        await cleanup.complete(
-          original.walletName,
-          original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        await WalletCredentialCleanup(
-          storage,
-          backend,
-        ).resume({replacement.entryId});
-        expect(backend.deletions.map((call) => call.key), [
-          original.credentialKey,
-        ]);
-        expect(await backend.metadata(replacement.credentialKey), isNotNull);
-        expect(await storage.read(_pendingKey), replacement.entryId);
-        expect(await storage.read(_lastKey), {'entryId': replacement.entryId});
-        expect(await cleanup.hasPending, isFalse);
-        expect(await cleanup.hasIntents, isTrue);
-      },
-    );
+          discoverRecords: true,
+        ),
+        throwsA(_storageFailure),
+      );
+      expect(backend.deletions, isEmpty);
+      expect(await backend.metadata(original.credentialKey), isNotNull);
+    });
+
+    test('a committed deletion cannot be withdrawn', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, null);
+      await cleanup.resume({});
+      expect(await cleanup.hasPending, isTrue);
+      await cleanup.withdraw(original.entryId);
+      expect(await cleanup.hasPending, isTrue);
+    });
+
+    test('startup withdraws a leftover intent rather than keep it', () async {
+      await cleanup.prepare(original, null);
+      final restarted = WalletCredentialCleanup(storage, backend);
+      await restarted.resume({original.entryId});
+      expect(await restarted.hasIntents, isFalse);
+      // Were the catalog to miss this wallet on a later launch, nothing is
+      // left to turn that into the removal of its credential.
+      await WalletCredentialCleanup(storage, backend).resume({});
+      expect(backend.deletions, isEmpty);
+      expect(await backend.metadata(original.credentialKey), isNotNull);
+      expect(
+        await storage.read(WalletCredentialCleanup.recordsKey),
+        contains(original.entryId),
+      );
+    });
+
+    test('an unreadable record does not stop another cleanup', () async {
+      const unreadable = {'version': 99, 'entryId': 'later-build-entry'};
+      await storage.write(WalletCredentialCleanup.recordsKey, {
+        original.entryId: original.toJson(),
+        'later-build-entry': unreadable,
+      });
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        discoverRecords: true,
+      );
+      expect(await backend.metadata(original.credentialKey), isNull);
+      expect(await storage.read(WalletCredentialCleanup.recordsKey), {
+        'later-build-entry': unreadable,
+      });
+    });
 
     test(
       'a native success without deletion fails its readback check',

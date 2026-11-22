@@ -16,6 +16,13 @@ GuardedFileSaver createGuardedFileSaver() {
   return DesktopGuardedFileSaver();
 }
 
+/// The declared type must agree with the suggested name: an Android document
+/// provider appends the type's own extension to a name that maps elsewhere.
+String _mimeTypeFor(String fileName) =>
+    path.extension(fileName).toLowerCase() == '.json'
+    ? 'application/json'
+    : 'text/plain';
+
 class DesktopGuardedFileSaver implements GuardedFileSaver {
   DesktopGuardedFileSaver({Future<String?> Function(String)? selectDestination})
     : _selectDestination = selectDestination ?? _chooseDestination;
@@ -65,8 +72,10 @@ class AndroidGuardedFileSaver implements GuardedFileSaver {
     beforeCommit();
     String? chosenToken;
     Future<String?> choose() async {
+      final name = path.basename(fileName);
       chosenToken = await _channel.invokeMethod<String>('chooseDestination', {
-        'fileName': path.basename(fileName),
+        'fileName': name,
+        'mimeType': _mimeTypeFor(name),
       });
       return chosenToken;
     }
@@ -121,7 +130,7 @@ class IosGuardedFileSaver implements GuardedFileSaver {
       file.writeAsStringSync(data, flush: true);
       final result = await _share(
         ShareParams(
-          files: [XFile(file.path, mimeType: 'application/json')],
+          files: [XFile(file.path, mimeType: _mimeTypeFor(file.path))],
           sharePositionOrigin: _shareOrigin(),
         ),
       );

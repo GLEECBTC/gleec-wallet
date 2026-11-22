@@ -12,6 +12,8 @@ import 'services/wallet_access/wallet_access_rollback_test.dart'
 import 'services/wallet_access/artifact_privacy_test.dart'
     as artifact_privacy_test;
 import 'bloc/update_bloc_dismissal_test.dart' as update_bloc_dismissal_test;
+import 'services/wallet_access/native_credential_backend_channel_test.dart'
+    as native_credential_backend_channel_test;
 import 'services/wallet_access/native_credential_backend_linux_test.dart'
     as native_credential_backend_linux_test;
 import 'services/wallet_access/password_rotation_envelope_test.dart'
@@ -592,6 +594,10 @@ void main() {
   wallet_access_rollback_test.main();
   artifact_privacy_test.main();
   update_bloc_dismissal_test.main();
+  group(
+    'native_credential_backend_channel_test',
+    native_credential_backend_channel_test.main,
+  );
   native_credential_backend_linux_test.main();
   password_rotation_envelope_test.main();
   testRecoveryEvidence();
