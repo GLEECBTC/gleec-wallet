@@ -15,9 +15,11 @@ The development build workflow [40693119999](https://github.com/GLEECBTC/kdf-int
 
 ## Interim engine on dev
 
-The SDK pins `46769c4df3b043669eee59508bf1af017157dcdd` under the temporary build label `charl-temp/solana-combined`. The build combines KDF dev `e3392da6f5`, the earlier PR 35 head `b1ff8f05c8`, and production main `f9632e0ec7`, including LI.FI. Native and WASM `cargo check --locked` passed for this build. The dependencies above still apply to this pin.
+The SDK pins `fd8249c904ae1c75d66fce1c1e361686f13d723c` under the temporary build label `charl-temp/solana-combined`. It extends `46769c4df3b043669eee59508bf1af017157dcdd` with Bitcoin and TRON routed swaps from KDF PR 49. The Solana withdrawal and activation source files are identical in both revisions, so the existing withdrawal guards cover the new pin. SDK PR 457 verified the seven archive checksums. [KDF PR 49](https://github.com/GLEECBTC/kdf-internal/pull/49) · [SDK PR 457](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/457)
 
-Its seven artifacts were built with nitride-kdf-builds and are served from `https://kdf-dev-builds.nitride.app/local-solana-combined/`. macOS and Linux also have `native-v1` archives carrying the shared library, built from a `git archive` of the commit with Rust 1.98.0 and `--locked` (Linux offline, in the Debian 11 CI image). Both libraries pass the eight-phase native lifecycle smoke: macOS on arm64 and on x86_64 under Rosetta, Linux on amd64. Archive checksums are in the SDK build configuration.
+The earlier build combined KDF dev `e3392da6f5`, the PR 35 head `b1ff8f05c8`, and production main `f9632e0ec7`, including LI.FI. Native and WASM `cargo check --locked` passed for that build.
+
+The earlier build’s seven artifacts were built with nitride-kdf-builds and are served from `https://kdf-dev-builds.nitride.app/local-solana-combined/`. macOS and Linux also have `native-v1` archives carrying the shared library, built from a `git archive` of the commit with Rust 1.98.0 and `--locked` (Linux offline, in the Debian 11 CI image). Both libraries pass the eight-phase native lifecycle smoke: macOS on arm64 and on x86_64 under Rosetta, Linux on amd64. Archive checksums are in the SDK build configuration.
 
 This pin may reach `dev` only. The release guard rejects `local/...` and `charl-temp/...` KDF pins on pull requests into `main` and release branches. [`kdf-pin-releasable.yml`](../.github/workflows/kdf-pin-releasable.yml)
 
