@@ -10,7 +10,6 @@ import 'package:web_dex/views/swap/swap_shell.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 import 'swap_accessibility_checks.dart';
-import 'swap_motion_fakes.dart';
 import 'swap_surface_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
 
@@ -245,40 +244,6 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(SwapCountDot), findsNothing);
         expect(find.bySemanticsLabel(RegExp('active')), findsNothing);
-      });
-
-      testWidgets('the count pops when it changes, not when Swap is shown', (
-        tester,
-      ) async {
-        Iterable<double> shrunk() =>
-            effectScales(tester).where((scale) => scale < 0.99);
-        await registry.start(quoteOf(), registry.beginSubmission());
-        await pumpSurface(
-          tester,
-          SwapShell(
-            destinationBuilder: (destination) =>
-                Text('body:${destination.name}'),
-          ),
-          services: services,
-          size: const Size(420, 800),
-          settle: false,
-        );
-        // A count already there when the shell arrives is simply there.
-        expect(find.byType(SwapCountDot), findsOneWidget);
-        expect(shrunk(), isEmpty);
-        await tester.pump(const Duration(milliseconds: 16));
-        expect(shrunk(), isEmpty);
-        await tester.pumpAndSettle();
-
-        await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
-        // The count arrives, then the frames its pop is drawn in.
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 16));
-        await tester.pump(const Duration(milliseconds: 16));
-        expect(tester.widget<SwapCountDot>(find.byType(SwapCountDot)).count, 2);
-        expect(shrunk(), isNotEmpty);
-        await tester.pumpAndSettle();
-        expect(shrunk(), isEmpty);
       });
 
       testWidgets('shows no count without swap services', (tester) async {

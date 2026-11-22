@@ -47,14 +47,6 @@ Uri? swapLinkUri(String? url) {
   return uri.isScheme('https') && uri.host.isNotEmpty ? uri : null;
 }
 
-/// [text] with each address or hash that `SwapFormat.short` cut to its ends
-/// kept on one line: word joiners around the ellipsis, where a line would
-/// otherwise break through the middle of it.
-String swapUnbroken(String text) => text.replaceAll(
-  RegExp('(?<=[0-9A-Za-z])…(?=[0-9A-Za-z])'),
-  '\u2060…\u2060',
-);
-
 /// The route's own status page at [url], when it is an https page.
 Uri? swapRoutePage(String? url) {
   final uri = swapLinkUri(url);
@@ -137,8 +129,9 @@ class _SwapLinkFailedDialogState extends State<SwapLinkFailedDialog> {
           if (_copied == value)
             Text(
               copiedValue,
-              style: SwapText.small(context)
-                  .copyWith(color: palette.toneColor(SwapTone.success)),
+              style: SwapText.small(
+                context,
+              ).copyWith(color: palette.toneColor(SwapTone.success)),
             ),
         ],
       ),
@@ -188,18 +181,13 @@ String? _addressOf(String url) {
 class SwapProviderNotice extends StatelessWidget {
   const SwapProviderNotice({
     this.acceptance = false,
-    this.linked = true,
     this.snapshot,
     this.linkKey = const Key('swap-terms-link'),
     super.key,
-  }) : assert(linked || !acceptance, 'An acceptance names the terms it links');
+  });
 
   /// Whether starting the swap accepts the provider's terms.
   final bool acceptance;
-
-  /// Whether the terms are linked in the sentence. Off where the screen
-  /// lists them with its other documents, as [SwapLegalLinks] does.
-  final bool linked;
   final LegalConsentSnapshot? snapshot;
 
   /// The terms link's key, distinct where two notices can be on screen.
@@ -208,11 +196,12 @@ class SwapProviderNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final style = swapLegalTextStyle(context);
+    final style = SwapText.small(
+      context,
+    ).copyWith(color: palette.textSecondary, height: 1.5);
     const provider = SwapTermsRepository.provider;
     final linkLabel = LocaleKeys.swapTermsLinkLabel.tr(args: [provider]);
     final routed = LocaleKeys.swapRoutedThrough.tr(args: [provider]);
-    if (!linked) return Text(routed, style: style);
     final terms = acceptance
         ? LocaleKeys.swapTermsNotice.tr(
             namedArgs: {'terms': '{terms}', 'provider': provider},

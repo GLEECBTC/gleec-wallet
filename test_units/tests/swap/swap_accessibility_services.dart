@@ -15,12 +15,6 @@ class _Services implements SwapServices {
   @override
   final SwapExecutionRegistry registry;
 
-  @override
-  late final SwapPresentationSession presentation = SwapPresentationSession(
-    registry: registry,
-    refreshBalances: (_) async => true,
-  );
-
   final Set<AssetId> _activated;
   Map<AssetId, Decimal> balances = {};
   Map<AssetId, Decimal> elsewhere = {};

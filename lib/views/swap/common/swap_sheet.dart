@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
-import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 /// Width below which a sheet covers the whole screen.
 const double _fullScreenBelow = 768;
@@ -56,10 +55,7 @@ Future<T?> showSwapSheet<T>({
               duration: Duration.zero,
               reverseDuration: Duration.zero,
             )
-          : const AnimationStyle(
-              duration: SwapMotion.sheet,
-              reverseDuration: SwapMotion.sheet,
-            ),
+          : null,
       builder: (sheetContext) => _FitsContent(
         handle: true,
         child: SafeArea(top: false, child: Builder(builder: builder)),
@@ -73,7 +69,9 @@ Future<T?> showSwapSheet<T>({
     barrierColor: fullScreen
         ? Colors.transparent
         : Colors.black.withValues(alpha: 0.45),
-    transitionDuration: reduceMotion ? Duration.zero : SwapMotion.sheet,
+    transitionDuration: reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220),
     pageBuilder: (dialogContext, _, _) {
       final content = ScaffoldMessenger(
         child: Scaffold(
@@ -149,7 +147,9 @@ Future<T?> _showSwapDialog<T>({
     barrierDismissible: true,
     barrierLabel: label,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    transitionDuration: reduceMotion ? Duration.zero : SwapMotion.pair,
+    transitionDuration: reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180),
     // Dialog stays above the keyboard and hides it from its content, so a
     // sheet that makes its own room for the keyboard adds none here.
     pageBuilder: (_, _, _) => SafeArea(
@@ -159,7 +159,9 @@ Future<T?> _showSwapDialog<T>({
         shadowColor: palette.shadow,
         elevation: 24,
         insetPadding: const EdgeInsets.all(24),
-        insetAnimationDuration: reduceMotion ? Duration.zero : SwapMotion.press,
+        insetAnimationDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 100),
         constraints: const BoxConstraints(
           minWidth: 280,
           maxWidth: _dialogWidth,

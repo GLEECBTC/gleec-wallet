@@ -258,66 +258,6 @@ void main() {
       });
     }
 
-    // KDF's Max carries eighteen places. The form holds an amount to the
-    // asset's own, which most UTXO coins and some tokens leave to be resolved.
-    for (final (name, precision, kdfMax, shown) in [
-      ('eight resolved', 8, '0.123456789012345678', '0.12345678'),
-      ('six resolved', 6, '12.345678901234567891', '12.345678'),
-      ('none resolvable', null, '0.123456789012345678', '0.123456789012345678'),
-    ]) {
-      swapBlocTest('Max on a coin declaring no decimals, $name, can be '
-          'reviewed', (h) {
-        final coin = assetOf(
-          'UNDECLARED',
-          subClass: CoinSubClass.utxo,
-          chainId: 0,
-          decimals: null,
-        );
-        h.extraAssets.add(coin);
-        h.atomic.tradable.add(coin);
-        h.balances[coin] = d('100');
-        h.atomic.respond = (request) => [
-          SwapQuoteAvailable(
-            quoteOf(
-              id: 'book',
-              source: SwapLiquiditySource.atomic,
-              routeKind: SwapRouteKind.direct,
-              order: null,
-              from: coin,
-              to: gleec,
-              sell: '${request.amount}',
-              fees: const [],
-              quotedAt: h.now(),
-            ),
-          ),
-        ];
-        final source = AtomicSwapQuoteSource(
-          trading: SrcTrading()
-            ..maxTaker = kdfMax
-            ..bids = [bidOf('20', '0.01', '500')],
-          networks: () => SwapNetworks([coin, gleec]),
-          spendDecimalsOf: (_) async => precision,
-          now: h.now,
-        );
-        h.atomic.max = h.resolve(
-          source.maxAmount(from: coin, to: gleec, balance: d('100')),
-        );
-        final bloc = h.open(
-          pay: coin.id,
-          receive: 'GLEEC',
-          bloc: h.build(spendDecimalsOf: (_) async => precision),
-        )..add(const UnifiedSwapMaxRequested());
-        h.settle();
-
-        expect(bloc.state.inputText, shown);
-        expect(bloc.state.maxApplied!.amount, d(shown));
-        expect(d(shown) <= d(kdfMax), isTrue);
-        expect(bloc.state.issue, isNull);
-        expect(h.atomic.requests.last.amount, d(shown));
-        expect(bloc.state.canReview, isTrue);
-      });
-    }
-
     swapBlocTest('its trading fee counts with its gas, and the refund', (h) {
       _onlyTheBook(h, _bookQuote(h, _ethForBtc(h), btc));
       // Enough for KDF's own checks, which leave the refund out.

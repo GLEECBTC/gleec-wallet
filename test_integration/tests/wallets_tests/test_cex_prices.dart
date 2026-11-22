@@ -15,19 +15,10 @@ import 'wallet_tools.dart';
 
 Future<void> testCexPrices(WidgetTester tester) async {
   print('🔍 CEX PRICES: Starting CEX prices test suite');
-  const String docByTicker = 'DOC';
-  const String kmdBep20ByTicker = 'KMD';
 
   final Finder totalAmount = find.byKey(const Key('overview-current-value'));
-
-  final Finder kmdBep20CoinActive = find.byKey(
-    const Key('coin-list-item-kmd-bep20'),
-  );
   final Finder page = find.byKey(const Key('wallet-page'));
-  final Finder kmdBep20Item = find.byKey(
-    const Key('coins-manager-list-item-kmd-bep20'),
-  );
-  final Finder docItem = find.byKey(const Key('coins-manager-list-item-doc'));
+  final Finder trxRow = find.byKey(const Key('coin-list-item-trx'));
   final Finder searchCoinsField = find.byKey(
     const Key('wallet-page-search-field'),
   );
@@ -39,41 +30,24 @@ Future<void> testCexPrices(WidgetTester tester) async {
   print('🔍 CEX PRICES: Navigated to wallet page');
   expect(page, findsOneWidget);
   expect(totalAmount, findsOneWidget);
-
-  await addAsset(tester, asset: docItem, search: docByTicker);
-  print('🔍 CEX PRICES: Added DOC asset');
-
-  await addAsset(tester, asset: kmdBep20Item, search: kmdBep20ByTicker);
-  print('🔍 CEX PRICES: Added KMD-BEP20 asset');
-
   expect(coinsList, findsOneWidget);
 
-  print('🔍 CEX PRICES: Starting KMD-BEP20 price check');
-  final hasKmdBep20 = await filterAsset(
+  // TRX is restored by default and has a quote in the Gleec ticker feed.
+  // KMD-BEP20 activation is exercised in testActivateCoins.
+  final hasTrx = await filterAsset(
     tester,
     assetScrollView: coinsList,
-    asset: kmdBep20CoinActive,
-    text: kmdBep20ByTicker,
+    asset: trxRow,
+    text: 'TRX',
     searchField: searchCoinsField,
-    // Enabling a coin activates it through CoinsRepo.activateCoinsSync, which
-    // retries 15 times with a backoff capped at 10s - about two minutes in the
-    // worst case - and the row only joins the list once that settles. Allow
-    // the whole budget so a slow CI activation is not read as a missing coin.
-    timeout: const Duration(minutes: 3),
   );
 
-  expect(
-    hasKmdBep20,
-    isTrue,
-    reason:
-        'KMD-BEP20 must reach the wallet list after being added; it did '
-        'not appear, so its activation never completed',
-  );
+  expect(hasTrx, isTrue, reason: 'TRX must appear in the restored wallet');
 
   // Prices on the current wallet list use TrendPercentageText. The old
   // fiat-price key belongs to coin details, which this test has not opened.
   final price = find.descendant(
-    of: kmdBep20CoinActive,
+    of: trxRow,
     matching: find.byType(TrendPercentageText),
   );
   expect(price, findsOneWidget);
@@ -85,7 +59,7 @@ Future<void> testCexPrices(WidgetTester tester) async {
   expect(
     tester.widget<TrendPercentageText>(price).value,
     greaterThan(0),
-    reason: 'KMD-BEP20 must show an available positive market price',
+    reason: 'TRX must show an available positive market price',
   );
   await tester.pumpAndSettle();
   expect(
@@ -93,15 +67,8 @@ Future<void> testCexPrices(WidgetTester tester) async {
     findsOneWidget,
     reason: 'The market price must be rendered in the wallet row',
   );
-  print('🔍 CEX PRICES: KMD-BEP20 wallet row displays a positive USD price');
-
-  await goto.walletPage(tester);
-
-  await removeAsset(tester, asset: docItem, search: docByTicker);
-  print('🔍 CEX PRICES: Removed DOC asset');
-
-  await removeAsset(tester, asset: kmdBep20Item, search: kmdBep20ByTicker);
-  print('🔍 CEX PRICES: Removed KMD-BEP20 asset');
+  print('🔍 CEX PRICES: TRX wallet row displays a positive USD price');
+  await enterText(tester, finder: searchCoinsField, text: '');
   await pause(msg: '🔍 CEX PRICES: Test completed');
 }
 

@@ -90,21 +90,4 @@ enum LoadFileType {
         return 'txt';
     }
   }
-
-  /// Extensions the mobile import pickers offer. They filter by MIME type, and
-  /// Android preview builds after 0.10.0 saved text backups as
-  /// `<name>.txt.json`, so those are selectable only if JSON documents are.
-  List<String> get importExtensions => switch (this) {
-    LoadFileType.compressed => const ['zip'],
-    LoadFileType.text => const ['txt', 'json'],
-  };
-
-  /// Whether a picked file may be read. Of the JSON documents the picker has
-  /// to offer, only a `.txt.json` export is a text file of ours.
-  bool acceptsImport(String fileName) {
-    final name = fileName.toLowerCase();
-    return this != LoadFileType.text ||
-        !name.endsWith('.json') ||
-        name.endsWith('.txt.json');
-  }
 }

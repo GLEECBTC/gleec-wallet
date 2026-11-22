@@ -58,10 +58,6 @@ enum SwapQuoteFailureKind {
   unknown,
 }
 
-/// Structured diagnostic cause of a service failure. None of these proves
-/// that the wallet needs more gas; only an insufficient-funds response does.
-enum SwapQuoteFailureCause { engine, transport, provider, feeEstimation }
-
 /// A source that could not price a swap, and why.
 class SwapQuoteFailure extends Equatable {
   const SwapQuoteFailure({
@@ -78,7 +74,6 @@ class SwapQuoteFailure extends Equatable {
     this.detail,
     this.retryAt,
     this.offers,
-    this.cause,
   });
 
   /// Which source could not price it.
@@ -86,8 +81,6 @@ class SwapQuoteFailure extends Equatable {
 
   /// Why.
   final SwapQuoteFailureKind kind;
-
-  final SwapQuoteFailureCause? cause;
 
   /// The asset concerned, for [SwapQuoteFailureKind.assetInactive],
   /// [SwapQuoteFailureKind.tradingBlocked] and
@@ -145,7 +138,6 @@ class SwapQuoteFailure extends Equatable {
   List<Object?> get props => [
     source,
     kind,
-    cause,
     asset,
     minimum,
     maximum,

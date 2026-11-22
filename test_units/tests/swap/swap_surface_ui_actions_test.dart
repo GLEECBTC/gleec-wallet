@@ -268,9 +268,9 @@ void main() {
           context: SwapExecutionContext.flow,
         );
 
-        expect(find.text('Back to wallet'), findsOneWidget);
+        expect(find.text('Done'), findsOneWidget);
         expect(find.text('View in Activity'), findsNothing);
-        await choose(tester, 'Back to wallet');
+        await choose(tester, 'Done');
 
         expect(swap.events, [const UnifiedSwapProgressLeft()]);
         expect(shell.detail, isNull);

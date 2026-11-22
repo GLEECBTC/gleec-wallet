@@ -237,6 +237,47 @@ void testCoinsBlocActivationRecovery() {
       expect(await sdk.walletAssets.load(), {'KMD'});
     });
 
+    test('failed policy recovery keeps the saved selection', () async {
+      final completion = Completer<void>();
+      final repo = _FakeCoinsRepo()
+        ..catalogue = {asset.id.id: _coin(asset, CoinState.inactive)}
+        ..activationCompletion = completion.future;
+      final policy = _FakeTradingStatusService()..ready = false;
+      final auth = _FakeAuth(_user('Original'));
+      final sdk = _FakeSdk(
+        assets: _FakeAssetManager({asset.id: asset}),
+        pubkeys: _FakePubkeyManager(),
+        auth: auth,
+      );
+      final bloc = CoinsBloc(sdk, repo, policy);
+      addTearDown(bloc.close);
+      addTearDown(sdk.walletAssets.dispose);
+      addTearDown(policy.changes.close);
+      bloc.add(CoinsSessionStarted(auth.user!));
+      await bloc.stream.firstWhere(
+        (state) => state.coins[asset.id.id]?.isSuspended ?? false,
+      );
+
+      policy.ready = true;
+      policy.changes.add(const AppGeoStatus());
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.activateCalls.single.single.id, asset.id);
+
+      expect(bloc.state.walletCoins[asset.id.id]?.isActivating, isTrue);
+      final removed = bloc.stream
+          .firstWhere((state) => !state.walletCoins.containsKey(asset.id.id))
+          .timeout(const Duration(seconds: 5));
+      repo.seed(_coin(asset, CoinState.suspended));
+      completion.complete(
+        Future<void>.sync(
+          ActivationResult.failure(asset.id, 'Activation failed').throwIfFailed,
+        ),
+      );
+      await removed;
+      await Future<void>.delayed(Duration.zero);
+      expect(await sdk.walletAssets.load(), {asset.id.id});
+    });
+
     test(
       'closing during activation cannot queue a late balance refresh',
       () async {

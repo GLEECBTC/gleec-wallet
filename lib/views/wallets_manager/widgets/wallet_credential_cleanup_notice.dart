@@ -4,7 +4,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
-import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 
 /// Discoverable even after the last wallet was removed from the engine catalog.
 class WalletCredentialCleanupNotice extends StatefulWidget {
@@ -55,25 +54,15 @@ class _WalletCredentialCleanupNoticeState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('authCredentialCleanupPending'.tr()),
-              if (_error case final error?) ...[
+              if (_error != null) ...[
                 const SizedBox(height: 8),
-                WalletAccessNotice(text: error, tone: WalletAccessTone.error),
+                Semantics(liveRegion: true, child: Text(_error!)),
               ],
-              // Stays pressable while busy so keyboard focus is kept; `_retry`
-              // ignores the repeat.
               TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
-                ),
-                onPressed: _retry,
+                onPressed: _busy ? null : _retry,
                 child: Text('authRetryCredentialCleanup'.tr()),
               ),
-              if (_busy)
-                WalletAccessProgress(
-                  label: 'authCredentialCleanupInProgress'.tr(),
-                  linear: true,
-                ),
+              if (_busy) const LinearProgressIndicator(),
             ],
           ),
         ),
@@ -93,12 +82,8 @@ class _WalletCredentialCleanupNoticeState
         _error =
             error is WalletAccessException &&
                 error.failure == WalletAccessFailure.canceled
-            ? walletAccessFailureText(
-                error,
-                passwordEntered: false,
-                unlocking: false,
-              )
-            : 'authCredentialCleanupFailed'.tr();
+            ? 'authUnlockCanceled'.tr()
+            : 'authCredentialCleanupPending'.tr();
       }
     } finally {
       if (mounted) {

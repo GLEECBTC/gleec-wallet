@@ -3,13 +3,12 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show WalletChangedDisconnectException;
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/assets_overview/investment_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/fiat_value.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/profit_loss.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_calculator.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/model/coin.dart';
 
@@ -63,11 +62,12 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
         event.walletId,
       );
       if (!_ownsLoad(generation, emit)) return;
+
+      final totalInvestment = await _investmentRepository
+          .calculateTotalInvestment(event.walletId, [event.coin]);
+      if (!_ownsLoad(generation, emit)) return;
       _sdk.auth.ensureSessionContextCurrent(session);
 
-      final totalInvestment = _investmentRepository.investmentOf([
-        profitLosses,
-      ]);
       final profitAmount = profitLosses.lastOrNull?.profitLoss ?? 0.0;
       // The percent which the user has gained or lost on their investment
       final investmentReturnPercentage =
@@ -111,10 +111,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
     try {
       if (event.coins.isEmpty) {
         _log.warning('No coins to load portfolio overview for');
-        return _emitUnavailable(
-          emit,
-          AssetOverviewUnavailableReason.noActiveAssets,
-        );
+        return;
       }
 
       final session = await _sdk.auth.captureSessionContext();
@@ -123,10 +120,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
       if (!_ownsLoad(generation, emit)) return;
       if (supportedCoins.isEmpty) {
         _log.warning('No supported coins to load portfolio overview for');
-        return _emitUnavailable(
-          emit,
-          AssetOverviewUnavailableReason.noActiveAssets,
-        );
+        return;
       }
 
       await supportedCoins.waitForActivationThreshold(_sdk);
@@ -136,31 +130,37 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
       if (!_ownsLoad(generation, emit)) return;
       if (activeCoins.isEmpty) {
         _log.warning('No active coins to load portfolio overview for');
-        return _emitUnavailable(
-          emit,
-          AssetOverviewUnavailableReason.noActiveAssets,
-        );
+        return;
       }
 
-      // One pass over the coins: profit, investment and the excluded assets
-      // must all describe the same set.
-      final investment = await _investmentRepository.calculateTotalInvestment(
-        event.walletId,
-        activeCoins,
-      );
+      final profitLossesFutures = activeCoins.map((coin) async {
+        // Catch errors that occur for single coins and exclude them from the
+        // total so that transaction fetching errors for a single coin do not
+        // affect the total investment calculation.
+        try {
+          return await _profitLossRepository.getProfitLoss(
+            coin.id,
+            'USDT',
+            event.walletId,
+          );
+        } catch (e, s) {
+          if (e is ProfitLossPriceUnavailable ||
+              e is AuthSessionChangedException) {
+            rethrow;
+          }
+          _log.shout('Failed to fetch profit/loss for ${coin.id.id}', e, s);
+          return Future.value(<ProfitLoss>[]);
+        }
+      });
+
+      final profitLosses = await Future.wait(profitLossesFutures);
+      if (!_ownsLoad(generation, emit)) return;
+
+      final totalInvestment = await _investmentRepository
+          .calculateTotalInvestment(event.walletId, activeCoins);
       if (!_ownsLoad(generation, emit)) return;
       _sdk.auth.ensureSessionContextCurrent(session);
 
-      final portfolio = investment.profitLoss;
-      if (portfolio.isUnavailable) {
-        return _emitUnavailable(
-          emit,
-          AssetOverviewUnavailableReason.noAssetValued,
-        );
-      }
-
-      final profitLosses = portfolio.valued.values.toList();
-      final totalInvestment = investment.total;
       final profitAmount = profitLosses.fold(0.0, (sum, item) {
         return sum + (item.lastOrNull?.profitLoss ?? 0.0);
       });
@@ -175,8 +175,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
 
       emit(
         PortfolioAssetsOverviewLoadSuccess(
-          selectedAssetIds: [for (final id in portfolio.valued.keys) id.id],
-          excludedAssetIds: portfolio.unavailableIds,
+          selectedAssetIds: activeCoins.map((coin) => coin.id.id).toList(),
           assetPortionPercentages: assetPortionPercentages,
           totalInvestment: totalInvestment,
           totalValue: FiatValue.usd(profitAmount),
@@ -184,35 +183,17 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
           profitIncreasePercentage: portfolioInvestmentReturnPercentage,
         ),
       );
-    } on AuthIdentityUnavailableException {
-      if (!_ownsLoad(generation, emit)) return;
-      _log.warning('Wallet identity unavailable for the portfolio overview');
-      _emitUnavailable(emit, AssetOverviewUnavailableReason.walletIdentity);
-    } on WalletChangedDisconnectException {
-      if (!_ownsLoad(generation, emit)) return;
-      // The session this load was for has ended, and so has the one any
-      // totals on screen belong to. Whoever starts the next session loads it.
-      _log.fine('Dropping the portfolio overview of an ended session');
-      if (state is PortfolioAssetsOverviewLoadSuccess) {
-        emit(const AssetOverviewInitial());
-      }
     } catch (e, s) {
       if (!_ownsLoad(generation, emit)) return;
       _log.shout('Failed to load portfolio assets overview', e, s);
-      _emitUnavailable(emit, AssetOverviewUnavailableReason.loadFailed);
+      if (e is ProfitLossPriceUnavailable ||
+          e is AuthSessionChangedException ||
+          state is! PortfolioAssetsOverviewLoadSuccess) {
+        emit(AssetOverviewLoadFailure(error: e.toString()));
+      }
     } finally {
       if (_portfolioLoad == generation) _portfolioLoad = null;
     }
-  }
-
-  /// A load that found no totals. Totals already on screen stay: they were
-  /// right when loaded, and the next refresh is what should replace them.
-  void _emitUnavailable(
-    Emitter<AssetOverviewState> emit,
-    AssetOverviewUnavailableReason reason,
-  ) {
-    if (state is PortfolioAssetsOverviewLoadSuccess) return;
-    emit(PortfolioAssetsOverviewUnavailable(reason: reason));
   }
 
   double _calculateInvestmentReturnPercentage(

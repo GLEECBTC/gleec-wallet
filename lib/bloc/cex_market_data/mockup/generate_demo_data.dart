@@ -4,7 +4,6 @@ import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:uuid/uuid.dart';
-import 'package:web_dex/bloc/cex_market_data/common/price_history_coverage.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
 
 // Cache for demo price history data
@@ -251,11 +250,6 @@ class DemoDataGenerator {
               dates,
               quoteCurrency: quoteCurrency,
             );
-            // A provider outage leaves a few known days rather than an
-            // error; simulate the year instead of trading against those.
-            if (isPartialPriceHistory(sdkPriceHistory, dates)) {
-              throw PartialPriceHistoryException(assetId.id);
-            }
 
             // Convert Decimal to double
             priceHistory = sdkPriceHistory.map(

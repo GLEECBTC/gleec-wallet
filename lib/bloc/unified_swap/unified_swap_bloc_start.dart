@@ -32,8 +32,6 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
       );
     } on SwapStartRejectedException {
       return null;
-    } on WalletOperationDenied {
-      return null;
     }
   }
 

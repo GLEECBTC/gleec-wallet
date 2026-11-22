@@ -85,7 +85,7 @@ void main() {
         await show(tester);
 
         expect(find.text(partial), findsOneWidget);
-        expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
+        expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
         await expectSwapAccessible(tester);
 
         history.failedSources = {};
@@ -156,7 +156,7 @@ void main() {
       await show(tester);
 
       await tester.fling(
-        find.text('1 ETH → ≈ 3,000 USDC'),
+        find.text('1 ETH → 3,000 USDC'),
         const Offset(0, 400),
         1000,
       );

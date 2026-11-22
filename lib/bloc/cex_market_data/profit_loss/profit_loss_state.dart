@@ -26,7 +26,6 @@ final class PortfolioProfitLossChartLoadSuccess extends ProfitLossState {
     required this.fiatCurrency,
     required this.walletId,
     required super.selectedPeriod,
-    this.excludedAssetIds = const [],
     this.isUpdating = false,
   });
 
@@ -38,65 +37,29 @@ final class PortfolioProfitLossChartLoadSuccess extends ProfitLossState {
   final String walletId;
   final bool isUpdating;
 
-  /// Assets in [coins] whose profit/loss could not be computed. The chart and
-  /// totals cover the others; these are left out rather than counted as zero.
-  final List<String> excludedAssetIds;
-
-  PortfolioProfitLossChartLoadSuccess copyWith({
-    Duration? selectedPeriod,
-    bool? isUpdating,
-  }) => PortfolioProfitLossChartLoadSuccess(
-    profitLossChart: profitLossChart,
-    totalValue: totalValue,
-    percentageIncrease: percentageIncrease,
-    coins: coins,
-    fiatCurrency: fiatCurrency,
-    walletId: walletId,
-    selectedPeriod: selectedPeriod ?? this.selectedPeriod,
-    excludedAssetIds: excludedAssetIds,
-    isUpdating: isUpdating ?? this.isUpdating,
-  );
-
   @override
   List<Object> get props => [
-    profitLossChart,
-    totalValue,
-    percentageIncrease,
-    coins,
-    fiatCurrency,
-    selectedPeriod,
-    walletId,
-    excludedAssetIds,
-    isUpdating,
-  ];
-}
-
-/// Why a load left no profit/loss to show.
-enum ProfitLossUnavailableReason {
-  /// None of the requested assets is active yet.
-  noActiveAssets,
-
-  /// None of the requested assets could be valued.
-  noAssetValued,
-
-  /// The session's wallet identity could not be read, so results can neither
-  /// be stored nor looked up for this wallet.
-  walletIdentity,
-
-  /// The load failed for another reason.
-  loadFailed,
+        profitLossChart,
+        totalValue,
+        percentageIncrease,
+        coins,
+        fiatCurrency,
+        selectedPeriod,
+        walletId,
+        isUpdating,
+      ];
 }
 
 final class ProfitLossLoadFailure extends ProfitLossState {
   const ProfitLossLoadFailure({
-    required this.reason,
+    required this.error,
     required super.selectedPeriod,
   });
 
-  final ProfitLossUnavailableReason reason;
+  final BaseError error;
 
   @override
-  List<Object> get props => [reason, selectedPeriod];
+  List<Object> get props => [error, selectedPeriod];
 }
 
 final class PortfolioProfitLossChartUnsupported extends ProfitLossState {

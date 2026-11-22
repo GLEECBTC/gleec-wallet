@@ -81,32 +81,21 @@ Future<RollbackFixture> _write(String scenario) async {
       newPassword: rollbackNewPassword,
     );
   } else if (scenario.startsWith('rotation-')) {
-    // A change that fails in a running process is settled there and then.
-    // These fixtures are what a process that died at that boundary leaves
-    // behind, so everything persisted is put back as it stood on reaching it.
-    String? atInterruption;
-    void interrupted() => atInterruption = jsonEncode(fixture.toJson());
     if (scenario == 'rotation-vault-write') {
       fixture.backend.failWrite = true;
-      fixture.backend.onFailedWrite = interrupted;
     } else {
       fixture.auth.rotationFailure = scenario.split('-').last;
-      fixture.auth.onRotationFailure = interrupted;
     }
-    try {
-      await fixture.service.changePassword(
+    await expectLater(
+      fixture.service.changePassword(
         walletId: user.walletId,
         newPassword: rollbackNewPassword,
-      );
-    } on WalletAccessException {
-      // What the running process reported is not part of the fixture.
-    }
-    await fixture.service.dispose();
-    final died = RollbackFixture()
-      ..restore(jsonDecode(atInterruption!) as Map<String, dynamic>);
-    expect(_record(died).phase, 'rotating');
-    expect(_record(died).rotationEnvelope, isNotNull);
-    return died;
+      ),
+      throwsA(isA<WalletAccessException>()),
+    );
+    fixture.backend.failWrite = false;
+    expect(_record(fixture).phase, 'rotating');
+    expect(_record(fixture).rotationEnvelope, isNotNull);
   } else if (scenario == 'delete-after-engine') {
     final cleanup = WalletCredentialCleanup(fixture.storage, fixture.backend);
     await cleanup.prepare(_record(fixture), null);

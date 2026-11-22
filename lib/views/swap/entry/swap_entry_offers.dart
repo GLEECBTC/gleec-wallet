@@ -36,7 +36,6 @@ extension _SwapEntryOffers on _SwapEntryViewState {
     final watching = state.hints.watching;
     return [
       SwapHelperLine(
-        liveRegion: true,
         text: _noMarket(state)
             ? LocaleKeys.swapErrorNoMarket.tr(
                 args: [SwapFormat.ticker(orderBookOnly)],
@@ -131,7 +130,7 @@ extension _SwapEntryOffers on _SwapEntryViewState {
   }
 
   /// What the pair's offers take, before the pair is priced.
-  String? _offerRange(UnifiedSwapState state) {
+  SwapHelperLine? _offerRange(UnifiedSwapState state) {
     final pay = state.pay;
     final receive = state.receive;
     if (pay == null || receive == null || state.quotes != null) return null;
@@ -140,11 +139,13 @@ extension _SwapEntryOffers on _SwapEntryViewState {
     final maximum = offers?.maximum;
     if (minimum == null || maximum == null) return null;
     final ticker = SwapFormat.ticker(pay);
-    return LocaleKeys.swapHelperOffersRange.tr(
-      args: [
-        SwapFormat.tokens(minimum, ticker, rounding: SwapRounding.up),
-        SwapFormat.tokens(maximum, ticker, rounding: SwapRounding.down),
-      ],
+    return SwapHelperLine(
+      text: LocaleKeys.swapHelperOffersRange.tr(
+        args: [
+          SwapFormat.tokens(minimum, ticker, rounding: SwapRounding.up),
+          SwapFormat.tokens(maximum, ticker, rounding: SwapRounding.down),
+        ],
+      ),
     );
   }
 }

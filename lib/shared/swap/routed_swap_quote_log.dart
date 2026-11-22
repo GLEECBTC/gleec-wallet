@@ -1,8 +1,9 @@
 part of 'routed_swap_source.dart';
 
 /// One line per failed routed quote or catalog read, for the app's exportable
-/// log: which step failed, with its typed engine/provider cause. User-facing
-/// service failures remain neutral; diagnostic evidence identifies the cause.
+/// log: which step failed, in KDF's words. A provider that can't be reached
+/// and an approval that can't be estimated share a type and a copy, and only
+/// the words tell them apart.
 ///
 /// [DiagnosticSanitizer] drops a whole record over a bracket, a URL, a long
 /// hex run or a sensitive label, so KDF's text is cleaned first, and a line

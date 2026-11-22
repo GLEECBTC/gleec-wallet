@@ -51,16 +51,8 @@ extension TradingStatusStateX on TradingStatusState {
     return (this as TradingStatusLoadSuccess).disallowedAssets.contains(asset);
   }
 
-  /// Whether this location may trade [assets] at all: trading is on, and
-  /// none of them is restricted here. Which venue can trade them is another
-  /// question, and the order book's own rules are in [canTradeAssets].
-  bool isTradingPermitted(Iterable<AssetId?> assets) =>
-      isEnabled && !assets.whereType<AssetId>().any(isAssetBlocked);
-
-  /// Whether the order book may trade [assets] here: [isTradingPermitted],
-  /// and none is wallet-only or refused by the trading policy.
   bool canTradeAssets(Iterable<AssetId?> assets) {
-    if (!isTradingPermitted(assets)) return false;
+    if (!isEnabled) return false;
     // Filter out nulls - only check assets that are actually selected
     final nonNullAssets = assets.whereType<AssetId>().toList();
     final policy = this is TradingStatusLoadSuccess
@@ -78,7 +70,11 @@ extension TradingStatusStateX on TradingStatusState {
     } else if (nonNullAssets.any((asset) => !canTradeAssetId(asset))) {
       return false;
     }
-    return !nonNullAssets.any(_isWalletOnlyAsset);
+    for (final asset in nonNullAssets) {
+      if (_isWalletOnlyAsset(asset)) return false;
+      if (isAssetBlocked(asset)) return false;
+    }
+    return true;
   }
 
   bool _isWalletOnlyAsset(AssetId asset) {

@@ -93,38 +93,18 @@
         request.onblocked = () => reject(new VaultError('busy'));
         request.onsuccess = () => {
           request.result.onversionchange = () => { request.result.close(); database = null; };
-          // Browsers also close a connection on their own, as iOS Safari does
-          // to a backgrounded page. The next call must open a new one.
-          request.result.onclose = () => { database = null; };
           resolve(request.result);
         };
       }).catch((error) => { database = null; throw error; });
       return database;
     }
-    const begin = (db, mode) => {
-      try { return db.transaction(STORE_NAME, mode, { durability: 'strict' }); }
-      catch (error) {
-        // Only an engine without durability options is worth a plain retry;
-        // a closed connection refuses both forms.
-        if (error?.name === 'InvalidStateError') throw error;
-        return db.transaction(STORE_NAME, mode);
-      }
-    };
     async function transaction(mode, action, signal) {
-      let tx;
-      try { tx = begin(await open(), mode); }
-      catch (error) {
-        if (error?.name !== 'InvalidStateError') throw error;
-        // The cached connection was closed without a close event. Nothing has
-        // been read or written yet, so one fresh connection is safe to try.
-        database = null;
-        tx = begin(await open(), mode);
-      }
+      const db = await open();
       return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
-          try { tx.abort(); } catch (_) { /* Nothing was queued on it. */ }
-          reject(new VaultError('staleOperation')); return;
-        }
+        if (signal?.aborted) { reject(new VaultError('staleOperation')); return; }
+        let tx;
+        try { tx = db.transaction(STORE_NAME, mode, { durability: 'strict' }); }
+        catch (_) { tx = db.transaction(STORE_NAME, mode); }
         let result, failure;
         const abort = (code) => { failure = code; tx.abort(); };
         // Cancellation can arrive after the caller's generation check while
@@ -235,16 +215,6 @@
     let generation = 0;
     let operation = null;
     let requestedPersistence = false;
-    // A storage grant reduces eviction risk; it is never recovery or a backup
-    // guarantee. A browser can leave the request pending for as long as its
-    // permission prompt is ignored, so no vault operation ever waits for it.
-    const requestPersistence = () => {
-      if (requestedPersistence || !environment.navigator?.storage?.persist) return;
-      requestedPersistence = true;
-      try {
-        Promise.resolve(environment.navigator.storage.persist()).catch(() => {});
-      } catch (_) { /* Best effort. */ }
-    };
     // Deletion authorization stays in this process only. It contains no wallet
     // credential, survives no lock/reload, and is consumed before the CAS erase.
     const deletionPermits = new Map();
@@ -565,8 +535,7 @@
       },
       async write({ key, value, requireAuthentication = false }) {
         keyString(key); secretString(value);
-        let created = false;
-        await exclusive(async (token, signal) => {
+        return exclusive(async (token, signal) => {
           const expected = context();
           const previous = await store.get(key);
           if (previous) validateRecord(previous, key);
@@ -583,9 +552,14 @@
           const record = await encrypt({ schema: SCHEMA, key, origin: expected.origin,
             protection: 'browserLocal', revision: nextRevision(previous), unattendedKey: encryptionKey }, encryptionKey, value);
           await commit(previous, record, value, encryptionKey, token);
-          created = !previous;
+          if (!previous && !requestedPersistence && environment.navigator?.storage?.persist) {
+            requestedPersistence = true;
+            // A storage grant reduces eviction risk; it is never recovery or a
+            // backup guarantee. Keep any browser permission dialog serialized.
+            try { await environment.navigator.storage.persist(); } catch (_) { /* Best effort. */ }
+            assertOperation(token);
+          }
         });
-        if (created) requestPersistence();
       },
       async read({ key, requireAuthentication = false, trigger = 'explicit', purpose }) {
         keyString(key);

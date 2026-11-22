@@ -75,110 +75,6 @@ void main() {
     expect(bloc.state.review!.rejectionDetail, 'pair paused');
   });
 
-  for (final throws in [false, true]) {
-    swapBlocTest(
-      'a ${throws ? 'throwing' : 'refused'} consent write never dispatches and can be retried',
-      (h) {
-        final bloc = h.inReview();
-        h.storage.writeSucceeds = false;
-        h.storage.writeError = throws
-            ? StateError('storage unavailable')
-            : null;
-        bloc.add(const UnifiedSwapStartRequested());
-        h.settle();
-
-        expect(bloc.state.view, UnifiedSwapView.form);
-        expect(bloc.state.review, isNull);
-        expect(h.routedExecutor.started, isEmpty);
-        expect(h.registry.current, isEmpty);
-        expect(h.resolve(h.terms.hasAccepted()), isFalse);
-
-        h.storage.writeSucceeds = true;
-        h.storage.writeError = null;
-        // An abandoned confirmation needs a new, explicit review.
-        bloc.add(const UnifiedSwapReviewOpened());
-        h.settle();
-        expect(bloc.state.review!.status, SwapReviewStatus.ready);
-        expect(h.routedExecutor.started, isEmpty);
-        bloc.add(const UnifiedSwapStartRequested());
-        h.settle();
-        expect(h.routedExecutor.started, hasLength(1));
-        expect(h.resolve(h.terms.hasAccepted()), isTrue);
-      },
-    );
-  }
-
-  swapBlocTest('closing the form during revalidation cannot start a swap', (h) {
-    final bloc = h.inReview();
-    final pending = h.routed.requoteGate = Completer<void>();
-    bloc.add(const UnifiedSwapStartRequested());
-    h.settle();
-    expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
-
-    unawaited(bloc.close());
-    h.settle();
-    pending.complete();
-    h.settle();
-
-    expect(h.routedExecutor.started, isEmpty);
-    expect(h.registry.current, isEmpty);
-  });
-
-  swapBlocTest(
-    'a timed-out consent write cannot start when it later completes',
-    (h) {
-      final bloc = h.inReview();
-      final pending = h.termsGate = Completer<void>();
-      bloc.add(const UnifiedSwapStartRequested());
-      h.elapse(const Duration(seconds: 25));
-
-      expect(bloc.state.view, UnifiedSwapView.form);
-      expect(bloc.state.review, isNull);
-      expect(h.routedExecutor.started, isEmpty);
-      pending.complete();
-      h.settle();
-      expect(bloc.state.view, UnifiedSwapView.form);
-      expect(bloc.state.review, isNull);
-      expect(h.routedExecutor.started, isEmpty);
-      expect(h.resolve(h.terms.hasAccepted()), isFalse);
-    },
-  );
-
-  swapBlocTest('closing during consent persistence cannot dispatch a swap', (
-    h,
-  ) {
-    final bloc = h.inReview();
-    final pending = h.termsGate = Completer<void>();
-    bloc.add(const UnifiedSwapStartRequested());
-    h.settle();
-    // Consent is preparation; starting begins only at authenticated dispatch.
-    expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
-
-    unawaited(bloc.close());
-    h.settle();
-    pending.complete();
-    h.settle();
-
-    expect(h.routedExecutor.started, isEmpty);
-    expect(h.registry.current, isEmpty);
-  });
-
-  swapBlocTest('closing after dispatch keeps the execution discoverable', (h) {
-    final bloc = h.inReview();
-    final dispatched = h.routedExecutor.gate = Completer<void>();
-    bloc.add(const UnifiedSwapStartRequested());
-    h.settle();
-    expect(bloc.state.review!.status, SwapReviewStatus.starting);
-
-    unawaited(bloc.close());
-    h.settle();
-    dispatched.complete();
-    h.settle();
-
-    expect(h.routedExecutor.started, hasLength(1));
-    expect(h.registry.current, hasLength(1));
-  });
-
   group('re-priced costs', () {
     swapBlocTest('a rise under fifty cents starts without asking', (h) {
       startAgainst(
@@ -283,7 +179,6 @@ void main() {
       });
 
       swapBlocTest('asks again for a fee in another token', (h) {
-        h.balances[gleec] = d('2');
         final bloc = startUnpriced(
           h,
           before: inBtc('0.001'),
@@ -434,7 +329,7 @@ void main() {
       h.settle();
 
       expect((bloc.state.pay, bloc.state.receive), (null, null));
-      expect(bloc.state.amountMode, SwapAmountMode.fiat);
+      expect(bloc.state.amountMode, SwapAmountMode.token);
       expect(bloc.state.inputText, isEmpty);
       expect(bloc.state.balance, isNull);
     });

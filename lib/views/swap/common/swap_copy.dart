@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -138,32 +137,18 @@ class SwapExecutionCopy {
         : snapshot.fundsMovement;
   }
 
-  /// "0.42 ETH → ≈ 1,318.42 USDT" while it runs: what arrives is an estimate
-  /// until it has. Once finished, what did arrive; the tickers alone when
-  /// amounts are unknown. Two assets sharing a ticker are told apart by
-  /// their networks: "100 USDC on Ethereum → ≈ 99.8 USDC on Arbitrum".
+  /// "0.42 ETH → 1,318.42 USDT", or the tickers when amounts are unknown.
   String get pairLine {
     final sell = snapshot.sellAmount;
-    final estimated = !snapshot.isTerminal;
-    final receive = estimated
-        ? snapshot.expectedReceive ?? snapshot.minimumReceive
-        : snapshot.outcome?.receivedAmount;
-    final sameTicker = fromTicker == toTicker;
-    final fromUnit = sameTicker
-        ? _onNetwork(fromTicker, snapshot.from, fromNetwork)
-        : fromTicker;
-    final toUnit = sameTicker
-        ? _onNetwork(toTicker, snapshot.to, toNetwork)
-        : toTicker;
-    final left = sell == null ? fromUnit : SwapFormat.tokens(sell, fromUnit);
-    final amount = receive == null
-        ? null
-        : SwapFormat.amount(receive, rounding: SwapRounding.down);
-    final right = amount == null
-        ? toUnit
-        : estimated
-        ? LocaleKeys.swapApproxToken.tr(args: [amount, toUnit])
-        : '$amount $toUnit';
+    final receive = snapshot.isTerminal
+        ? snapshot.outcome?.receivedAmount
+        : snapshot.expectedReceive ?? snapshot.minimumReceive;
+    final left = sell == null
+        ? fromTicker
+        : SwapFormat.tokens(sell, fromTicker);
+    final right = receive == null
+        ? toTicker
+        : SwapFormat.tokens(receive, toTicker, rounding: SwapRounding.down);
     return LocaleKeys.swapActivityPair.tr(
       args: [
         left,
@@ -174,17 +159,6 @@ class SwapExecutionCopy {
             : right,
       ],
     );
-  }
-
-  /// [ticker] with the network it is on, when the network is known. SegWit
-  /// shares both with the legacy coin, so it says which it is.
-  String _onNetwork(String ticker, AssetId? asset, String network) {
-    final name = asset != null && asset.isSegwit
-        ? SwapFormat.network(asset, networks)
-        : network;
-    return name.isEmpty || name == ticker
-        ? ticker
-        : SwapFormat.onNetwork(ticker, name);
   }
 
   /// What the received token is called.

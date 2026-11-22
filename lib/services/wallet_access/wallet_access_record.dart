@@ -51,21 +51,7 @@ class WalletAccessRecord {
   final bool generated;
   final PasswordManagerOutcome manager;
   final String? rotationEnvelope;
-  String get credentialKey => credentialKeyFor(entryId);
-  static String credentialKeyFor(String entryId) => 'gleec.wallet.$entryId';
-
-  /// The record stored under [key], or null when this build cannot read it:
-  /// damaged, or written by a later build and met again after a rollback.
-  static WalletAccessRecord? tryParse(String key, Object? value) {
-    try {
-      final record = WalletAccessRecord.fromJson(
-        Map<String, dynamic>.from(value as Map),
-      );
-      return record.entryId == key ? record : null;
-    } on Object {
-      return null;
-    }
-  }
+  String get credentialKey => 'gleec.wallet.$entryId';
 
   WalletAccessRecord copyWith({
     String? walletName,

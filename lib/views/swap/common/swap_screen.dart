@@ -26,24 +26,15 @@ class SwapScreen extends StatefulWidget {
 
 class _SwapScreenState extends State<SwapScreen> {
   final FocusNode _heading = FocusNode(debugLabel: 'SwapScreen heading');
-  bool _visible = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final visible = TickerMode.valuesOf(context).enabled;
-    // The form stays mounted behind review/progress. Returning to it is an
-    // arrival too, but a quote update while typing is not.
-    if (visible && !_visible) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _arrive());
-    }
-    _visible = visible;
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _arrive());
   }
 
   void _arrive() {
-    if (!mounted || !_visible || !(ModalRoute.of(context)?.isCurrent ?? true)) {
-      return;
-    }
+    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
     if (swapFocusLost()) _heading.requestFocus();
   }
 

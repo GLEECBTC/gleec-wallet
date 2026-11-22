@@ -15,7 +15,6 @@ import 'package:web_dex/views/swap/common/swap_buttons.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_status_widgets.dart';
-import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 /// An asset's logo with its network badge, or a ticker monogram when the
 /// asset is not one the wallet knows.
@@ -188,7 +187,7 @@ class _SwapCopyLineState extends State<SwapCopyLine> {
   }
 }
 
-/// A placeholder with one brief shimmer burst, then a quiet waiting state.
+/// A shimmering placeholder. Still when the platform asks for less motion.
 class SwapSkeleton extends StatefulWidget {
   const SwapSkeleton({this.height = 18, this.widthFactor = 1, super.key});
 
@@ -205,39 +204,19 @@ class _SwapSkeletonState extends State<SwapSkeleton>
     vsync: this,
     duration: const Duration(milliseconds: 1400),
   );
-  late final AppLifecycleListener _lifecycle;
-  bool _played = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _lifecycle = AppLifecycleListener(onStateChange: (_) => _syncMotion());
-  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncMotion();
-  }
-
-  void _syncMotion() {
-    if (!mounted) return;
-    final state = WidgetsBinding.instance.lifecycleState;
-    final active =
-        TickerMode.valuesOf(context).enabled &&
-        (state == null || state == AppLifecycleState.resumed);
-    if (!active || !SwapMotion.enabled(context)) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       _controller.stop();
-    } else if (!_played) {
-      _played = true;
-      // Two 1.4-second passes finish inside the three-second feedback window.
-      _controller.repeat(count: 2);
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
     }
   }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -303,7 +282,6 @@ class _SwapDetailsState extends State<SwapDetails> {
         border: Border.all(color: palette.controlBorder),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Semantics(
@@ -329,7 +307,9 @@ class _SwapDetailsState extends State<SwapDetails> {
                       ),
                       AnimatedRotation(
                         turns: _expanded ? 0.5 : 0,
-                        duration: SwapMotion.of(context, SwapMotion.details),
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
                         child: Icon(
                           Icons.expand_more_rounded,
                           color: palette.textSecondary,
@@ -341,20 +321,14 @@ class _SwapDetailsState extends State<SwapDetails> {
               ),
             ),
           ),
-          ClipRect(
-            child: SwapSmoothSize(
-              duration: SwapMotion.details,
-              child: _expanded
-                  ? Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: widget.children,
-                      ),
-                    )
-                  : const SizedBox(width: double.infinity),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: widget.children,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -377,8 +351,9 @@ class SwapDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelText = Text(label, style: SwapText.body(context));
-    final valueStyle = SwapText.strong(context)
-        .copyWith(color: valueColor, fontWeight: FontWeight.w700);
+    final valueStyle = SwapText.strong(
+      context,
+    ).copyWith(color: valueColor, fontWeight: FontWeight.w700);
     return MergeSemantics(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),

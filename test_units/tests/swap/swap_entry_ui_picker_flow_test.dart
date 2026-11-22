@@ -15,7 +15,6 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -46,7 +45,6 @@ void main() {
     UnifiedSwapState state, {
     bool panelOpen = false,
     List<BlocProvider> providers = const [],
-    bool settle = true,
   }) async {
     swap.emit(state);
     await pumpSwapUi(
@@ -55,7 +53,6 @@ void main() {
       bloc: swap,
       services: services,
       providers: providers,
-      settle: settle,
     );
   }
 
@@ -241,7 +238,7 @@ void main() {
       await open(tester, payPill);
 
       expect(find.text('BTC'), findsWidgets);
-      expect(find.text('Not active'), findsNothing);
+      expect(find.text('Not active'), findsOneWidget);
     });
   });
 
@@ -254,7 +251,6 @@ void main() {
         loadingAssets: true,
         catalog: SwapCatalog.empty,
       ),
-      settle: false,
     );
     await tester.tap(payPill);
     await tester.pump();

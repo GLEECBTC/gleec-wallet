@@ -7,7 +7,8 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
     AssetId to,
     Decimal balance,
   ) async {
-    if (!_canTradePair(from, to) ||
+    if (!canTrade(from) ||
+        !canTrade(to) ||
         (_tradingAllowed != null && !_tradingAllowed(from, to))) {
       return null;
     }
@@ -22,10 +23,9 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
             onError: (Object _) => null,
           );
       final book = _readOffers(from, to);
-      final precision = _spendDecimals(from);
       final max = await response;
       if (max == null) return null;
-      final decimals = await precision;
+      final decimals = from.chainId.decimals;
       // KDF's figures seldom end within the asset's decimals.
       Decimal sellableOf(Decimal value) {
         final kept = value < Decimal.zero ? Decimal.zero : value;
@@ -51,21 +51,6 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
         offerLimit: fillable != null && fillable < sellable,
         coversRefund: !isSolanaTradingAsset(from) && !isSolanaTradingAsset(to),
       );
-    } on Object {
-      return null;
-    }
-  }
-
-  /// The decimals the form holds an amount of [asset] to: those its config
-  /// declares, else the resolved ones. Most UTXO coins declare none. Null
-  /// when neither is known, which leaves KDF's figure as it is.
-  Future<int?> _spendDecimals(AssetId asset) async {
-    bool valid(int? value) => value != null && value >= 0 && value <= 255;
-    final declared = asset.chainId.decimals;
-    if (valid(declared)) return declared;
-    try {
-      final resolved = await _spendDecimalsOf?.call(asset);
-      return valid(resolved) ? resolved : null;
     } on Object {
       return null;
     }

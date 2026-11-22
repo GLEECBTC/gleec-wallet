@@ -56,30 +56,17 @@ class _SwapPulseState extends State<SwapPulse>
   late final AnimationController _controller = AnimationController(vsync: this);
   bool _started = false;
   int _beats = 1;
-  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
     assert(widget.burst <= const Duration(seconds: 5));
-    _lifecycle = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state != AppLifecycleState.resumed) _stop();
-      },
-    );
-  }
-
-  bool get _canPlay {
-    final state = WidgetsBinding.instance.lifecycleState;
-    return SwapMotion.enabled(context) &&
-        TickerMode.valuesOf(context).enabled &&
-        (state == null || state == AppLifecycleState.resumed);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_canPlay) {
+    if (!SwapMotion.enabled(context)) {
       _stop();
     } else if (!_started && widget.onMount) {
       _play();
@@ -99,7 +86,7 @@ class _SwapPulseState extends State<SwapPulse>
   }
 
   void _play() {
-    if (!widget.active || !_canPlay) return;
+    if (!widget.active || !SwapMotion.enabled(context)) return;
     _beats = widget.beats;
     _controller
       ..duration = widget.burst
@@ -114,7 +101,6 @@ class _SwapPulseState extends State<SwapPulse>
 
   @override
   void dispose() {
-    _lifecycle.dispose();
     _controller.dispose();
     super.dispose();
   }
