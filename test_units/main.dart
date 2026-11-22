@@ -261,6 +261,10 @@ import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_atomic_exact_price_test.dart'
     as swap_atomic_exact_price_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
+import 'tests/swap/swap_surface_ui_waiting_test.dart'
+    as swap_surface_ui_waiting_test;
+import 'tests/swap/swap_ux_capture_test.dart' as swap_ux_capture_test;
+import 'tests/swap/wallet_swap_status_test.dart' as wallet_swap_status_test;
 import 'tests/swap/swap_bloc_preparation_test.dart'
     as swap_bloc_preparation_test;
 import 'tests/swap/swap_bloc_stream_test.dart' as swap_bloc_stream_test;
@@ -857,6 +861,9 @@ void main() {
   swap_slippage_test.main();
   swap_route_alias_test.main();
   swap_widgets_test.main();
+  swap_ux_capture_test.main();
+  wallet_swap_status_test.main();
+  group('swap_surface_ui_waiting_test', swap_surface_ui_waiting_test.main);
   swap_bloc_preparation_test.main();
   swap_bloc_stream_test.main();
   swap_preferences_mode_test.main();

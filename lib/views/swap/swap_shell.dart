@@ -236,7 +236,8 @@ class _SwapScopeState extends State<_SwapScope> {
       ..add(tradingStatus.stream.listen((_) => _publishCapabilities()))
       ..add(systemHealth.stream.listen((_) => _publishCapabilities()))
       ..add(_services.intents.listen((_) => _applyPendingIntent()))
-      ..add(_services.openRequests.listen((_) => _openPending()));
+      ..add(_services.openRequests.listen((_) => _openPending()))
+      ..add(_services.activityRequests.listen((_) => _openPendingActivity()));
     if (auth != null) {
       _subscriptions.add(auth.stream.listen((_) => _publishCapabilities()));
     }
@@ -258,6 +259,7 @@ class _SwapScopeState extends State<_SwapScope> {
     final routeApplied = _applyRouteIntent(force: false);
     if (!intentApplied && !routeApplied) _restoreDraft();
     _openPending();
+    _openPendingActivity();
     if (widget.controller.destination == SwapDestination.activity) {
       _showActivity();
     }
@@ -395,6 +397,10 @@ class _SwapScopeState extends State<_SwapScope> {
     final ref = _services.takePendingOpen();
     if (ref == null) return;
     widget.controller.showActivity(swap: ref);
+  }
+
+  void _openPendingActivity() {
+    if (_services.takePendingActivity()) widget.controller.showActivity();
   }
 
   @override

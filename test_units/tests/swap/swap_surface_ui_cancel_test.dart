@@ -178,7 +178,7 @@ void main() {
       ),
       'a peer-to-peer exchange': (
         const SwapCancelRefusedException(SwapCancelRefusal.notSupported),
-        "A peer-to-peer exchange can't be stopped once matched. If the other "
+        "A peer-to-peer swap can't be stopped once matched. If the other "
             "side doesn't complete, your funds are refunded automatically.",
       ),
       'the answer was lost': (

@@ -177,7 +177,10 @@ Future<void> _testSwapHistoryTable(
   final historyItem = find.descendant(
     of: find.byType(HistoryList),
     matching: find.byWidgetPredicate(
-      (widget) => widget is HistoryItem && widget.swap.uuid == swapUuid,
+      (widget) =>
+          widget is HistoryItem &&
+          widget.swap.uuid == swapUuid &&
+          widget.swap.isSuccessful,
     ),
   );
   await tester.pumpUntilFound(

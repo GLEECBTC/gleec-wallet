@@ -44,6 +44,7 @@ import 'package:web_dex/views/dex/dex_helpers.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_swap_status.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/assets_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_handler.dart'
     show ZhtlcConfigurationHandler;
@@ -217,6 +218,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                             onAssetsPressed: () => _tabController.animateTo(0),
                           ),
                         ),
+                        const SliverToBoxAdapter(child: WalletSwapStatus()),
                         if (authState.currentUser?.wallet.isHW == false)
                           SliverToBoxAdapter(
                             child: _WalletSetupReminder(
