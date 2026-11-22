@@ -261,6 +261,12 @@ import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_atomic_exact_price_test.dart'
     as swap_atomic_exact_price_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
+import 'tests/swap/swap_bloc_preparation_test.dart'
+    as swap_bloc_preparation_test;
+import 'tests/swap/swap_bloc_stream_test.dart' as swap_bloc_stream_test;
+import 'tests/swap/swap_preferences_mode_test.dart'
+    as swap_preferences_mode_test;
+import 'tests/swap/swap_quote_stream_test.dart' as swap_quote_stream_test;
 import 'tests/swap/unified_swap_bloc_test.dart' as unified_swap_bloc_test;
 import 'tests/swap/unified_swap_catalog_bloc_test.dart'
     as unified_swap_catalog_bloc_test;
@@ -846,6 +852,10 @@ void main() {
   swap_slippage_test.main();
   swap_route_alias_test.main();
   swap_widgets_test.main();
+  swap_bloc_preparation_test.main();
+  swap_bloc_stream_test.main();
+  swap_preferences_mode_test.main();
+  swap_quote_stream_test.main();
   swap_accessibility_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();

@@ -6,6 +6,7 @@ class UnifiedSwapQuotes extends Equatable {
     required this.ranked,
     required this.unrankable,
     required this.failures,
+    this.comparisonComplete = true,
   });
 
   /// Options that could be compared on net return, best first.
@@ -21,6 +22,10 @@ class UnifiedSwapQuotes extends Equatable {
   /// useful thing to tell the user, and "no aggregator lists this asset" needs
   /// very different copy from "no one is trading it right now".
   final List<SwapQuoteFailure> failures;
+
+  /// False while another source or a price read can change the comparison.
+  /// Available quotes may already be usable; a best-return claim must wait.
+  final bool comparisonComplete;
 
   /// Every option, ranked ones first.
   List<SwapQuote> get options => [...ranked, ...unrankable];
@@ -41,7 +46,8 @@ class UnifiedSwapQuotes extends Equatable {
 
   /// Whether "best net return" may be claimed for the top option: only when
   /// at least two options were comparable.
-  bool get canClaimBestNetReturn => ranked.length >= 2;
+  bool get canClaimBestNetReturn =>
+      comparisonComplete && unrankable.isEmpty && ranked.length >= 2;
 
   /// Whether several options exist, so comparison is worth offering.
   bool get hasAlternatives => options.length > 1;
@@ -120,5 +126,5 @@ class UnifiedSwapQuotes extends Equatable {
   }
 
   @override
-  List<Object?> get props => [ranked, unrankable, failures];
+  List<Object?> get props => [ranked, unrankable, failures, comparisonComplete];
 }

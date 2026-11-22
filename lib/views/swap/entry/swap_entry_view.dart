@@ -346,6 +346,16 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         state.evaluation != SwapEvaluationStatus.failed) {
       return connect;
     }
+    if (state.preparingAssets) {
+      return (LocaleKeys.swapHelperLoadingAssets.tr(), null, true);
+    }
+    if (state.preparationFailedAsset != null) {
+      return (
+        LocaleKeys.tryAgain.tr(),
+        () => _bloc.add(const UnifiedSwapPreparationRetried()),
+        false,
+      );
+    }
     if (issue == SwapFormIssue.assetInactive) {
       final asset = state.inactiveAsset!;
       return (

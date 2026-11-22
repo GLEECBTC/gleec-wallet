@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart' show RpcDispatchGuard;
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show RpcDispatchGuard, RpcDispatchRejected;
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -34,7 +35,6 @@ class RoutedSwapExecutor implements SwapExecutor {
     SwapQuote quote, {
     required SwapExecutionAuthorization authorization,
   }) async {
-    final permit = WalletOperationGate.instance.capture();
     final offer = quote.payload;
     if (offer is! RoutedSwapOffer) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
@@ -49,16 +49,27 @@ class RoutedSwapExecutor implements SwapExecutor {
     }
     final startedAt = _now();
     final RoutedSwapHandle handle;
+    var dispatching = false;
     try {
+      final permit = WalletOperationGate.instance.capture();
       handle = await manager.start(
         offer,
         beforeDispatch: () {
           permit.ensureCurrent();
           authorization.beforeDispatch();
+          dispatching = true;
         },
       );
     } on RoutedSwapStartUnconfirmedException catch (error) {
       throw SwapStartUnconfirmedException(error.cause, taskId: error.taskId);
+    } on WalletOperationDenied catch (error) {
+      // The lock is read only on the way to the request, so nothing was
+      // sent. Past that boundary a refusal could hide a start.
+      if (dispatching) throw SwapStartUnconfirmedException(error);
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
+    } on RpcDispatchRejected {
+      // The SDK's transport raises this in place of sending, never after.
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
     } on AuthSessionChangedException {
       // Thrown before anything is sent. A change once the engine has been
       // asked arrives as unconfirmed, above.

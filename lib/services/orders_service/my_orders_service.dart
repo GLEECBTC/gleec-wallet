@@ -77,7 +77,8 @@ class MyOrdersService {
       CancelOrderRequest(uuid: uuid),
       beforeMutation: beforeMutation,
     );
-    return response['error'];
+    final error = response['error'];
+    return error == null ? null : '$error';
   }
 
   TakerOrderCancellationReason _getTakerOrderCancellationReason(String reason) {

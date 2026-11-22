@@ -400,7 +400,13 @@ void main() {
   });
 
   testWidgets('a priced swap opens the review', (tester) async {
-    await pump(tester, swapPricedForm());
+    await pump(
+      tester,
+      swapPricedForm().copyWith(
+        payAddress: 'own-pay',
+        receiveAddress: 'own-receive',
+      ),
+    );
 
     expect(swapPrimaryLabel(tester), 'Review swap');
     await press(tester);
@@ -435,9 +441,8 @@ void main() {
     ) async {
       await pump(
         tester,
-        swapBaseForm(
-          input: '1.2.3',
-        ).copyWith(issue: SwapFormIssue.amountMalformed),
+        swapBaseForm(input: '1.2.3')
+            .copyWith(issue: SwapFormIssue.amountMalformed),
       );
 
       expect(find.text('Enter a valid number.'), findsOneWidget);

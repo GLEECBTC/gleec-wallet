@@ -2176,4 +2176,6 @@ abstract class LocaleKeys {
       'authDeviceUnlockOffDescription';
   static const authPasskeyOffTitle = 'authPasskeyOffTitle';
   static const authPasskeyOffDescription = 'authPasskeyOffDescription';
+  static const swapAssetPreparationUnavailable =
+      'swapAssetPreparationUnavailable';
 }
