@@ -2178,4 +2178,30 @@ abstract class LocaleKeys {
   static const authPasskeyOffDescription = 'authPasskeyOffDescription';
   static const swapAssetPreparationUnavailable =
       'swapAssetPreparationUnavailable';
+  static const swapAvailabilityChecking = 'swapAvailabilityChecking';
+  static const swapAvailabilityUnavailable = 'swapAvailabilityUnavailable';
+  static const swapPreparingAssets = 'swapPreparingAssets';
+  static const swapCheckingFunds = 'swapCheckingFunds';
+  static const swapQuoteSlow = 'swapQuoteSlow';
+  static const swapEstimateUpdating = 'swapEstimateUpdating';
+  static const swapEstimatePlaceholder = 'swapEstimatePlaceholder';
+  static const swapMoreQuotesChecking = 'swapMoreQuotesChecking';
+  static const swapNetworkFilter = 'swapNetworkFilter';
+  static const swapAllNetworks = 'swapAllNetworks';
+  static const swapReviewPeerToPeer = 'swapReviewPeerToPeer';
+  static const swapConfirmSwap = 'swapConfirmSwap';
+  static const swapBetterOptionAvailable = 'swapBetterOptionAvailable';
+  static const swapPreviousEstimate = 'swapPreviousEstimate';
+  static const swapLegalConsentCompact = 'swapLegalConsentCompact';
+  static const swapReviewToWallet = 'swapReviewToWallet';
+  static const swapReviewSameWallet = 'swapReviewSameWallet';
+  static const swapReviewCostsUnknownNote = 'swapReviewCostsUnknownNote';
+  static const swapReviewUpdatedIntro = 'swapReviewUpdatedIntro';
+  static const swapReviewUpdatedFallback = 'swapReviewUpdatedFallback';
+  static const swapReviewUpdatedSpoken = 'swapReviewUpdatedSpoken';
+  static const swapAmountToPayIn = 'swapAmountToPayIn';
+  static const swapAmountToPayInUsd = 'swapAmountToPayInUsd';
+  static const swapA11yNoEstimate = 'swapA11yNoEstimate';
+  static const swapA11yReceiveEstimate = 'swapA11yReceiveEstimate';
+  static const swapA11yReceiveEstimateUsd = 'swapA11yReceiveEstimateUsd';
 }

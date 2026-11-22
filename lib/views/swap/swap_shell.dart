@@ -155,9 +155,12 @@ class _SwapShellState extends State<SwapShell> {
     if (widget.destinationBuilder != null) return shell;
     // The form reads its catalog and default pair at start, so signing in or
     // out needs a new one.
-    final signedIn = context.select<AuthBloc?, bool>(_isSignedIn);
+    final walletSession = context.select<AuthBloc?, (bool, String?)>(
+      (auth) =>
+          (_isSignedIn(auth), auth?.state.currentUser?.walletId.compoundId),
+    );
     return _SwapScope(
-      key: ValueKey(signedIn),
+      key: ValueKey(walletSession),
       controller: _controller,
       child: shell,
     );
@@ -182,6 +185,7 @@ class _SwapScope extends StatefulWidget {
 
 class _SwapScopeState extends State<_SwapScope> {
   late final SwapServices _services = context.read<SwapServices>();
+  late final Object _draftSession;
   late final UnifiedSwapBloc _swap;
   late final SwapActivityBloc _activity;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -196,6 +200,7 @@ class _SwapScopeState extends State<_SwapScope> {
   @override
   void initState() {
     super.initState();
+    _draftSession = _services.draftSession;
     final tradingStatus = context.read<TradingStatusBloc>();
     final systemHealth = context.read<SystemHealthBloc>();
     final auth = context.read<AuthBloc?>();
@@ -203,6 +208,9 @@ class _SwapScopeState extends State<_SwapScope> {
     _swap =
         UnifiedSwapBloc(
             repository: _services.createRepository(
+              // Whether this location may swap the pair at all. The order
+              // book applies its own wallet-only rule; a route is not bound
+              // by it, and neither rule is about location.
               tradingAllowed: (from, to) =>
                   tradingStatus.state.isTradingPermitted([from, to]),
               clockValid: () => _clockValid(systemHealth.state),
@@ -246,8 +254,9 @@ class _SwapScopeState extends State<_SwapScope> {
 
     widget.controller.addListener(_onDestinationChanged);
     routingState.dexState.addListener(_onRouteChanged);
-    _applyPendingIntent();
-    _applyRouteIntent(force: false);
+    final intentApplied = _applyPendingIntent();
+    final routeApplied = _applyRouteIntent(force: false);
+    if (!intentApplied && !routeApplied) _restoreDraft();
     _openPending();
     if (widget.controller.destination == SwapDestination.activity) {
       _showActivity();
@@ -266,6 +275,18 @@ class _SwapScopeState extends State<_SwapScope> {
 
   @override
   void dispose() {
+    final state = _swap.state;
+    final unsigned =
+        state.view != UnifiedSwapView.progress &&
+        state.review?.status != SwapReviewStatus.starting &&
+        state.review?.status != SwapReviewStatus.unconfirmed;
+    _services.rememberDraft(_draftSession, (
+      pay: state.pay?.id,
+      receive: state.receive?.id,
+      input: unsigned ? state.inputText : '',
+      fiat: state.amountMode == SwapAmountMode.fiat,
+      slippage: state.slippage,
+    ));
     _lifecycle.dispose();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
@@ -320,9 +341,9 @@ class _SwapScopeState extends State<_SwapScope> {
     });
   }
 
-  void _applyPendingIntent() {
+  bool _applyPendingIntent() {
     final intent = _services.takePendingIntent();
-    if (intent == null) return;
+    if (intent == null) return false;
     _swap.add(
       UnifiedSwapIntentApplied(
         pay: intent.pay,
@@ -332,18 +353,33 @@ class _SwapScopeState extends State<_SwapScope> {
       ),
     );
     widget.controller.show(SwapDestination.swap);
+    return true;
+  }
+
+  void _restoreDraft() {
+    final draft = _services.draftFor(_draftSession);
+    if (draft == null) return;
+    _swap.add(
+      UnifiedSwapDraftRestored(
+        pay: draft.pay,
+        receive: draft.receive,
+        input: draft.input,
+        amountMode: draft.fiat ? SwapAmountMode.fiat : SwapAmountMode.token,
+        slippage: draft.slippage,
+      ),
+    );
   }
 
   /// Applies `/dex?from_currency=…&to_currency=…&from_amount=…`. On mount the
   /// same link is applied once only; a fresh navigation always applies.
-  void _applyRouteIntent({required bool force}) {
+  bool _applyRouteIntent({required bool force}) {
     final dex = routingState.dexState;
-    if (dex.orderType == 'maker' || dex.isTradingDetails) return;
+    if (dex.orderType == 'maker' || dex.isTradingDetails) return false;
     final pay = dex.fromCurrency;
     final receive = dex.toCurrency;
-    if (pay.isEmpty && receive.isEmpty) return;
+    if (pay.isEmpty && receive.isEmpty) return false;
     final signature = '$pay|$receive|${dex.fromAmount}';
-    if (!force && _services.lastRouteIntent == signature) return;
+    if (!force && _services.lastRouteIntent == signature) return false;
     _services.lastRouteIntent = signature;
     _swap.add(
       UnifiedSwapIntentApplied(
@@ -352,6 +388,7 @@ class _SwapScopeState extends State<_SwapScope> {
         amount: dex.fromAmount.isEmpty ? null : dex.fromAmount,
       ),
     );
+    return true;
   }
 
   void _openPending() {

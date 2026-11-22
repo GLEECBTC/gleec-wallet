@@ -27,9 +27,11 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/entry/swap_sign_in.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_entry_messages.dart';
 part 'swap_entry_offers.dart';
+part 'swap_entry_feedback.dart';
 
 /// The swap form: what to pay, what to receive, and the best way to do it.
 class SwapEntryView extends StatefulWidget {
@@ -51,13 +53,6 @@ class SwapEntryView extends StatefulWidget {
 }
 
 class _SwapEntryViewState extends State<SwapEntryView> {
-  bool _activating = false;
-
-  /// The asset that last failed to activate. Said under the cards rather
-  /// than in a snack bar, which on a phone would cover the pinned button
-  /// that tries again.
-  AssetId? _activationFailed;
-
   UnifiedSwapBloc get _bloc => context.read<UnifiedSwapBloc>();
   SwapServices get _services => context.read<SwapServices>();
 
@@ -72,7 +67,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
 
   bool _isBlocked(AssetId asset) {
     try {
-      return context.read<TradingStatusBloc>().state.isAssetBlocked(asset);
+      final status = context.read<TradingStatusBloc>().state;
+      return status is TradingStatusLoadSuccess &&
+          status.disallowedAssets.contains(asset);
     } on Object {
       return false;
     }
@@ -97,22 +94,10 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     );
   }
 
-  Future<void> _activate(AssetId asset) async {
-    setState(() {
-      _activating = true;
-      _activationFailed = null;
-    });
-    try {
-      await _services.activate(asset);
-      if (!mounted) return;
-      _bloc.add(UnifiedSwapAssetActivated(asset));
-    } on Object {
-      if (!mounted) return;
-      setState(() => _activationFailed = asset);
-    } finally {
-      if (mounted) setState(() => _activating = false);
-    }
-  }
+  void _retryPreparation() => _bloc.add(const UnifiedSwapPreparationRetried());
+
+  void _retryAvailability() =>
+      context.read<TradingStatusBloc>().add(TradingStatusCheckRequested());
 
   void _openWalletManager() => unawaited(connectWalletFromSwap(context));
 
@@ -156,12 +141,17 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         final receive = state.receive;
         final price = pay == null ? null : _services.usdPrice(pay);
         final compact = SwapGeometry.isCompact(context);
+        // The review beside the form has new terms. The form's figures are
+        // the ones it replaced, so they must not read as current.
+        final stale =
+            widget.panelOpen &&
+            state.review?.status == SwapReviewStatus.materialUpdate;
 
         final cards = Semantics(
           container: true,
           explicitChildNodes: true,
           child: SwapCardPair(
-            gap: compact ? 20 : 32,
+            gap: compact ? 12 : 24,
             top: Semantics(
               sortKey: const OrdinalSortKey(0),
               child: SwapPayCard(
@@ -185,12 +175,18 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                   }
                 },
                 onPickAsset: () => _pick(SwapPickerSide.pay),
+                onSubmitted: () {
+                  if (_bloc.state.canReview) {
+                    _bloc.add(const UnifiedSwapReviewOpened());
+                  }
+                },
               ),
             ),
             bottom: Semantics(
               sortKey: const OrdinalSortKey(2),
               child: SwapReceiveCard(
                 state: state,
+                previousEstimate: stale,
                 network: receive == null
                     ? null
                     : SwapFormat.network(receive, networks),
@@ -214,10 +210,6 @@ class _SwapEntryViewState extends State<SwapEntryView> {
           ),
         );
 
-        final quote = state.selectedQuote;
-        final checking =
-            state.evaluation == SwapEvaluationStatus.checking &&
-            state.quotes == null;
         return SwapScreen(
           // A phone keeps the main action pinned above the keyboard and the
           // bottom of the screen; a wider window pins it once the form runs
@@ -235,41 +227,23 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                   // The selected tab already names the screen.
                   SwapPageHeading(title: LocaleKeys.swap.tr(), visible: false),
                   if (!state.tradingEnabled) ...[
-                    SwapCallout(
-                      tone: SwapTone.warning,
-                      message: state.hardwareWallet
-                          ? LocaleKeys.trezorWalletOnlyNotice.tr()
-                          : LocaleKeys.tradingDisabled.tr(),
-                    ),
-                    const SizedBox(height: 14),
+                    _EntryAvailability(state: state),
+                    const SizedBox(height: 10),
                   ],
                   cards,
-                  ..._messages(context, state),
-                  if (_activationFailed case final failed?
-                      when failed == pay || failed == receive)
+                  // Under the cards it explains, and above the figures the
+                  // review may take away, so their going moves nothing.
+                  if (widget.panelOpen)
                     SwapHelperLine(
-                      text: LocaleKeys.swapPickerActivationFailed.tr(
-                        args: [SwapFormat.ticker(failed)],
-                      ),
-                      tone: SwapTone.danger,
+                      text: LocaleKeys.swapReviewPanelNote.tr(),
+                      liveRegion: false,
                     ),
-                  if (checking) ...[
-                    const SizedBox(height: 14),
-                    const SwapSkeleton(widthFactor: 0.68),
-                    const SizedBox(height: 8),
-                    const SwapSkeleton(widthFactor: 0.45),
-                  ],
-                  if (quote != null) ...[
-                    SwapQuoteStrip(
-                      state: state,
-                      onCompare: () => showSwapOptionsSheet(context, _bloc),
-                    ),
-                    SwapRateLine(quote: quote),
-                  ],
-                  if (widget.panelOpen) ...[
-                    const SizedBox(height: 14),
-                    SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr()),
-                  ],
+                  _EntryQuoteArea(
+                    state: state,
+                    lines: _lines(state, stale: stale),
+                    stale: stale,
+                    onCompare: () => showSwapOptionsSheet(context, _bloc),
+                  ),
                   if (inlineAction != null) ...[
                     const SizedBox(height: 14),
                     inlineAction,
@@ -295,13 +269,16 @@ class _SwapEntryViewState extends State<SwapEntryView> {
 
   (String, VoidCallback?, bool) _cta(UnifiedSwapState state) {
     if (!state.tradingEnabled) {
-      return (
-        state.hardwareWallet
-            ? LocaleKeys.swapCtaUnavailable.tr()
-            : LocaleKeys.tradingDisabled.tr(),
-        null,
-        false,
-      );
+      if (state.hardwareWallet) {
+        return (LocaleKeys.swapCtaUnavailable.tr(), null, false);
+      }
+      if (state.tradingStatusLoading) {
+        return ('swapAvailabilityChecking'.tr(), null, true);
+      }
+      if (state.tradingStatusUnavailable) {
+        return (LocaleKeys.tryAgain.tr(), _retryAvailability, false);
+      }
+      return (LocaleKeys.tradingDisabled.tr(), null, false);
     }
     if (state.pay == null) {
       return (
@@ -347,22 +324,11 @@ class _SwapEntryViewState extends State<SwapEntryView> {
       return connect;
     }
     if (state.preparingAssets) {
-      return (LocaleKeys.swapHelperLoadingAssets.tr(), null, true);
+      return ('swapPreparingAssets'.tr(), null, true);
     }
-    if (state.preparationFailedAsset != null) {
-      return (
-        LocaleKeys.tryAgain.tr(),
-        () => _bloc.add(const UnifiedSwapPreparationRetried()),
-        false,
-      );
-    }
-    if (issue == SwapFormIssue.assetInactive) {
-      final asset = state.inactiveAsset!;
-      return (
-        LocaleKeys.swapCtaActivateAsset.tr(args: [SwapFormat.ticker(asset)]),
-        _activating ? null : () => _activate(asset),
-        _activating,
-      );
+    if (state.preparationFailedAsset != null ||
+        issue == SwapFormIssue.assetInactive) {
+      return (LocaleKeys.tryAgain.tr(), _retryPreparation, false);
     }
     if (issue == SwapFormIssue.amountMissing) {
       return (LocaleKeys.swapCtaEnterAmount.tr(), null, false);
@@ -406,11 +372,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             false,
           ),
           SwapEntryAction.activate => (
-            LocaleKeys.swapCtaActivateAsset.tr(
-              args: [SwapFormat.ticker(failure.asset ?? state.pay!)],
-            ),
-            _activating ? null : () => _activate(failure.asset ?? state.pay!),
-            _activating,
+            LocaleKeys.tryAgain.tr(),
+            _retryPreparation,
+            false,
           ),
           SwapEntryAction.chooseAnother => (
             LocaleKeys.swapCtaChooseAnother.tr(),
@@ -443,6 +407,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             () => showSwapOptionsSheet(context, _bloc),
             false,
           );
+        }
+        if (!state.fundingReady && state.issue == null && state.signedIn) {
+          return ('swapCheckingFunds'.tr(), null, true);
         }
         return (
           review,

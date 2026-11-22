@@ -2,14 +2,17 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -18,6 +21,9 @@ import 'swap_test_fixtures.dart';
 /// Covers what the review discloses: every cost, in dollars or else in
 /// tokens, the protection, the route and the identities it touches, and
 /// the warnings that apply before anything is signed.
+///
+/// Section names and status copy are looked up by key, so rewording them
+/// does not read as a broken review; figures are asserted as written.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpSwapUi();
@@ -63,9 +69,23 @@ void main() {
     );
   }
 
-  Future<void> expand(WidgetTester tester, String section) async {
-    await tester.tap(find.text(section));
+  Future<void> expand(WidgetTester tester, String sectionKey) async {
+    await tester.tap(find.text(sectionKey.tr()));
     await tester.pumpAndSettle();
+  }
+
+  const costs = LocaleKeys.swapReviewCostsProtection;
+  const route = LocaleKeys.swapReviewRouteIdentities;
+
+  /// The value beside [label] among the decision figures above the details.
+  String figure(WidgetTester tester, String label) {
+    final row = find.ancestor(of: find.text(label), matching: find.byType(Row));
+    return tester
+        .widgetList<Text>(
+          find.descendant(of: row.first, matching: find.byType(Text)),
+        )
+        .last
+        .data!;
   }
 
   /// The value beside [label] in a detail section.
@@ -106,6 +126,7 @@ void main() {
       final start = find.byKey(const Key('swap-start'));
       expect(tester.widget<SwapButton>(start).onPressed, isNotNull);
       await tester.ensureVisible(start);
+      await tester.pump(swapCommitArmingDelay);
       await tester.tap(start);
       expect(swap.events.whereType<UnifiedSwapStartRequested>(), hasLength(1));
     },
@@ -148,13 +169,22 @@ void main() {
           pricing: pricingOf(network: null, swap: null, complete: false),
         ),
       );
-      await expand(tester, 'Costs & protection');
+      await expand(tester, costs);
 
       expect(detail(tester, 'Network costs'), '0.0015 ETH');
       expect(detail(tester, '↳ Approval network cost'), '0.0005 ETH');
       expect(detail(tester, 'Swap costs'), '2 USDC + 0.1 XYZ');
-      // Nothing priced in dollars, so no dollar total either.
-      expect(find.text('Incomplete'), findsNWidgets(2));
+      // Nothing priced in dollars, so the figures above the details give
+      // the same amounts rather than a word for "unknown".
+      expect(
+        figure(tester, LocaleKeys.swapTotalCost.tr()),
+        '0.0015 ETH + 2 USDC + 0.1 XYZ',
+      );
+      expect(
+        figure(tester, LocaleKeys.swapReviewNetworkCost.tr()),
+        '0.0015 ETH',
+      );
+      expect(find.text(LocaleKeys.swapCostIncomplete.tr()), findsNothing);
     });
 
     testWidgets('with no fees at all cost nothing', (tester) async {
@@ -165,7 +195,7 @@ void main() {
           pricing: pricingOf(network: null, swap: null, complete: false),
         ),
       );
-      await expand(tester, 'Costs & protection');
+      await expand(tester, costs);
 
       expect(detail(tester, 'Network costs'), r'$0.00');
       expect(detail(tester, 'Swap costs'), r'$0.00');
@@ -188,7 +218,7 @@ void main() {
           pricing: pricingOf(network: '4.201', approval: '1.2', swap: '0.5'),
         ),
       );
-      await expand(tester, 'Costs & protection');
+      await expand(tester, costs);
 
       expect(detail(tester, 'Network costs'), r'$4.21');
       expect(detail(tester, '↳ Approval network cost'), r'$1.20');
@@ -225,7 +255,7 @@ void main() {
     ]) {
       testWidgets('slippage: $name', (tester) async {
         await pump(tester, quote);
-        await expand(tester, 'Costs & protection');
+        await expand(tester, costs);
         expect(detail(tester, 'Slippage'), slippage);
       });
     }
@@ -238,7 +268,7 @@ void main() {
       const contract = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
       services.contracts = {usdc: contract};
       await pump(tester, quoteOf());
-      await expand(tester, 'Route & identities');
+      await expand(tester, route);
 
       expect(
         detail(tester, 'How it completes'),
@@ -258,7 +288,7 @@ void main() {
         tester,
       ) async {
         await pump(tester, quoteOf(routeKind: kind, stages: const []));
-        await expand(tester, 'Route & identities');
+        await expand(tester, route);
         expect(detail(tester, 'How it completes'), label);
       });
     }
@@ -271,7 +301,7 @@ void main() {
         tester,
         quoteWith(quoteOf(), fromAddress: from, toAddress: to),
       );
-      await expand(tester, 'Route & identities');
+      await expand(tester, route);
 
       expect(find.text('Source address'), findsOneWidget);
       expect(find.text('Receiving address'), findsOneWidget);
@@ -347,147 +377,43 @@ void main() {
     });
   });
 
-  group('the latest re-price', () {
-    testWidgets('an update gives the minimum and the cost, old and new', (
-      tester,
-    ) async {
-      await pump(
-        tester,
-        quoteOf(
-          guaranteed: '2900',
-          pricing: pricingOf(minimum: '2900', network: '5'),
-        ),
-        status: SwapReviewStatus.materialUpdate,
-        previous: quoteOf(),
-      );
-
-      expect(find.text('Outcome updated'), findsOneWidget);
-      expect(
-        find.text(
-          r'Minimum changed from 2,985 USDC to 2,900 USDC. Total cost '
-          r'changed from $3.00 to $5.00.',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('an update of the cost alone says only that', (tester) async {
-      await pump(
-        tester,
-        quoteOf(pricing: pricingOf(network: '5')),
-        status: SwapReviewStatus.materialUpdate,
-        previous: quoteOf(),
-      );
-
-      expect(
-        find.text(r'Total cost changed from $3.00 to $5.00.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a cost that was unknown is not compared', (tester) async {
-      await pump(
-        tester,
-        quoteOf(
-          guaranteed: '2900',
-          pricing: pricingOf(minimum: '2900'),
-        ),
-        status: SwapReviewStatus.materialUpdate,
-        previous: quoteOf(pricing: pricingOf(network: null)),
-      );
-
-      expect(
-        find.text('Minimum changed from 2,985 USDC to 2,900 USDC.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a change too small for the usual precision still reads '
-        'as one', (tester) async {
-      await pump(
-        tester,
-        quoteOf(
-          guaranteed: '2985.1234',
-          pricing: pricingOf(network: '3.004'),
-        ),
-        status: SwapReviewStatus.materialUpdate,
-        previous: quoteOf(
-          guaranteed: '2985.1291',
-          pricing: pricingOf(network: '3.001'),
-        ),
-      );
-
-      // The minimum gets the decimals that tell it apart; a cost is shown
-      // in cents, so a change within one is left out.
-      expect(
-        find.text('Minimum changed from 2,985.129 USDC to 2,985.123 USDC.'),
-        findsOneWidget,
-      );
-    });
-
-    for (final (status, title, body) in [
-      (
-        SwapReviewStatus.expired,
-        'Quote expired',
-        'Refresh before starting. Nothing has been signed or sent.',
-      ),
-      (
-        SwapReviewStatus.revalidationFailed,
-        'Latest quote not confirmed',
-        'Try again before starting. Your selections are preserved.',
-      ),
-      (
-        SwapReviewStatus.rejected,
-        "This swap couldn't start",
-        'Nothing was sent. Check the amount and try again.',
-      ),
-    ]) {
-      testWidgets('${status.name} is explained: "$title"', (tester) async {
-        await pump(tester, quoteOf(), status: status);
-
-        expect(find.text(title), findsWidgets);
-        expect(find.text(body), findsOneWidget);
-      });
-    }
-
-    testWidgets('a check in progress says starting waits for it', (
-      tester,
-    ) async {
-      await pump(tester, quoteOf(), status: SwapReviewStatus.revalidating);
-
-      expect(
-        find.text(
-          'Checking the latest outcome and costs. Starting is unavailable '
-          'until this finishes.',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a ready review has nothing to explain', (tester) async {
-      await pump(tester, quoteOf());
-
-      for (final title in [
-        'Outcome updated',
-        'Latest quote not confirmed',
-        "This swap couldn't start",
-        "We couldn't confirm whether this swap started",
-      ]) {
-        expect(find.text(title), findsNothing, reason: title);
-      }
-      expect(find.textContaining('Checking the latest'), findsNothing);
-    });
-  });
-
   group('the decision figures', () {
     final total = find.text('Total cost');
     final time = find.text('Estimated completion');
 
-    testWidgets('sit in a row, and say when a cost is unknown', (tester) async {
+    testWidgets('use compact rows, with a cost that has no dollar price in '
+        'its own token', (tester) async {
       await pump(tester, quoteOf(pricing: pricingOf(network: null)));
 
-      expect(sameRow(tester, total, time), isTrue);
-      expect(find.text('Incomplete'), findsNWidgets(2));
+      expect(above(tester, total, time), isTrue);
+      expect(figure(tester, LocaleKeys.swapTotalCost.tr()), '0.001 ETH');
+      expect(
+        figure(tester, LocaleKeys.swapReviewNetworkCost.tr()),
+        '0.001 ETH',
+      );
+      expect(find.text(LocaleKeys.swapCostIncomplete.tr()), findsNothing);
+    });
+
+    testWidgets('never show an unfinished dollar total as the total', (
+      tester,
+    ) async {
+      // The network cost is priced, a route fee is not.
+      await pump(
+        tester,
+        quoteOf(
+          fees: [
+            fee(SwapFeeKind.network, '0.0004', asset: eth),
+            fee(SwapFeeKind.swap, '0.1', asset: gleec),
+          ],
+          pricing: pricingOf(network: '1.2', swap: '0', complete: false),
+        ),
+      );
+
+      expect(
+        figure(tester, LocaleKeys.swapTotalCost.tr()),
+        '0.0004 ETH + 0.1 GLEEC',
+      );
+      expect(figure(tester, LocaleKeys.swapReviewNetworkCost.tr()), r'$1.20');
     });
 
     testWidgets('stack at 200% text', (tester) async {

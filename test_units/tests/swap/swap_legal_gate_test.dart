@@ -209,7 +209,7 @@ void main() {
           );
           final button = find.byKey(const Key('swap-start'));
           final pending = status == LegalDocumentStatus.loading;
-          expect(swapButtonEnabled(tester, find.text('Start swap')), pending);
+          expect(swapButtonEnabled(tester, find.text('Confirm swap')), pending);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             pending ? findsNothing : findsOneWidget,
@@ -218,6 +218,8 @@ void main() {
             find.byTooltip(LocaleKeys.legalDocumentsUnavailable.tr()),
             pending ? findsNothing : findsOneWidget,
           );
+          // The action that commits is armed a moment after it appears.
+          await tester.pump(swapCommitArmingDelay);
           await tester.tap(button);
           expect(
             bloc.events,
@@ -238,7 +240,7 @@ void main() {
               ),
             ),
           );
-          expect(swapButtonEnabled(tester, find.text('Start swap')), isTrue);
+          expect(swapButtonEnabled(tester, find.text('Confirm swap')), isTrue);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             findsNothing,

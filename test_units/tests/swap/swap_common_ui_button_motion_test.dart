@@ -14,8 +14,10 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
+import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_common_ui_fakes.dart';
@@ -34,7 +36,7 @@ double? _smallestScale(WidgetTester tester) {
 }
 
 /// Covers how the swap button answers a hand on it: it presses down, its
-/// spinner pops in without moving the label abruptly, and Start keeps one
+/// spinner appears without moving the label, and Confirm keeps one
 /// button, with one firm tap, from ready to starting.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -87,8 +89,8 @@ void main() {
       await gesture.up();
     });
 
-    testWidgets('its spinner is there, 16 px square, from the first frame, '
-        'and pops in', (tester) async {
+    testWidgets('its spinner is there, 16 px square, from the first frame '
+        'without another transition', (tester) async {
       await show(tester, const SwapButton(label: 'Checking…', onPressed: null));
       await show(
         tester,
@@ -102,14 +104,15 @@ void main() {
       );
 
       await tester.pump(SwapMotion.pop ~/ 4);
-      expect(_smallestScale(tester), lessThan(1));
+      expect(_smallestScale(tester), isNull);
     });
 
-    testWidgets('its label glides aside as the spinner arrives', (
+    testWidgets('its label and bounds stay fixed as the spinner arrives', (
       tester,
     ) async {
       await show(tester, const SwapButton(label: 'Checking…', onPressed: null));
       final before = tester.getTopLeft(find.text('Checking…')).dx;
+      final bounds = tester.getRect(find.byType(SwapButton));
       await show(
         tester,
         const SwapButton(label: 'Checking…', onPressed: null, busy: true),
@@ -120,11 +123,9 @@ void main() {
       await tester.pump(SwapMotion.grow);
       final after = tester.getTopLeft(find.text('Checking…')).dx;
 
-      expect(after, isNot(before));
-      expect(
-        midway,
-        inExclusiveRange(math.min(before, after), math.max(before, after)),
-      );
+      expect(midway, before);
+      expect(after, before);
+      expect(tester.getRect(find.byType(SwapButton)), bounds);
     });
   });
 
@@ -196,6 +197,13 @@ void main() {
       await show(tester, SwapReviewStatus.ready);
 
       await tester.ensureVisible(find.byKey(const Key('swap-start')));
+      // Dropped while the action arms: no start, and no haptic for one.
+      await tester.tap(find.byKey(const Key('swap-start')));
+      await tester.pump();
+      expect(played, isEmpty);
+      expect(swap.events.whereType<UnifiedSwapStartRequested>(), isEmpty);
+
+      await tester.pump(swapCommitArmingDelay);
       await tester.tap(find.byKey(const Key('swap-start')));
       await tester.pump();
       expect(played, ['HapticFeedbackType.mediumImpact']);
