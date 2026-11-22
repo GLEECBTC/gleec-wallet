@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
+import 'package:web_dex/views/common/wallet_password_dialog/wallet_access_actions.dart';
 
 /// Labels are supplied by the application localization boundary.
 class WalletLockLabels {
   const WalletLockLabels({
     this.title = 'Unlock your wallet',
-    this.message = 'Use your device or wallet password to continue.',
+    this.message,
     this.unlock = 'Unlock',
     this.unlocking = 'Unlocking…',
     this.usePassword = 'Use password',
@@ -16,7 +20,11 @@ class WalletLockLabels {
   });
 
   final String title;
-  final String message;
+
+  /// A line under the title, for when the title cannot name the wallet.
+  final String? message;
+
+  /// Names the method the primary action uses, e.g. "Unlock with passkey".
   final String unlock;
   final String unlocking;
   final String usePassword;
@@ -38,6 +46,7 @@ class AppLockBoundary extends StatefulWidget {
     this.onRecoverWallet,
     this.labels = const WalletLockLabels(),
     this.errorMessage,
+    this.errorTone = WalletAccessTone.error,
     this.authenticationContent,
     this.observeLifecycle = true,
     super.key,
@@ -51,6 +60,7 @@ class AppLockBoundary extends StatefulWidget {
   final VoidCallback? onRecoverWallet;
   final WalletLockLabels labels;
   final String? errorMessage;
+  final WalletAccessTone errorTone;
 
   /// Password/recovery forms live outside the blocked application Navigator.
   /// A regular showDialog in [child] would correctly remain under the cover.
@@ -63,9 +73,22 @@ class AppLockBoundary extends StatefulWidget {
 
 class _AppLockBoundaryState extends State<AppLockBoundary>
     with WidgetsBindingObserver {
+  final _contentFocus = FocusNode(debugLabel: 'wallet content');
+  late WalletUnlockState _state;
+  StreamSubscription<WalletUnlockState>? _changes;
+
+  /// What was focused in [AppLockBoundary.child] most recently. Covering the
+  /// content takes its focus away, and on desktop the framework has already
+  /// parked focus on the root scope by the time the cover is known.
+  FocusNode? _lastContentFocus;
+  FocusNode? _focusBeforeCover;
+  bool _lockRequiredWhileCovered = false;
+
   @override
   void initState() {
     super.initState();
+    _listen();
+    FocusManager.instance.addListener(_rememberContentFocus);
     if (widget.observeLifecycle) {
       WidgetsBinding.instance.addObserver(this);
       final current = WidgetsBinding.instance.lifecycleState;
@@ -76,6 +99,7 @@ class _AppLockBoundaryState extends State<AppLockBoundary>
   @override
   void didUpdateWidget(AppLockBoundary oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.coordinator, widget.coordinator)) _listen();
     if (oldWidget.observeLifecycle == widget.observeLifecycle) return;
     if (widget.observeLifecycle) {
       WidgetsBinding.instance.addObserver(this);
@@ -84,13 +108,57 @@ class _AppLockBoundaryState extends State<AppLockBoundary>
     }
   }
 
+  void _listen() {
+    unawaited(_changes?.cancel());
+    _state = widget.coordinator.state;
+    _changes = widget.coordinator.changes.listen(_onState);
+  }
+
+  void _rememberContentFocus() {
+    if (_state.coversContent) return;
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused != null && focused.ancestors.contains(_contentFocus)) {
+      _lastContentFocus = focused;
+    }
+  }
+
+  void _onState(WalletUnlockState next) {
+    if (!mounted) return;
+    final wasCovered = _state.coversContent;
+    final covers = next.coversContent;
+    if (covers && !wasCovered) {
+      _focusBeforeCover = _lastContentFocus;
+      _lockRequiredWhileCovered = false;
+    }
+    if (covers && next.isLocked) _lockRequiredWhileCovered = true;
+    FocusNode? restore;
+    if (wasCovered && !covers) {
+      // After an unlock the user starts afresh; only a cover that lifted on
+      // its own hands focus back to where they were typing.
+      if (!_lockRequiredWhileCovered) restore = _focusBeforeCover;
+      _focusBeforeCover = null;
+    }
+    setState(() => _state = next);
+    if (restore == null) return;
+    final node = restore;
+    // The content accepts focus again only once this state has been built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _state.coversContent) return;
+      if ((node.context?.mounted ?? false) && node.canRequestFocus) {
+        node.requestFocus();
+      }
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
         widget.coordinator.resume();
       case AppLifecycleState.inactive:
-        widget.coordinator.inactive();
+        // On desktop and web this is only another window taking input focus:
+        // the wallet stays readable and the re-lock clock does not start.
+        if (focusLossLeavesApp) widget.coordinator.inactive();
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
@@ -101,54 +169,111 @@ class _AppLockBoundaryState extends State<AppLockBoundary>
   @override
   void dispose() {
     if (widget.observeLifecycle) WidgetsBinding.instance.removeObserver(this);
+    FocusManager.instance.removeListener(_rememberContentFocus);
+    unawaited(_changes?.cancel());
+    _contentFocus.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => StreamBuilder<WalletUnlockState>(
-    stream: widget.coordinator.changes,
-    initialData: widget.coordinator.state,
-    builder: (context, snapshot) {
-      final state = snapshot.data ?? widget.coordinator.state;
-      final covered = state.coversContent;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          ExcludeSemantics(
-            excluding: covered,
-            child: ExcludeFocus(
-              excluding: covered,
-              child: IgnorePointer(
-                ignoring: covered,
-                child: TickerMode(enabled: !covered, child: widget.child),
-              ),
+  Widget build(BuildContext context) {
+    final state = _state;
+    final covered = state.coversContent;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ExcludeSemantics(
+          excluding: covered,
+          // ExcludeFocus with a node of our own, to tell content focus apart.
+          child: Focus(
+            focusNode: _contentFocus,
+            canRequestFocus: false,
+            skipTraversal: true,
+            includeSemantics: false,
+            descendantsAreFocusable: !covered,
+            child: IgnorePointer(
+              ignoring: covered,
+              child: TickerMode(enabled: !covered, child: widget.child),
             ),
           ),
-          if (covered)
-            Positioned.fill(
-              child: BlockSemantics(
-                child: _WalletLockSurface(
-                  state: state,
-                  labels: widget.labels,
-                  errorMessage: widget.errorMessage,
-                  authenticationContent: widget.authenticationContent,
-                  onUnlock: widget.onUnlock,
-                  onUsePassword: widget.onUsePassword,
-                  onSwitchWallet: widget.onSwitchWallet,
-                  onRecoverWallet: widget.onRecoverWallet,
-                ),
-              ),
+        ),
+        if (covered)
+          Positioned.fill(
+            child: BlockSemantics(
+              child: !state.isForeground
+                  ? _PrivacyCover(label: widget.labels.privacy)
+                  : _CoverOverlay(
+                      child: _WalletLockSurface(
+                        busy: state.unlockInProgress,
+                        labels: widget.labels,
+                        errorMessage: widget.errorMessage,
+                        errorTone: widget.errorTone,
+                        authenticationContent: widget.authenticationContent,
+                        onUnlock: widget.onUnlock,
+                        onUsePassword: widget.onUsePassword,
+                        onSwitchWallet: widget.onSwitchWallet,
+                        onRecoverWallet: widget.onRecoverWallet,
+                      ),
+                    ),
             ),
-        ],
-      );
-    },
+          ),
+      ],
+    );
+  }
+}
+
+class _PrivacyCover extends StatelessWidget {
+  const _PrivacyCover({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    key: const Key('wallet-privacy-cover'),
+    color: Theme.of(context).scaffoldBackgroundColor,
+    child: Semantics(
+      label: label,
+      child: const Center(child: Icon(Icons.lock_outline, size: 40)),
+    ),
   );
+}
+
+/// The cover sits above the app's Navigator and so above its Overlay. Text
+/// selection handles, the Paste toolbar and tooltips all need one, so the
+/// cover brings its own; it fills the boundary so they land where they should.
+class _CoverOverlay extends StatefulWidget {
+  const _CoverOverlay({required this.child});
+  final Widget child;
+
+  @override
+  State<_CoverOverlay> createState() => _CoverOverlayState();
+}
+
+class _CoverOverlayState extends State<_CoverOverlay> {
+  late final OverlayEntry _entry = OverlayEntry(builder: (_) => widget.child);
+
+  @override
+  void didUpdateWidget(_CoverOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _entry.markNeedsBuild();
+  }
+
+  @override
+  void dispose() {
+    _entry
+      ..remove()
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Overlay(initialEntries: [_entry]);
 }
 
 class _WalletLockSurface extends StatelessWidget {
   const _WalletLockSurface({
-    required this.state,
+    required this.busy,
     required this.labels,
+    required this.errorTone,
     required this.onUnlock,
     required this.onUsePassword,
     required this.onSwitchWallet,
@@ -157,9 +282,10 @@ class _WalletLockSurface extends StatelessWidget {
     this.authenticationContent,
   });
 
-  final WalletUnlockState state;
+  final bool busy;
   final WalletLockLabels labels;
   final String? errorMessage;
+  final WalletAccessTone errorTone;
   final Widget? authenticationContent;
   final VoidCallback onUnlock;
   final VoidCallback? onUsePassword;
@@ -168,135 +294,133 @@ class _WalletLockSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (!state.isForeground) {
-      return ColoredBox(
-        key: const Key('wallet-privacy-cover'),
-        color: theme.scaffoldBackgroundColor,
-        child: Semantics(
-          label: labels.privacy,
-          child: const Center(child: Icon(Icons.lock_outline, size: 40)),
-        ),
-      );
-    }
     final authentication = authenticationContent;
-    if (authentication != null) {
-      return Material(
-        key: const Key('wallet-lock-authentication'),
-        color: theme.scaffoldBackgroundColor,
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: SafeArea(
-            child: FocusTraversalGroup(
-              child: FocusScope(autofocus: true, child: authentication),
-            ),
-          ),
-        ),
-      );
-    }
-    final busy = state.unlockInProgress;
     return Material(
-      key: const Key('wallet-lock-screen'),
-      color: theme.scaffoldBackgroundColor,
-      child: SafeArea(
-        child: FocusTraversalGroup(
-          child: FocusScope(
-            autofocus: true,
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 360),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+      key: Key(
+        authentication == null
+            ? 'wallet-lock-screen'
+            : 'wallet-lock-authentication',
+      ),
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SafeArea(
+          child: FocusTraversalGroup(
+            child: FocusScope(
+              autofocus: true,
+              child:
+                  authentication ??
+                  WalletLockPanel(
+                    title: labels.title,
+                    message: labels.message,
                     children: [
-                      ExcludeSemantics(
-                        child: Icon(
-                          Icons.lock_outline,
-                          size: 40,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          labels.title,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        labels.message,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                      ),
                       if (errorMessage != null) ...[
-                        const SizedBox(height: 16),
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.error,
-                            ),
-                          ),
+                        WalletAccessNotice(
+                          text: errorMessage!,
+                          tone: errorTone,
                         ),
+                        const SizedBox(height: 16),
                       ],
-                      const SizedBox(height: 28),
-                      UiPrimaryButton(
-                        expandForText: true,
-                        key: const Key('wallet-lock-unlock'),
-                        height: 50,
-                        text: busy ? labels.unlocking : labels.unlock,
-                        onPressed: busy ? null : onUnlock,
+                      WalletAccessPrimaryButton(
+                        buttonKey: const Key('wallet-lock-unlock'),
+                        autofocus: true,
+                        text: labels.unlock,
+                        busy: busy,
+                        busyText: labels.unlocking,
+                        onPressed: onUnlock,
                       ),
                       if (onUsePassword != null) ...[
                         const SizedBox(height: 8),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onSurface,
-                          ),
+                        WalletAccessSecondaryButton(
                           key: const Key('wallet-lock-use-password'),
-                          onPressed: busy ? null : onUsePassword,
-                          child: Text(labels.usePassword),
+                          text: labels.usePassword,
+                          onPressed: onUsePassword,
                         ),
                       ],
-                      const SizedBox(height: 16),
+                      if (onSwitchWallet != null || onRecoverWallet != null)
+                        const SizedBox(height: 16),
                       if (onSwitchWallet != null)
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onSurface,
-                          ),
+                        WalletAccessTertiaryButton(
                           key: const Key('wallet-lock-switch-wallet'),
+                          text: labels.switchWallet,
                           onPressed: onSwitchWallet,
-                          child: Text(labels.switchWallet),
                         ),
                       if (onRecoverWallet != null)
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onSurface,
-                          ),
+                        WalletAccessTertiaryButton(
                           key: const Key('wallet-lock-recover-wallet'),
+                          text: labels.recoverWallet,
                           onPressed: onRecoverWallet,
-                          child: Text(labels.recoverWallet),
                         ),
                     ],
                   ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The lock screen's column: the lock, a title that names the wallet, and the
+/// caller's controls. Centred and scrollable, so it holds at narrow widths and
+/// large text.
+class WalletLockPanel extends StatelessWidget {
+  const WalletLockPanel({
+    required this.title,
+    required this.children,
+    this.message,
+    super.key,
+  });
+
+  final String title;
+  final String? message;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ExcludeSemantics(
+                child: Icon(
+                  Icons.lock_outline,
+                  size: 40,
+                  color: theme.colorScheme.primary,
                 ),
               ),
-            ),
+              const SizedBox(height: 16),
+              Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
+              if (message != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  message!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              ...children,
+            ],
           ),
         ),
       ),

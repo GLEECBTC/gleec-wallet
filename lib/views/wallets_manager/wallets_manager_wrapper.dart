@@ -48,6 +48,10 @@ class WalletsManagerWrapper extends StatefulWidget {
 class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
   _WalletsManagerRoute _route = _WalletsManagerRoute.entry;
   WalletsManagerAction _pendingAction = WalletsManagerAction.none;
+
+  /// Set when someone who already has wallets asks for another: creation then
+  /// waits for a deliberate Create on its own card.
+  bool _confirmCreation = false;
   WalletsManagerExistWalletAction _pendingWalletAction =
       WalletsManagerExistWalletAction.logIn;
   Wallet? _pendingWallet;
@@ -125,6 +129,8 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
       case _WalletsManagerRoute.entry:
         return WalletsManagerEntry(
           onAction: _onAction,
+          onCreateAnother: () =>
+              _onAction(WalletsManagerAction.create, confirmCreation: true),
           onHardwareWallet: _onHardwareWallet,
           onWalletSelected: _onWalletSelected,
           onCancel: _handleCancel,
@@ -139,9 +145,12 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
             _pendingWallet?.id,
             _pendingAction,
             _pendingWalletAction,
+            _confirmCreation,
             _route,
           )),
-          onSwitchWallet: _showWalletSelector,
+          // Only where there is no list behind the sheet. Reached from the
+          // list, Cancel already returns there.
+          onSwitchWallet: _enteredDirectly ? _showWalletSelector : null,
           onRecover: () => _onAction(WalletsManagerAction.import),
           eventType: widget.eventType,
           walletType: _route == _WalletsManagerRoute.trezor
@@ -149,6 +158,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
               : WalletType.iguana,
           initialAction: _pendingAction,
           initialWalletAction: _pendingWalletAction,
+          confirmCreation: _confirmCreation,
           close: _closeWalletManager,
           onSuccess: widget.onSuccess ?? (_) {},
           selectedWallet: _pendingWallet,
@@ -160,7 +170,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
     }
   }
 
-  void _onAction(WalletsManagerAction action) {
+  void _onAction(WalletsManagerAction action, {bool confirmCreation = false}) {
     final isCreate = action == WalletsManagerAction.create;
     _funnel
       ..setFlow(
@@ -178,6 +188,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
     );
     setState(() {
       _pendingAction = action;
+      _confirmCreation = confirmCreation;
       _pendingWallet = null;
       _route = _WalletsManagerRoute.iguana;
     });

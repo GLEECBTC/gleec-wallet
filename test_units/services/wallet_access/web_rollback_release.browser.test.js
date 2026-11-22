@@ -89,12 +89,15 @@ async function main() {
       }
 
       async function passwordUnlock() {
-        await browser.wait(page, `${buttonPresent('Unlock')}||${buttonPresent('Use password')}||!!document.querySelector('input[type=password]')`,
+        // A wallet with only its own password returns on the password field,
+        // where 'Unlock' submits it. A retained managed unlock offers
+        // 'Use password' first.
+        const passwordField = "Array.from(document.querySelectorAll('input')).some(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||'').split('\\n').some(part=>part.trim()==='Wallet password')&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})";
+        await browser.wait(page, `${buttonPresent('Use password')}||(${passwordField})`,
           {timeout: 60000, label: 'password return entry'});
-        if (await page.evaluate(buttonPresent('Unlock'))) await browser.click(page, 'Unlock');
-        if (await page.evaluate(buttonPresent('Use password'))) await browser.click(page, 'Use password');
+        if (!(await page.evaluate(passwordField))) await browser.click(page, 'Use password');
         await browser.fill(page, 'Wallet password', customPassword);
-        await browser.click(page, 'Log In');
+        await browser.click(page, 'Unlock');
         await browser.wait(page, buttonPresent('Gleec Wallet'), {timeout: 60000, label: 'custom password return'});
       }
 
@@ -113,6 +116,9 @@ async function main() {
           assert.equal(metrics.cspViolations, 0);
           if (kind === 'passkey') assert.ok(virtual.counts.asserted > challenges);
           await browser.click(page, 'Settings'); await browser.click(page, 'Security');
+          // An absent action proves nothing while the section is still loading.
+          await browser.wait(page, `(${buttonPresent('Review wallet removal')})&&!(document.body.textContent.includes('Checking wallet protection')||Array.from(document.querySelectorAll('[aria-label]')).some(el=>el.getAttribute('aria-label').includes('Checking wallet protection')))`,
+            {label: 'security settings loaded'});
           if (profile === 'rollback') {
             assert.equal(await page.evaluate(buttonPresent('Create a passkey')), false);
             assert.equal(await page.evaluate(buttonPresent('Set up local passkey')), false);
@@ -139,7 +145,7 @@ async function main() {
           const diagnostics = await page.evaluate(`JSON.stringify({
             controls:Array.from(document.querySelectorAll('[role=button]')).map(el=>el.getAttribute('aria-label')||'').filter(Boolean),
             fields:Array.from(document.querySelectorAll('input')).map(el=>({label:el.getAttribute('aria-label'),length:el.value.length})),
-            knownErrors:['Password not accepted','Incorrect password','Password has changed','Please wait','Passwords do not match'].filter(text=>document.body.textContent.includes(text))
+            knownErrors:['Password not accepted','Incorrect password','Password changed.','Please wait','passwords do not match'].filter(text=>document.body.textContent.includes(text))
           })`);
           console.log('Password replacement control state (no field values)', diagnostics);
           throw error;
@@ -157,9 +163,9 @@ async function main() {
         const protectedByPasskey = await page.evaluate(credentialsSummary);
         assert.equal(protectedByPasskey.staged, 0);
         await round('passkey', protectedByPasskey);
-        await browser.click(page, 'Settings'); await browser.click(page, 'Log out');
+        await browser.click(page, 'Settings'); await browser.click(page, 'Sign out');
         await browser.wait(page, "!!document.querySelector('[role=dialog]')", {label: 'explicit sign-out confirmation'});
-        await browser.click(page, 'Log out');
+        await browser.click(page, 'Sign out');
         for (const profile of ['rollback', 'normal']) {
           const before = virtual.counts.asserted;
           await replaceBuild(profile);

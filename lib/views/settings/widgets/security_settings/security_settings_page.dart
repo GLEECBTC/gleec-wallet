@@ -18,9 +18,11 @@ import 'package:web_dex/mm2/mm2_api/rpc/show_priv_key/show_priv_key_request.dart
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/views/common/page_header/page_header.dart';
 import 'package:web_dex/views/common/pages/page_layout.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_password_dialog.dart';
 import 'package:web_dex/views/settings/widgets/common/settings_content_wrapper.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/password_update_page.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/security_settings_entry.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_settings_main_page.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_confirm_success.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_confirmation/seed_confirmation.dart';
@@ -30,6 +32,7 @@ import 'package:web_dex/views/settings/widgets/security_settings/private_key_set
 import 'package:web_dex/services/security/private_key_export_service.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -56,6 +59,10 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
   SecuritySettingsBloc? _seedFlowBloc;
   final Map<Coin, String> _privKeys = {};
 
+  /// Why the recovery phrase was taken off screen, told once the user is
+  /// back on the list. Without it the flow just seems to have vanished.
+  String? _seedHiddenNotice;
+
   @override
   void initState() {
     super.initState();
@@ -65,25 +72,58 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _seedAccessSubscription ??= context
-        .read<WalletAccessService?>()
-        ?.unlockCoordinator
-        .sensitiveViewsMustClose
-        .listen((_) => _revokeSeedReveal());
+    final coordinator = context.read<WalletAccessService?>()?.unlockCoordinator;
+    _seedAccessSubscription ??= coordinator?.sensitiveViewsMustClose.listen((
+      _,
+    ) {
+      // Losing focus alone is answered in [didChangeAppLifecycleState]. Here
+      // it only ends the flow when it also locked the wallet.
+      if (WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.inactive &&
+          !coordinator.state.isLocked) {
+        return;
+      }
+      _revokeSeedReveal(leftApp: !coordinator.state.isForeground);
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
-    _revokeSeedReveal();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        return;
+      case AppLifecycleState.inactive:
+        // On desktop and web another window was clicked, often the one the
+        // words are being saved in: the user is still here. On a phone the
+        // app is about to be snapshotted, so the words are covered again but
+        // the step, and a quiz in progress, are kept.
+        if (focusLossLeavesApp) _maskSeedWords();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _revokeSeedReveal(leftApp: true);
+    }
   }
 
-  void _revokeSeedReveal() {
+  void _maskSeedWords() {
+    final bloc = _seedFlowBloc;
+    if (bloc == null || bloc.isClosed) return;
+    // The event also returns to the reveal step, so it is only sent from it.
+    if (bloc.state.step == SecuritySettingsStep.seedShow &&
+        bloc.state.showSeedWords) {
+      bloc.add(const ShowSeedWordsEvent(false));
+    }
+  }
+
+  void _revokeSeedReveal({bool leftApp = false}) {
     _seedRevision++;
     final hadSecrets = _seed.isNotEmpty || _seedSession != null;
     _clearAllSensitiveData();
     final bloc = _seedFlowBloc;
     if (hadSecrets && bloc != null && !bloc.isClosed) {
+      _seedHiddenNotice =
+          (leftApp ? 'authRecoveryHiddenLeftApp' : 'authRecoveryHiddenLocked')
+              .tr();
       bloc.add(const ResetEvent());
     }
   }
@@ -91,6 +131,9 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // After this frame: listeners rebuild, which a tree being torn down
+    // does not allow.
+    scheduleMicrotask(() => recoveryPhraseFlowOnScreen.value = false);
     // Ensure sensitive data is cleared when widget is disposed
     _clearAllSensitiveData();
     _seedSessionSubscription?.cancel();
@@ -126,6 +169,18 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
       child: PrivateKeyExportFlowListener(
         child: MultiBlocListener(
           listeners: [
+            BlocListener<SecuritySettingsBloc, SecuritySettingsState>(
+              listenWhen: (previous, current) => previous.step != current.step,
+              listener: (context, state) {
+                recoveryPhraseFlowOnScreen.value =
+                    state.step == SecuritySettingsStep.seedShow ||
+                    state.step == SecuritySettingsStep.seedConfirm;
+                // Read once: moving on to any other step retires the notice.
+                if (state.step != SecuritySettingsStep.securityMain) {
+                  _seedHiddenNotice = null;
+                }
+              },
+            ),
             BlocListener<AuthBloc, AuthBlocState>(
               listener: (context, state) {
                 if (!state.isSignedIn) {
@@ -146,18 +201,21 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
               },
             ),
           ],
-          child: BlocBuilder<SecuritySettingsBloc, SecuritySettingsState>(
-            builder: (BuildContext context, SecuritySettingsState state) {
-              final Widget content = _buildContent(context, state.step);
-              if (isMobile) {
-                return _SecuritySettingsPageMobile(
-                  content: content,
-                  onBackButtonPressed: () =>
-                      _handleBackButton(context, state.step),
-                );
-              }
-              return content;
-            },
+          child: SecuritySettingsEntryRunner(
+            onRecoveryPhrase: onViewSeedPressed,
+            child: BlocBuilder<SecuritySettingsBloc, SecuritySettingsState>(
+              builder: (BuildContext context, SecuritySettingsState state) {
+                final Widget content = _buildContent(context, state.step);
+                if (isMobile) {
+                  return _SecuritySettingsPageMobile(
+                    content: content,
+                    onBackButtonPressed: () =>
+                        _handleBackButton(context, state.step),
+                  );
+                }
+                return content;
+              },
+            ),
           ),
         ),
       ),
@@ -187,9 +245,16 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
     switch (step) {
       case SecuritySettingsStep.securityMain:
         _clearAllSensitiveData(); // Clear data when returning to main
+        final notice = _seedHiddenNotice;
         return SecuritySettingsMainPage(
           onViewSeedPressed: onViewSeedPressed,
           onViewPrivateKeysPressed: onViewPrivateKeysPressed,
+          notice: notice == null
+              ? null
+              : WalletAccessNotice(
+                  key: const Key('recovery-phrase-hidden-notice'),
+                  text: notice,
+                ),
         );
 
       case SecuritySettingsStep.seedShow:
@@ -228,6 +293,8 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
       return;
     }
     if (!context.mounted) return;
+    // Starting again answers the notice about the last attempt.
+    if (_seedHiddenNotice != null) setState(() => _seedHiddenNotice = null);
 
     final String? pass = await walletPasswordDialog(context);
     if (pass == null || !mounted || !context.mounted) return;
@@ -244,7 +311,7 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
         if (!mounted ||
             revealRevision != _seedRevision ||
             !kdfSdk.auth.isSessionContextCurrent(session) ||
-            (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+            (lifecycle != null && lifecycleLeavesApp(lifecycle))) {
           throw const WalletAccessException(WalletAccessFailure.staleOperation);
         }
         ensureAccess();
@@ -297,14 +364,28 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage>
         securitySettingsBloc.add(const ShowSeedEvent());
       }, methods: const {'get_mnemonic', 'show_priv_key'});
     } on WalletAccessException {
-      _revokeSeedReveal();
+      _abandonSeedLoad();
     } on WalletOperationDenied {
-      _revokeSeedReveal();
+      _abandonSeedLoad();
     } on RpcDispatchRejected {
-      _revokeSeedReveal();
+      _abandonSeedLoad();
     } on AuthSessionChangedException {
       _revokeSeedReveal();
     }
+  }
+
+  /// The phrase was authorized but never reached the screen because the app
+  /// was left or locked meanwhile. Say so rather than leaving a dead press.
+  void _abandonSeedLoad() {
+    _revokeSeedReveal();
+    if (!mounted) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final away = lifecycle != null && lifecycleLeavesApp(lifecycle);
+    setState(
+      () => _seedHiddenNotice =
+          (away ? 'authRecoveryHiddenLeftApp' : 'authRecoveryHiddenLocked')
+              .tr(),
+    );
   }
 
   void onViewPrivateKeysPressed(BuildContext context) {

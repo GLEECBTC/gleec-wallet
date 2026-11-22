@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/utils/encryption_tool.dart';
@@ -23,8 +24,8 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart'
 
 import '../../../support/legal_onboarding_harness.dart';
 
-const _unavailable =
-    'The legal documentation could not be retrieved. Please consult Gleec’s online legal documentation before proceeding.';
+// Read from the catalogue: its wording is edited centrally.
+String get _unavailable => LocaleKeys.legalDocumentsUnavailable.tr();
 
 Future<void> _passwords(WidgetTester tester) async {
   await enterLegalField(tester, 'create-password-field', legalTestPassword);
@@ -43,13 +44,8 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
         onCancel: () {},
       ),
       'seed' => WalletSimpleImport(
-        onImport:
-            ({
-              required name,
-              required password,
-              required walletConfig,
-              required rememberMe,
-            }) => submitted(),
+        onImport: ({required name, required password, required walletConfig}) =>
+            submitted(),
         onUploadFiles: ({required fileName, required fileData}) {},
         onCancel: () {},
       ),
@@ -58,13 +54,8 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
           content: fileContent ?? 'not-decrypted-while-gated',
           name: 'My wallet.json',
         ),
-        onImport:
-            ({
-              required name,
-              required password,
-              required walletConfig,
-              required rememberMe,
-            }) => submitted(),
+        onImport: ({required name, required password, required walletConfig}) =>
+            submitted(),
         onCancel: () {},
       ),
       'login' => WalletLogIn(
