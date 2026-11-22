@@ -1816,6 +1816,8 @@
   "authAuthorizationTitle": "Confirm wallet access",
   "authPasswordChangeDisclosure": "Changing this password does not change your blockchain keys or revoke old encrypted wallet files. Anyone with your recovery phrase can still access the funds.",
   "authCreationProtectionNotice": "Start without a name or password. Add secure unlock and back up your recovery phrase when you’re ready.",
+  "authManagedUnlockCanceled": "Unlock cancelled. Try again or use your wallet password.",
+  "authManagedUnlockFailed": "That didn't unlock your wallet. Try your wallet password or recovery phrase.",
   "authSignOutFailed": "Sign-out could not be saved on this device. Your wallet remains locked. Please try again.",
   "authCredentialCleanupPending": "Device access cleanup is incomplete. Your recovery phrase and exported files are unchanged.",
   "authRetryCredentialCleanup": "Finish removing device access",

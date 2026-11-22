@@ -11,12 +11,19 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/password_rotation_envelope.dart';
 import 'package:web_dex/services/wallet_access/platform/credential_backend.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/services/wallet_access/wallet_credential_cleanup.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
+
+part 'wallet_access_review_cases.dart';
+part 'wallet_access_rotation_cases.dart';
+part 'wallet_access_session_cases.dart';
+part 'wallet_access_test_harness.dart';
 
 const _password = 'Synthetic-password-123456!';
 const _entry = 'test-wallet-entry-0001';
@@ -40,9 +47,13 @@ class _Storage extends BaseStorage {
   bool throwAfterPendingDelete = false;
   bool Function(String key, dynamic value)? failOneWrite;
   bool failAfterWrite = false;
+  void Function(String key)? onRead;
   @override
-  Future<dynamic> read(String key) async =>
-      values[key] == null ? null : jsonDecode(jsonEncode(values[key]));
+  Future<dynamic> read(String key) async {
+    onRead?.call(key);
+    return values[key] == null ? null : jsonDecode(jsonEncode(values[key]));
+  }
+
   @override
   Future<bool> write(String key, dynamic data) async {
     if (failWrite == key) return false;
@@ -67,7 +78,7 @@ class _Backend extends CredentialBackend {
   final values = <String, String>{};
   final infos = <String, CredentialRecordInfo>{};
   final deviceEvents = StreamController<void>.broadcast(sync: true);
-  final protectionEvents = StreamController<void>.broadcast(sync: true);
+  final protectionEvents = StreamController<String?>.broadcast(sync: true);
   Completer<String?>? pendingRead;
   Completer<void>? readReached;
   Completer<void>? pendingCancel;
@@ -92,19 +103,29 @@ class _Backend extends CredentialBackend {
   int passwordDeletionGrants = 0;
   WalletAccessFailure? replacementFailure;
   WalletAccessFailure? metadataFailure;
+  String? metadataFailureFor;
+  WalletAccessFailure? protectedWriteFailure;
+  WalletAccessFailure? readbackFailure;
+  bool promptedDelete = false;
+  bool deviceAuthentication = false;
+  int repairs = 0;
+  int deletes = 0;
   @override
   Stream<void> get deviceLocked => deviceEvents.stream;
   @override
-  Stream<void> get protectionChanged => protectionEvents.stream;
+  Stream<String?> get protectionChanged => protectionEvents.stream;
   @override
-  Future<CredentialCapabilities> capabilities() async =>
-      const CredentialCapabilities(
-        available: true,
-        protection: CredentialProtection.appLocal,
-      );
+  Future<CredentialCapabilities> capabilities() async => CredentialCapabilities(
+    available: true,
+    protection: CredentialProtection.appLocal,
+    deviceAuthentication: deviceAuthentication,
+  );
   @override
   Future<CredentialRecordInfo?> metadata(String key) async {
-    if (metadataFailure != null) throw WalletAccessException(metadataFailure!);
+    if (metadataFailure != null &&
+        (metadataFailureFor == null || metadataFailureFor == key)) {
+      throw WalletAccessException(metadataFailure!);
+    }
     return infos[key];
   }
 
@@ -116,6 +137,9 @@ class _Backend extends CredentialBackend {
   }) async {
     writes++;
     if (requireAuthentication) await onProtectedWrite?.call();
+    if (requireAuthentication && protectedWriteFailure != null) {
+      throw WalletAccessException(protectedWriteFailure!);
+    }
     final fail = failNextWrite;
     failNextWrite = false;
     if (fail && !failAfterWrite) {
@@ -148,6 +172,9 @@ class _Backend extends CredentialBackend {
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
     readReasons.add(reason);
+    if (purpose == 'verifyWrite' && readbackFailure != null) {
+      throw WalletAccessException(readbackFailure!);
+    }
     if (purpose == 'verifyWrite' && onProtectedReadback != null) {
       return onProtectedReadback!();
     }
@@ -158,7 +185,11 @@ class _Backend extends CredentialBackend {
   @override
   Future<String?> prepareDelete(String key, {required String reason}) async {
     prepares++;
-    return 'synthetic-delete-token';
+    // As on every platform, there is nothing to authorize without an item.
+    // One whose key was invalidated is still there to be removed.
+    return infos.containsKey(key) || metadataFailure != null
+        ? 'synthetic-delete-token'
+        : null;
   }
 
   @override
@@ -216,12 +247,27 @@ class _Backend extends CredentialBackend {
     return 'synthetic-delete-token';
   }
 
+  // The keys the system invalidated can only be replaced, never rewritten.
+  @override
+  Future<void> repairInvalidated(String key, String value) async {
+    repairs++;
+    values[key] = value;
+    infos[key] = const CredentialRecordInfo(
+      protection: CredentialProtection.authenticationBound,
+      enrolled: true,
+    );
+  }
+
   @override
   Future<void> delete(String key, {String? authorization}) async {
+    deletes++;
     if (failDelete) {
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
-    if (infos[key]?.enrolled == true && authorization == null) {
+    // Android authorizes an unprepared removal with its own prompt.
+    if (infos[key]?.enrolled == true &&
+        authorization == null &&
+        !promptedDelete) {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     }
     values.remove(key);
@@ -266,7 +312,17 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   String? failPasswordChange;
   bool cleanupSucceeds = true;
   int cleanupAttempts = 0;
+
+  /// The SDK refuses a second sign-in and checks the password; older cases
+  /// rely on a laxer engine, so both are opted into.
+  bool strictSignIn = false;
+  Object? verificationError;
+  Completer<void>? signInReached;
+  Completer<void>? pendingSignIn;
+  KdfUser Function(KdfUser stored, AuthOptions options)? signedInAs;
   int signIns = 0;
+  int signOuts = 0;
+  int passwordChanges = 0;
   void activate(KdfUser user) {
     active = user;
     sessions.observe(user);
@@ -311,6 +367,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
     }
     await pendingVerification?.future;
     RpcDispatchGuard.ensureCurrent('get_mnemonic');
+    if (verificationError != null) throw verificationError!;
     if (expectedSession != null) ensureSessionContextCurrent(expectedSession);
     if (active?.walletId != expectedWalletId) {
       throw const AuthSessionChangedException();
@@ -354,9 +411,31 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
     AuthOptions options = _options,
   }) async {
     signIns++;
-    final user = users.firstWhere((user) => user.walletId.name == walletName);
+    if (strictSignIn && active != null) {
+      throw AuthException(
+        'User is signed in.',
+        type: AuthExceptionType.alreadySignedIn,
+      );
+    }
+    final stored = users.firstWhere((user) => user.walletId.name == walletName);
+    if (signInReached?.isCompleted == false) signInReached!.complete();
+    await pendingSignIn?.future;
+    if (strictSignIn && password != enginePassword) {
+      throw AuthException(
+        'Incorrect password',
+        type: AuthExceptionType.incorrectPassword,
+      );
+    }
+    final user = signedInAs?.call(stored, options) ?? stored;
     activate(user);
     return user;
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOuts++;
+    active = null;
+    sessions.observe(null);
   }
 
   @override
@@ -379,6 +458,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
         type: AuthExceptionType.incorrectPassword,
       );
     }
+    passwordChanges++;
     final failure = failPasswordChange;
     failPasswordChange = null;
     if (failure == 'before') {
@@ -468,6 +548,9 @@ class _NoPendingTransfers extends Fake
 }
 
 void main() {
+  _rotationCases();
+  _sessionCases();
+  _reviewCases();
   group('WalletAccessService authority and recovery', () {
     late _Storage storage;
     late _Backend backend;
@@ -1926,17 +2009,6 @@ void main() {
         expect(backend.writes, writes);
       },
     );
-    test('managed unlock reuses the session the engine holds', () async {
-      // The real engine refuses a second sign-in while one is open.
-      final user = await install(protected: false);
-      final verified = auth.verifiedWallets.length;
-      expect(await service.signInManaged(user.wallet), user);
-      expect(auth.signIns, 0);
-      expect(auth.verifiedWallets.length, verified + 1);
-      auth.active = null;
-      expect(await service.signInManaged(user.wallet), user);
-      expect(auth.signIns, 1);
-    });
     test(
       'normal same-wallet engine attachment does not revoke unlock operation',
       () async {
@@ -2351,25 +2423,51 @@ void main() {
               storage.failOneWrite = (key, _) =>
                   key == 'wallet_access_signed_out_v1';
           }
-          await expectLater(
-            service.changePassword(
-              walletId: user.walletId,
-              newPassword: replacement,
-            ),
-            throwsA(
-              isA<WalletAccessException>().having(
-                (error) => error.failure,
-                'failure',
-                WalletAccessFailure.storageFailed,
-              ),
-            ),
+          // Whether the engine took the new password decides what the caller
+          // is told: a failure only while the former one still works.
+          const engineUnchanged = {
+            'journal before write',
+            'journal after write',
+            'engine before change',
+          };
+          const credentialLeftBehind = {
+            'vault before write',
+            'vault after write',
+            'vault readback',
+            'ready before write',
+          };
+          final changing = service.changePasswordWithOutcome(
+            walletId: user.walletId,
+            newPassword: replacement,
           );
+          if (engineUnchanged.contains(boundary)) {
+            await expectLater(
+              changing,
+              throwsA(
+                isA<WalletAccessException>().having(
+                  (error) => error.failure,
+                  'failure',
+                  WalletAccessFailure.storageFailed,
+                ),
+              ),
+            );
+          } else {
+            expect(
+              await changing,
+              credentialLeftBehind.contains(boundary)
+                  ? PasswordChangeOutcome.deviceUnlockNeedsSetup
+                  : PasswordChangeOutcome.completed,
+            );
+          }
           final persisted = jsonEncode(storage.values);
           expect(persisted, isNot(contains(_password)));
           expect(persisted, isNot(contains(replacement)));
+          // No in-process failure leaves the change journaled as undecided.
+          expect(persisted, isNot(contains('rotationEnvelope')));
           await service.dispose();
           auth.active = null;
           auth.sessions.observe(null);
+          auth.strictSignIn = true;
           coordinator = WalletUnlockCoordinator(
             operationGate: WalletOperationGate(),
           );
@@ -2380,19 +2478,29 @@ void main() {
             unlockCoordinator: coordinator,
           );
           await service.initialize();
-          if (boundary == 'journal before write') {
-            // The failed durable reservation must not change the engine.
+          if (engineUnchanged.contains(boundary)) {
+            // The stored credential the user depends on still opens it.
             expect(auth.enginePassword, _password);
             await service.signInManaged(user.wallet);
           } else {
-            await service.recoverPasswordRotation(user.wallet, replacement);
-            await auth.signIn(
-              walletName: user.walletId.name,
-              password: replacement,
-            );
-            await service.didAuthenticate(user, password: replacement);
             expect(auth.enginePassword, replacement);
-            expect(backend.values['gleec.wallet.$_entry'], replacement);
+            expect(
+              await service.recoverPasswordRotation(user.wallet, replacement),
+              isNull,
+            );
+            if (credentialLeftBehind.contains(boundary)) {
+              final signedIn = await auth.signIn(
+                walletName: user.walletId.name,
+                password: replacement,
+              );
+              await service.didAuthenticate(signedIn, password: replacement);
+              final status = await service.status();
+              expect(status.hasManagedCredential, isFalse);
+              expect(status.protection, CredentialProtection.password);
+            } else {
+              expect(backend.values['gleec.wallet.$_entry'], replacement);
+              await service.signInManaged(user.wallet);
+            }
           }
           expect(auth.users, [user]);
           expect((await service.lastWallet())?.name, user.walletId.name);

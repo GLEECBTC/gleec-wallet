@@ -2020,6 +2020,8 @@ abstract class LocaleKeys {
   static const authAuthorizationTitle = 'authAuthorizationTitle';
   static const authPasswordChangeDisclosure = 'authPasswordChangeDisclosure';
   static const authCreationProtectionNotice = 'authCreationProtectionNotice';
+  static const authManagedUnlockCanceled = 'authManagedUnlockCanceled';
+  static const authManagedUnlockFailed = 'authManagedUnlockFailed';
   static const authSignOutFailed = 'authSignOutFailed';
   static const authCredentialCleanupPending = 'authCredentialCleanupPending';
   static const authRetryCredentialCleanup = 'authRetryCredentialCleanup';
