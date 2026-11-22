@@ -128,8 +128,7 @@ void main() {
         );
         await tester.tap(find.byKey(const Key('save-wallet-display-name')));
         await tester.pumpAndSettle();
-        // A cancelled confirmation changed nothing; it is not an unlock.
-        expect(find.text('authConfirmationCanceled'.tr()), findsOneWidget);
+        expect(find.text('authUnlockCanceled'.tr()), findsOneWidget);
         expect(access.renamed, isEmpty);
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
@@ -212,12 +211,7 @@ void main() {
             ),
           ),
         );
-        // The title names the wallet by its label, never its engine identity.
-        expect(
-          find.text('authUnlockWalletTitle'.tr(args: ['Holiday wallet'])),
-          findsOneWidget,
-        );
-        expect(find.textContaining('Gleec Wallet'), findsNothing);
+        expect(find.text('Holiday wallet'), findsOneWidget);
         await tester.tap(find.byKey(const Key('managed-wallet-unlock')));
         await tester.pumpAndSettle();
         final event = harness.auth.events

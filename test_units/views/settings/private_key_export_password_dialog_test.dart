@@ -97,15 +97,15 @@ void testPrivateKeyExportPasswordDialog() {
         final field = tester.widget<UiTextFormField>(
           find.byKey(_passwordFieldKey),
         );
-        // Busy controls stay enabled so keyboard focus is not dropped; they
-        // just accept nothing.
-        expect(field.enabled, isTrue);
-        expect(field.readOnly, isTrue);
+        expect(field.enabled, isFalse);
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
         expect(find.text('Fetching Private Keys...'), findsOneWidget);
+        expect(
+          tester.widget<UiPrimaryButton>(find.byKey(_submitKey)).onPressed,
+          isNull,
+        );
         field.controller!.text = _passwordSentinel;
         field.onFieldSubmitted!(_passwordSentinel);
-        tester.widget<UiPrimaryButton>(find.byKey(_submitKey)).onPressed!();
         expect(submissions, 0);
 
         await tester.tap(find.byKey(_cancelKey));

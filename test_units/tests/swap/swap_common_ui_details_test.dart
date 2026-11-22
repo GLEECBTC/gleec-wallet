@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
-import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 import 'swap_common_ui_fakes.dart';
 
@@ -80,7 +79,7 @@ void main() {
         tester,
       ) async {
         await pumpSwapUi(tester, section);
-        expect(chevron(tester).duration, SwapMotion.details);
+        expect(chevron(tester).duration, const Duration(milliseconds: 180));
 
         await pumpSwapUi(
           tester,
@@ -93,24 +92,6 @@ void main() {
           ),
         );
         expect(chevron(tester).duration, Duration.zero);
-      });
-
-      testWidgets('expands once on request without delaying new content', (
-        tester,
-      ) async {
-        await pumpSwapUi(
-          tester,
-          const Align(alignment: Alignment.topLeft, child: section),
-        );
-        final before = tester.getSize(find.byType(SwapDetails)).height;
-        await tester.tap(find.text('Costs & protection'));
-        await tester.pump();
-        expect(find.text('Network fee'), findsOneWidget);
-        await tester.pump(SwapMotion.details ~/ 2);
-        final midway = tester.getSize(find.byType(SwapDetails)).height;
-        await tester.pumpAndSettle();
-        final after = tester.getSize(find.byType(SwapDetails)).height;
-        expect(midway, inExclusiveRange(before, after));
       });
     });
 

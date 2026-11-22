@@ -144,7 +144,8 @@ void main() {
         ),
         title: 'Cancelled before funds moved',
         body: 'No asset transfer was broadcast.',
-        funds: 'No swap payment was recorded. Network fees may still have been spent.',
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
         timeline: 'Cancelled: Preparing.',
       ),
@@ -176,7 +177,7 @@ void main() {
           outcome: const SwapExecutionOutcome(kind: SwapOutcomeKind.noMatch),
         ),
         title: 'No match found',
-        body: 'No one took this swap in time. Nothing was sent.',
+        body: 'No one took this exchange in time. Nothing was sent.',
         funds: unchanged,
         actions: ['Try again'],
         timeline: 'Not started: Exchanging asset.',
@@ -202,7 +203,6 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
-        expandProgressDetails: true,
       );
     }
 
@@ -219,8 +219,7 @@ void main() {
 
         final hero = tester.widget<SwapStatusHero>(find.byType(SwapStatusHero));
         expect(hero.title, outcome.title);
-        // An address in it is kept on one line by word joiners, unseen.
-        expect(hero.body?.replaceAll('\u2060', ''), outcome.body);
+        expect(hero.body, outcome.body);
         expect(find.text(outcome.title), findsWidgets);
 
         final funds = outcome.funds;
@@ -241,36 +240,23 @@ void main() {
         }
 
         final buttons = tester.widgetList<SwapButton>(find.byType(SwapButton));
-        expect(
-          buttons.map((button) => button.label),
-          outcome.snapshot.isSuccess
-              ? ['View asset', 'Receipt details']
-              : outcome.actions,
-        );
+        expect(buttons.map((button) => button.label), outcome.actions);
         expect(buttons.map((button) => button.variant), [
           SwapButtonVariant.primary,
-          for (
-            var i = 1;
-            i < (outcome.snapshot.isSuccess ? 2 : outcome.actions.length);
-            i++
-          )
+          for (var i = 1; i < outcome.actions.length; i++)
             SwapButtonVariant.secondary,
         ]);
         expect(find.byKey(const Key('swap-cancel')), findsNothing);
-        if (!outcome.snapshot.isSuccess) {
-          expect(
-            find.text(
-              'You can leave this screen. The swap continues in Activity.',
-            ),
-            findsNothing,
-          );
-        }
-        if (!outcome.snapshot.isSuccess) {
-          expect(
-            tester.getSemantics(find.byType(SwapTimelineView)).label,
-            contains(outcome.timeline),
-          );
-        }
+        expect(
+          find.text(
+            'You can leave this screen. The swap continues in Activity.',
+          ),
+          findsNothing,
+        );
+        expect(
+          tester.getSemantics(find.byType(SwapTimelineView)).label,
+          contains(outcome.timeline),
+        );
         await expectSwapAccessible(tester);
       });
     }
@@ -280,7 +266,7 @@ void main() {
     ) async {
       await show(tester, snapshotOf(outcome: completed(amount: '2999.999')));
 
-      expect(find.text('1 ETH → 2,999.99 USDC'), findsNothing);
+      expect(find.text('1 ETH → 2,999.99 USDC'), findsOneWidget);
       expect(find.text('You received 2,999.99 USDC'), findsOneWidget);
       expect(find.text('WHERE ARE THE FUNDS?'), findsNothing);
     });

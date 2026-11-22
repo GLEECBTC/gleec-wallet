@@ -67,7 +67,11 @@ extension _PickerList on _SwapAssetPickerState {
               blocked: widget.isBlocked(id),
               unreachableWith: unreachable ? widget.other : null,
               noOffers: noOffers,
-              onTap: !unreachable ? () => _choose(id) : null,
+              activating: _activating == id,
+              activationFailed: _activationFailed == id,
+              onTap: _activating == null && !unreachable
+                  ? () => _choose(id)
+                  : null,
             ),
         },
       ),

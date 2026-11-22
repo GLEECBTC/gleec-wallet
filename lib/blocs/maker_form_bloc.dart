@@ -139,9 +139,9 @@ class MakerFormBloc implements BlocBase {
     _inBuyCoin.add(_buyCoin);
     if (coin == sellCoin && coin != null) sellCoin = null;
 
-    _autoActivate(buyCoin)
-        .then((_) => _updatePreimage())
-        .then((_) => _reValidate());
+    _autoActivate(
+      buyCoin,
+    ).then((_) => _updatePreimage()).then((_) => _reValidate());
   }
 
   Rational? _sellAmount;
@@ -552,15 +552,7 @@ class MakerFormBloc implements BlocBase {
     }
 
     if (response['error'] != null) {
-      // The engine answers with text. A refusal before the order was sent
-      // arrives as an exception object, which is not written for users.
-      final error = response['error'];
-      return error is String
-          ? TextError(error: error)
-          : TextError(
-              error: LocaleKeys.somethingWrong.tr(),
-              technicalDetails: '$error',
-            );
+      return TextError(error: response['error']);
     }
 
     currentEntityUuid = response['result']['uuid'];

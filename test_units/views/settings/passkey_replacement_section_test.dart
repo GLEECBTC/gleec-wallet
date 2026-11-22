@@ -19,7 +19,6 @@ import '../../support/wallet_access_ui_fixture.dart';
 class _ReplacementAccess extends AccessibilityAccess {
   bool passkey = true;
   bool available = true;
-  bool generated = true;
   WalletAccessFailure? authorizationFailure;
   WalletAccessFailure? replacementFailure;
   final replacements = <(WalletId, String)>[];
@@ -32,7 +31,7 @@ class _ReplacementAccess extends AccessibilityAccess {
             : CredentialProtection.authenticationBound,
         hasManagedCredential: true,
         requiresAuthentication: true,
-        generatedPassword: generated,
+        generatedPassword: true,
       );
   @override
   Future<CredentialCapabilities> capabilities() async => CredentialCapabilities(
@@ -169,26 +168,6 @@ void main() {
         expect(access.replacements, isEmpty);
         expect(find.byType(PasswordDialogContent), findsNothing);
         expect(tester.takeException(), isNull);
-      });
-    }
-
-    for (final generated in [true, false]) {
-      testWidgets('says where the password is when it was '
-          '${generated ? 'created for the user' : 'chosen by the user'}', (
-        tester,
-      ) async {
-        final access = _ReplacementAccess()..generated = generated;
-        await _pump(tester, access);
-        // A created password cannot be recalled, so the user is pointed to
-        // their password manager; a chosen one needs no such hint.
-        expect(
-          find.text('authReplacePasskeyGeneratedDescription'.tr()),
-          generated ? findsOneWidget : findsNothing,
-        );
-        expect(
-          find.text('authReplacePasskeyDescription'.tr()),
-          generated ? findsNothing : findsOneWidget,
-        );
       });
     }
 

@@ -170,7 +170,10 @@ void main() {
           ),
         );
         expect(hero.title, 'No match found');
-        expect(hero.body, 'No one took this swap in time. Nothing was sent.');
+        expect(
+          hero.body,
+          'No one took this exchange in time. Nothing was sent.',
+        );
         expect(hero.icon, Icons.person_search_outlined);
         expect(hero.tone, SwapTone.neutral);
       });

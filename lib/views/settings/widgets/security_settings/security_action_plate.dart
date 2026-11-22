@@ -1,7 +1,6 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/views/settings/widgets/security_settings/security_section_card.dart';
 
 /// Generic reusable widget for security actions in the settings page.
 ///
@@ -17,8 +16,6 @@ class SecurityActionPlate extends StatelessWidget {
   /// [actionText] The text for the action button (if not using custom trailing widget)
   /// [onActionPressed] Callback when the action button is pressed (if not using custom trailing widget)
   /// [trailingWidget] Custom widget to display instead of the default action button
-  /// [status] One status row under the description
-  /// [details] Further controls of the section, below its header
   /// [showWarningIndicator] Whether to show a warning indicator next to the title
   /// [warningIndicatorColor] Optional color for the warning indicator (defaults to decrease color)
   /// [iconColor] Optional color for the icon (defaults to primary color)
@@ -31,23 +28,19 @@ class SecurityActionPlate extends StatelessWidget {
     this.actionText,
     this.onActionPressed,
     this.trailingWidget,
-    this.status,
-    this.details,
     this.showWarningIndicator = false,
     this.warningIndicatorColor,
     this.iconColor,
     this.buttonTextColor,
   }) : assert(
-         (actionText == null) == (onActionPressed == null),
-         'Provide actionText and onActionPressed together',
-       ),
-       assert(
-         trailingWidget == null || actionText == null,
-         'Provide actionText/onActionPressed OR trailingWidget, not both',
+         (actionText != null &&
+                 onActionPressed != null &&
+                 trailingWidget == null) ||
+             (trailingWidget != null &&
+                 actionText == null &&
+                 onActionPressed == null),
+         'Either provide actionText/onActionPressed OR trailingWidget, but not both',
        );
-
-  /// Width of a section's action when it sits beside the text.
-  static const double actionWidth = 210;
 
   final Widget icon;
   final String title;
@@ -55,44 +48,92 @@ class SecurityActionPlate extends StatelessWidget {
   final String? actionText;
   final VoidCallback? onActionPressed;
   final Widget? trailingWidget;
-  final Widget? status;
-  final Widget? details;
   final bool showWarningIndicator;
   final Color? warningIndicatorColor;
   final Color? iconColor;
   final Color? buttonTextColor;
 
-  /// Whether a section this wide puts its action beside its text. Sections
-  /// that build their own action use it to size that action the same way.
-  static bool isWide(BuildContext context, BoxConstraints constraints) =>
-      constraints.maxWidth >= 700 &&
-      MediaQuery.textScalerOf(context).scale(1) <= 1.5;
+  @override
+  Widget build(BuildContext context) {
+    return _ResponsiveBody(
+      icon: icon,
+      title: title,
+      description: description,
+      actionText: actionText,
+      onActionPressed: onActionPressed,
+      trailingWidget: trailingWidget,
+      showWarningIndicator: showWarningIndicator,
+      warningIndicatorColor: warningIndicatorColor,
+      iconColor: iconColor,
+      buttonTextColor: buttonTextColor,
+    );
+  }
+}
+
+/// Single responsive widget that handles all layout cases.
+/// Adapts between mobile/desktop and column/row layouts based on screen size.
+class _ResponsiveBody extends StatelessWidget {
+  const _ResponsiveBody({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.actionText,
+    this.onActionPressed,
+    this.trailingWidget,
+    required this.showWarningIndicator,
+    this.warningIndicatorColor,
+    this.iconColor,
+    this.buttonTextColor,
+  });
+
+  final Widget icon;
+  final String title;
+  final String description;
+  final String? actionText;
+  final VoidCallback? onActionPressed;
+  final Widget? trailingWidget;
+  final bool showWarningIndicator;
+  final Color? warningIndicatorColor;
+  final Color? iconColor;
+  final Color? buttonTextColor;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = isWide(context, constraints);
-        return SecuritySectionCard(
-          padding: wide
-              ? const EdgeInsets.all(16)
-              : const EdgeInsets.symmetric(horizontal: 12),
-          child: wide ? _buildRowLayout() : _buildColumnLayout(),
+        final useColumnLayout =
+            constraints.maxWidth < 700 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.5;
+        return Container(
+          padding: _getPadding(!useColumnLayout),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.tertiary,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: useColumnLayout
+              ? _buildColumnLayout(false)
+              : _buildRowLayout(),
         );
       },
     );
   }
 
+  /// Returns appropriate padding based on platform
+  EdgeInsets _getPadding(bool isDesktop) {
+    return isDesktop
+        ? const EdgeInsets.all(16)
+        : const EdgeInsets.symmetric(horizontal: 12);
+  }
+
   /// Builds column layout for mobile or constrained desktop widths
-  Widget _buildColumnLayout() {
-    final trailing = _buildTrailingWidget(fullWidth: true);
+  Widget _buildColumnLayout(bool isDesktop) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const SizedBox(height: 24),
+        SizedBox(height: isDesktop ? 16 : 24),
         _ActionIcon(icon: icon, iconColor: iconColor),
-        const SizedBox(height: 28),
+        SizedBox(height: isDesktop ? 16 : 28),
         _ActionTitle(
           title: title,
           showWarningIndicator: showWarningIndicator,
@@ -100,27 +141,17 @@ class SecurityActionPlate extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _ActionBody(description: description),
-        if (status != null) ...[
-          const SizedBox(height: 12),
-          // Short statuses sit under the centred text; long ones wrap.
-          Center(child: IntrinsicWidth(child: status)),
-        ],
-        if (trailing != null) ...[const SizedBox(height: 8), trailing],
-        if (details != null) ...[
-          const SizedBox(height: 16),
-          SizedBox(width: double.infinity, child: details),
-        ],
-        SizedBox(height: details != null || trailing == null ? 16 : 6),
+        SizedBox(height: isDesktop ? 16 : 8),
+        _buildTrailingWidget(fullWidth: true),
+        SizedBox(height: isDesktop ? 16 : 6),
       ],
     );
   }
 
   /// Builds row layout for wide desktop screens
   Widget _buildRowLayout() {
-    final trailing = _buildTrailingWidget();
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -142,28 +173,23 @@ class SecurityActionPlate extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   _ActionBody(description: description, isInRowLayout: true),
-                  if (status != null) ...[const SizedBox(height: 8), status!],
                 ],
               ),
             ),
-            if (trailing != null) ...[const SizedBox(width: 16), trailing],
+            const SizedBox(width: 16),
+            _buildTrailingWidget(),
             const SizedBox(width: 16),
           ],
         ),
-        if (details != null)
-          Padding(
-            // Aligned with the text, past the icon.
-            padding: const EdgeInsets.fromLTRB(88, 16, 16, 0),
-            child: details,
-          ),
       ],
     );
   }
 
   /// Builds the trailing widget (either custom widget or default action button)
-  Widget? _buildTrailingWidget({bool fullWidth = false}) {
-    if (trailingWidget != null) return trailingWidget;
-    if (actionText == null) return null;
+  Widget _buildTrailingWidget({bool fullWidth = false}) {
+    if (trailingWidget != null) {
+      return trailingWidget!;
+    }
 
     return _ActionButton(
       fullWidth: fullWidth,
@@ -185,9 +211,7 @@ class _ActionIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final defaultColor = iconColor ?? Theme.of(context).colorScheme.primary;
 
-    return ExcludeSemantics(
-      child: DefaultIconStyle(color: defaultColor, size: 50.0, child: icon),
-    );
+    return DefaultIconStyle(color: defaultColor, size: 50.0, child: icon);
   }
 }
 
@@ -238,18 +262,22 @@ class _ActionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textAlign = isInRowLayout ? TextAlign.left : TextAlign.center;
-    final text = Semantics(
-      header: true,
-      child: Text(
+    // TODO: See if possible to refactor theme to provide this text style in
+    // accordance with the Material Design 3 typography guidelines. This is
+    // used in other places as well. e.g. The seed backup notification.
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w700, fontSize: 16);
+
+    if (!showWarningIndicator) {
+      return Text(
         title,
-        style: SecuritySectionText.title(context),
+        style: titleStyle,
         textAlign: textAlign,
         overflow: TextOverflow.visible,
         softWrap: true,
-      ),
-    );
-
-    if (!showWarningIndicator) return text;
+      );
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -265,7 +293,15 @@ class _ActionTitle extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 7),
-        Flexible(child: text),
+        Flexible(
+          child: Text(
+            title,
+            style: titleStyle,
+            textAlign: textAlign,
+            overflow: TextOverflow.visible,
+            softWrap: true,
+          ),
+        ),
       ],
     );
   }
@@ -281,12 +317,20 @@ class _ActionBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textAlign = isInRowLayout ? TextAlign.left : TextAlign.center;
+    // TODO: See if possible to refactor theme to provide this text style in
+    // accordance with the Material Design 3 typography guidelines. This is
+    // used in other places as well. e.g. The seed backup notification.
+    final descriptionStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
+      fontWeight: FontWeight.w500,
+      fontSize: 14,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 100),
       child: Text(
         description,
-        style: SecuritySectionText.body(context),
+        style: descriptionStyle,
         textAlign: textAlign,
         overflow: TextOverflow.visible,
         softWrap: true,
@@ -311,7 +355,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = fullWidth ? double.infinity : SecurityActionPlate.actionWidth;
+    final width = fullWidth ? double.infinity : 210.0;
     const height = 48.0;
 
     return UiPrimaryButton(

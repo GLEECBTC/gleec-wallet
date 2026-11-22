@@ -7,12 +7,7 @@ sealed class WalletProtectionEvent extends Equatable {
 }
 
 final class WalletProtectionRefreshed extends WalletProtectionEvent {
-  const WalletProtectionRefreshed({this.manual = false});
-
-  /// The user asked for it, so the check is shown while it runs.
-  final bool manual;
-  @override
-  List<Object?> get props => [manual];
+  const WalletProtectionRefreshed();
 }
 
 enum WalletProtectionAction { passkey, device, replacePasskey, grace }

@@ -2,20 +2,17 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
-import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
-
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -60,9 +57,6 @@ void main() {
       loadingAssets: false,
       pay: eth,
       receive: usdc,
-      payAddress: '0xpay',
-      receiveAddress: '0xreceive',
-      feeBalance: d('2'),
       inputText: '1',
       balance: d('2'),
       evaluation: SwapEvaluationStatus.ready,
@@ -164,11 +158,7 @@ void main() {
         );
 
         expect(
-          find.semantics.byLabel(
-            'swapAmountToPayIn'.tr(
-              args: [SwapFormat.onNetwork('ETH', 'Ethereum')],
-            ),
-          ),
+          find.semantics.byLabel('Amount to pay'),
           usable ? findsOneWidget : findsNothing,
         );
         await tester.tap(

@@ -1,8 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show RpcDispatchRejected;
-import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -101,65 +98,6 @@ void main() {
         'unconfirmed', () async {
       manager.startError = RoutedSwapStartUnconfirmedException(
         const AuthSessionChangedException(),
-      );
-
-      await expectLater(
-        executor.start(quote, authorization: testSwapAuthorization()),
-        throwsA(isA<SwapStartUnconfirmedException>()),
-      );
-    });
-
-    test('the app lock refusing on the way to the engine is a refusal, '
-        'sending nothing', () async {
-      const locked = WalletOperationDenied(WalletOperationDenial.locked);
-
-      await expectLater(
-        executor.start(
-          quote,
-          authorization: testSwapAuthorization(
-            beforeDispatch: () => throw locked,
-          ),
-        ),
-        throwsA(
-          isA<SwapStartRejectedException>().having(
-            (e) => e.reason,
-            'reason',
-            SwapStartRejection.notAvailable,
-          ),
-        ),
-      );
-      expect(manager.started, isEmpty);
-    });
-
-    test('a start the registry revokes at the dispatch boundary keeps that '
-        'refusal', () async {
-      const revoked = SwapStartRejectedException(SwapStartRejection.quoteStale);
-
-      await expectLater(
-        executor.start(
-          quote,
-          authorization: testSwapAuthorization(
-            beforeDispatch: () => throw revoked,
-          ),
-        ),
-        throwsA(same(revoked)),
-      );
-      expect(manager.started, isEmpty);
-    });
-
-    test('the transport refusing to send is a refusal, never a start in '
-        'doubt', () async {
-      manager.startError = const RpcDispatchRejected('session revoked');
-
-      await expectLater(
-        executor.start(quote, authorization: testSwapAuthorization()),
-        throwsA(isA<SwapStartRejectedException>()),
-      );
-    });
-
-    test('a lock error after the engine was asked stays in doubt', () async {
-      manager.startError = const WalletOperationDenied(
-        WalletOperationDenial.locked,
       );
 
       await expectLater(

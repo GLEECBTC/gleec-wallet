@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   internal_android:
-    if: startsWith(github.head_ref, 'auth/') || github.head_ref == 'integration/post-0.10.0-preview' || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.head_ref, 'auth/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

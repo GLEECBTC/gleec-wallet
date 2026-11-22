@@ -133,6 +133,7 @@ class _InProgressSwapStatusState extends State<_InProgressSwapStatus>
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     );
+    _colorAnimationController.repeat(reverse: true);
     _colorAnimation =
         Tween(begin: 0.0, end: 1.0)
             .chain(CurveTween(curve: Curves.easeIn))
@@ -141,18 +142,6 @@ class _InProgressSwapStatusState extends State<_InProgressSwapStatus>
             setState(() {});
           });
     super.initState();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // With reduced motion the ring is a still gradient: the percentage in
-    // it is what reports progress.
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _colorAnimationController.stop();
-    } else if (!_colorAnimationController.isAnimating) {
-      _colorAnimationController.repeat(reverse: true);
-    }
   }
 
   @override

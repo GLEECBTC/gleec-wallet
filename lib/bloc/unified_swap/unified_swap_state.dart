@@ -114,10 +114,6 @@ class UnifiedSwapState extends Equatable {
   const UnifiedSwapState({
     this.view = UnifiedSwapView.form,
     this.loadingAssets = true,
-    this.preparingAssets = false,
-    this.preparationFailedAsset,
-    this.quotesPending = false,
-    this.pricingPending = false,
     this.catalog = SwapCatalog.empty,
     this.pay,
     this.receive,
@@ -160,18 +156,6 @@ class UnifiedSwapState extends Equatable {
 
   /// Whether the tradable assets are still loading.
   final bool loadingAssets;
-
-  /// Whether activation, addresses, or funding are being prepared.
-  final bool preparingAssets;
-
-  /// The chosen asset whose preparation failed; retry keeps the intent.
-  final AssetId? preparationFailedAsset;
-
-  /// Other eligible sources are still checking this exact intent.
-  final bool quotesPending;
-
-  /// Fiat decoration/comparison is still loading; token quotes stay usable.
-  final bool pricingPending;
 
   /// What the sources can trade, active or not.
   final SwapCatalog catalog;
@@ -321,10 +305,6 @@ class UnifiedSwapState extends Equatable {
   /// Missing or failed funding reads cannot authorize a trade.
   bool get fundingReady =>
       signedIn &&
-      !preparingAssets &&
-      !loadingAssets &&
-      preparationFailedAsset == null &&
-      inactiveAsset == null &&
       hasPair &&
       balance != null &&
       (pay!.parentId == null || feeBalance != null) &&
@@ -334,9 +314,7 @@ class UnifiedSwapState extends Equatable {
                 asset == pay!.parentId ||
                 fundingBalances[asset] != null,
           ) ??
-          true) &&
-      payAddress != null &&
-      receiveAddress != null;
+          true);
 
   /// A required currency whose latest balance lookup failed. A retry is
   /// explicit so a failed endpoint cannot trigger an unbounded request loop.
@@ -376,10 +354,6 @@ class UnifiedSwapState extends Equatable {
   List<Object?> get props => [
     view,
     loadingAssets,
-    preparingAssets,
-    preparationFailedAsset,
-    quotesPending,
-    pricingPending,
     catalog,
     pay,
     receive,
@@ -423,10 +397,6 @@ class UnifiedSwapState extends Equatable {
   UnifiedSwapState copyWith({
     UnifiedSwapView? view,
     bool? loadingAssets,
-    bool? preparingAssets,
-    AssetId? preparationFailedAsset,
-    bool? quotesPending,
-    bool? pricingPending,
     SwapCatalog? catalog,
     AssetId? pay,
     AssetId? receive,
@@ -462,7 +432,6 @@ class UnifiedSwapState extends Equatable {
     bool? hardwareWallet,
     bool? sessionReady,
     SwapOrderBookHints? hints,
-    bool clearPreparationFailure = false,
     bool clearPay = false,
     bool clearReceive = false,
     bool clearPayAddress = false,
@@ -482,14 +451,6 @@ class UnifiedSwapState extends Equatable {
     return UnifiedSwapState(
       view: view ?? this.view,
       loadingAssets: loadingAssets ?? this.loadingAssets,
-      preparingAssets: preparingAssets ?? this.preparingAssets,
-      preparationFailedAsset: clearPreparationFailure
-          ? null
-          : (preparationFailedAsset ?? this.preparationFailedAsset),
-      quotesPending:
-          quotesPending ?? (clearQuotes ? false : this.quotesPending),
-      pricingPending:
-          pricingPending ?? (clearQuotes ? false : this.pricingPending),
       catalog: catalog ?? this.catalog,
       pay: clearPay ? null : (pay ?? this.pay),
       receive: clearReceive ? null : (receive ?? this.receive),

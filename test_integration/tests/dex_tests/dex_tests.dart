@@ -12,6 +12,7 @@ import 'taker_orders_test.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  reportFrameworkFailures(binding);
   dexWidgetTests(binding);
 }
 

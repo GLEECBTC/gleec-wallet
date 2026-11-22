@@ -349,28 +349,3 @@ final class UnifiedSwapLegalRequested extends UnifiedSwapEvent {
   @override
   List<Object?> get props => [retry];
 }
-
-/// Retry preparation of the current pair without losing the entered amount.
-final class UnifiedSwapPreparationRetried extends UnifiedSwapEvent {
-  const UnifiedSwapPreparationRetried();
-}
-
-/// Restores unsigned input after leaving Swap within the same wallet session.
-final class UnifiedSwapDraftRestored extends UnifiedSwapEvent {
-  const UnifiedSwapDraftRestored({
-    this.pay,
-    this.receive,
-    required this.input,
-    required this.amountMode,
-    required this.slippage,
-  });
-
-  final String? pay;
-  final String? receive;
-  final String input;
-  final SwapAmountMode amountMode;
-  final double slippage;
-
-  @override
-  List<Object?> get props => [pay, receive, input, amountMode, slippage];
-}

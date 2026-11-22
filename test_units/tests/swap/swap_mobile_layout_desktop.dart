@@ -6,11 +6,13 @@ part of 'swap_mobile_layout_test.dart';
 
 void _desktopCases() {
   group('the form in a desktop window', () {
-    // A laptop window reserves the quote region before an option arrives.
+    // A laptop window: a priced form runs past its bottom, an unpriced one
+    // does not.
     const laptop = Size(1366, 700);
     const tall = Size(1366, 1200);
-    final unpriced = swapBaseForm(input: '')
-        .copyWith(issue: SwapFormIssue.amountMissing);
+    final unpriced = swapBaseForm(
+      input: '',
+    ).copyWith(issue: SwapFormIssue.amountMissing);
 
     Future<void> show(WidgetTester tester, UnifiedSwapState state) async {
       swap.emit(state);
@@ -43,13 +45,12 @@ void _desktopCases() {
       expect(swapPrimaryAction.hitTestable(), findsOneWidget);
     });
 
-    testWidgets('keeps the pinned action stable as quotes arrive and clear', (
+    testWidgets('pins and unpins it as the form grows and shrinks', (
       tester,
     ) async {
       await pump(tester, unpriced, size: laptop);
-      expect(footer, findsOneWidget);
+      expect(footer, findsNothing);
       expect(swapPrimaryLabel(tester), 'Enter amount');
-      final position = tester.getRect(swapPrimaryAction);
 
       await show(tester, swapPricedForm());
       expect(
@@ -57,12 +58,10 @@ void _desktopCases() {
         findsOneWidget,
       );
       expect(swapPrimaryLabel(tester), 'Review swap');
-      expect(tester.getRect(swapPrimaryAction), position);
 
       await show(tester, unpriced);
-      expect(footer, findsOneWidget);
+      expect(footer, findsNothing);
       expect(swapPrimaryAction.hitTestable(), findsOneWidget);
-      expect(tester.getRect(swapPrimaryAction), position);
     });
 
     testWidgets('holds steady when only the action itself does not fit', (

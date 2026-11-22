@@ -7,7 +7,7 @@
   - macOS is unchanged: Time Machine backups stay on disks you hold.
 - **Desktop Wallet Data Leaves Documents** ([@CharlVS], [SDK#458](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/458)) — On Windows and Linux the wallet's encrypted recovery phrase and swap data moved from `Documents\.kdf` to `%LOCALAPPDATA%\Gleec\kdf` on Windows and `~/.local/share/com.gleec.GleecDEX/kdf` on Linux. Windows often backs Documents up to OneDrive, which copied that data to the cloud and synced its databases while they were being written.
   - The first start after the update puts the old folder aside as `.kdf.moved`, copies the data, checks every file, and leaves a `README.txt` in `Documents\.kdf` saying where it went. If the copy can't finish, for example because OneDrive is offline, the old folder goes back, the wallet keeps working from Documents, and the next start tries again.
-  - `.kdf.moved` is deleted a week after a wallet first opens from the new folder. Anything in it that changed after the move is kept.
+  - After a successful wallet open from the new folder and a seven-day grace period, cleanup removes unchanged files from `.kdf.moved`. A running wallet engine defers cleanup.
   - If you back up `Documents\.kdf` yourself, back up the new folder or your recovery phrase instead. To use one wallet on several computers that share OneDrive, update each of them within that week.
 
 ## 🐛 Bug Fixes

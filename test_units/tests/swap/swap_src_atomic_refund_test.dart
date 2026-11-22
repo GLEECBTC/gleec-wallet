@@ -155,19 +155,17 @@ void main() {
   });
 
   test('its default gas limits are those of the KDF this build pins', () {
-    final config =
-        jsonDecode(
-              File(
-                'sdk/packages/komodo_defi_framework/app_build/'
-                'build_config.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File(
+        'sdk/packages/komodo_defi_framework/app_build/'
+        'build_config.json',
+      ).readAsStringSync(),
+    ) as Map<String, dynamic>;
     final pinned = (config['api'] as Map<String, dynamic>)['api_commit_hash'];
 
     expect(
       pinned,
-      '46769c4df3b043669eee59508bf1af017157dcdd',
+      'fd8249c904ae1c75d66fce1c1e361686f13d723c',
       reason:
           'KDF was repinned. Check ETH_PAYMENT and ETH_SENDER_REFUND in '
           "eth.rs's gas_limit module at the new commit against the defaults "

@@ -19,7 +19,6 @@ class WalletsManager extends StatelessWidget {
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
     this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
-    this.confirmCreation = false,
   });
   final WalletsManagerEventType eventType;
   final WalletType walletType;
@@ -35,9 +34,6 @@ class WalletsManager extends StatelessWidget {
   /// callers - and `wallets_manager_test` - compile unchanged.
   final WalletsManagerAction initialAction;
   final WalletsManagerExistWalletAction initialWalletAction;
-
-  /// See [IguanaWalletsManager.confirmCreation].
-  final bool confirmCreation;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +51,6 @@ class WalletsManager extends StatelessWidget {
           rememberMe: rememberMe,
           initialAction: initialAction,
           initialWalletAction: initialWalletAction,
-          confirmCreation: confirmCreation,
         );
 
       case WalletType.trezor:

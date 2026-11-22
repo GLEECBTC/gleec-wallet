@@ -11,7 +11,6 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-import re
 import shutil
 import subprocess
 
@@ -60,17 +59,6 @@ def selected(root, sdk=False):
         yield item
 
 
-def flutter_version(root):
-    """The Flutter version .fvmrc pins, which is the one the candidate builds with."""
-    try:
-        version = json.loads((root / ".fvmrc").read_text())["flutter"]
-    except (OSError, ValueError, KeyError, TypeError):
-        version = None
-    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        raise SystemExit(".fvmrc is missing or does not pin an exact Flutter version")
-    return version
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -82,7 +70,6 @@ def main():
         raise SystemExit("Choose a new output directory; a frozen candidate is never overwritten")
     if root == output or root in output.parents:
         raise SystemExit("Place source snapshots outside the working tree")
-    pinned_flutter = flutter_version(root)
     source = output / "source"
     source.mkdir(parents=True)
     entries = []
@@ -101,7 +88,7 @@ def main():
                 "rootBaseCommit": git(root, "rev-parse", "HEAD").decode().strip(),
                 "sdkBaseCommit": git(root / "sdk", "rev-parse", "HEAD").decode().strip(),
                 "baseCommitsDoNotDescribeDirtySource": True,
-                "flutterVersion": pinned_flutter, "normalDefines": {**GASFREE_DEFINES, **NORMAL_DEFINES},
+                "flutterVersion": "3.41.4", "normalDefines": {**GASFREE_DEFINES, **NORMAL_DEFINES},
                 "rollbackDefines": {**GASFREE_DEFINES, **ROLLBACK_DEFINES},
                 "browserBuildOptions": ["--release", "--csp", "--no-web-resources-cdn"],
                 "excluded": "ignored files; non-source roots; private fixtures; profiles; signing; exports; caches; Git metadata",

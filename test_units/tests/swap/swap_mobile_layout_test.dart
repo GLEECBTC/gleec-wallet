@@ -2,15 +2,12 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
-import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/main_layout/main_layout.dart';
@@ -193,11 +190,11 @@ void _formCases() {
 
     testWidgets('a failed activation is said under the cards, leaving the '
         'pinned button free to try again', (tester) async {
+      services.activationError = StateError('offline');
       await pump(
         tester,
         swapBaseForm().copyWith(
           issue: SwapFormIssue.assetInactive,
-          preparationFailedAsset: usdc,
           catalog: SwapCatalog(
             sources: swapTestCatalog.sources,
             activated: {eth},
@@ -208,23 +205,23 @@ void _formCases() {
       await tester.tap(swapPrimaryAction);
       await tester.pumpAndSettle();
       expect(find.byType(SnackBar), findsNothing);
-      expect(
-        find.text('swapAssetPreparationUnavailable'.tr(args: ['USDC'])),
-        findsOneWidget,
-      );
+      expect(find.text("Couldn't activate USDC. Try again."), findsOneWidget);
       expect(swapPrimaryAction.hitTestable(), findsOneWidget);
 
-      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
-      expect(services.activations, isEmpty);
+      services.activationError = null;
+      await tester.tap(swapPrimaryAction);
+      await tester.pumpAndSettle();
+      expect(services.activations, [usdc, usdc]);
+      expect(find.text("Couldn't activate USDC. Try again."), findsNothing);
     });
   });
 
   group('the form on a wide screen', () {
-    testWidgets('draws no title and keeps the action reachable when the '
-        'reserved quote area fills the window', (tester) async {
+    testWidgets('draws no title either, and the main action follows the '
+        'quote', (tester) async {
       await pump(tester, swapPricedForm(), size: tablet);
 
-      expect(footer, findsOneWidget);
+      expect(footer, findsNothing);
       expect(find.text('Swap'), findsNothing);
       expect(
         find.semantics.byPredicate(
@@ -267,7 +264,7 @@ void _cardCases() {
       );
     });
 
-    testWidgets('signed in, reserve no entry space for a receiving address', (
+    testWidgets('signed in, keep the row an address is on its way to', (
       tester,
     ) async {
       await pump(
@@ -280,7 +277,7 @@ void _cardCases() {
           of: find.byType(SwapReceiveCard),
           matching: find.byType(Divider),
         ),
-        findsNothing,
+        findsOneWidget,
       );
     });
 

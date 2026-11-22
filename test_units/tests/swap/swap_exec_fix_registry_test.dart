@@ -1,9 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show RpcDispatchRejected;
-import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
@@ -15,8 +12,7 @@ import 'swap_exec_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Covers the registry when an engine answers late: after a sign-out, or
-/// after another screen already opened the same swap, and a start refused
-/// locally before its request could leave.
+/// after another screen already opened the same swap.
 void main() {
   group('an answer that lands after sign-out', () {
     late _SlowExecutor engine;
@@ -74,105 +70,6 @@ void main() {
       expect(registry.current, isEmpty);
       expect(engine.handle!.closed, isTrue);
     });
-  });
-
-  group('a start refused before its request could leave', () {
-    const locked = WalletOperationDenied(WalletOperationDenial.locked);
-    late WalletOperationGate lock;
-
-    SwapExecutionRegistry registryOf(SwapExecutor executor) {
-      final registry = SwapExecutionRegistry(
-        executors: [executor],
-        inFlight: () async => const [],
-        currentSession: () => testSwapAuth.currentSession,
-        isSessionCurrent: testSwapAuth.isSessionContextCurrent,
-        operationGate: lock,
-      );
-      addTearDown(registry.dispose);
-      return registry;
-    }
-
-    final refused = throwsA(
-      isA<SwapStartRejectedException>().having(
-        (error) => error.reason,
-        'reason',
-        SwapStartRejection.notAvailable,
-      ),
-    );
-
-    setUp(() {
-      lock = WalletOperationGate()
-        ..attachWallet(
-          'wallet',
-          sessionIdentity: Object(),
-          allowOperations: true,
-        );
-    });
-
-    test('by the app lock is rejected without asking the executor, and '
-        'unlocking does not revive it', () async {
-      final engine = FakeExecutor(SwapLiquiditySource.routed);
-      final registry = registryOf(engine);
-      final submission = registry.beginSubmission();
-      lock.block();
-
-      await expectLater(registry.start(quoteOf(), submission), refused);
-      expect(registry.beginSubmission, throwsA(locked));
-      lock.allow(walletEntryId: 'wallet');
-      await expectLater(registry.start(quoteOf(), submission), refused);
-
-      expect(engine.started, isEmpty);
-    });
-
-    test('by the app lock as the executor asks to dispatch is '
-        'rejected', () async {
-      final engine = _PreparingExecutor();
-      final registry = registryOf(engine);
-      final rejection = expectLater(
-        registry.start(quoteOf(), registry.beginSubmission()),
-        refused,
-      );
-
-      lock.block();
-      engine.ready.complete();
-      await rejection;
-
-      expect(engine.sent, isFalse);
-    });
-
-    test('by an executor reading the lock before it dispatches is '
-        'rejected', () async {
-      final registry = registryOf(_RefusingExecutor(locked, dispatches: false));
-
-      await expectLater(
-        registry.start(quoteOf(), registry.beginSubmission()),
-        refused,
-      );
-    });
-
-    test('by the transport before an executor asked to dispatch is '
-        'rejected', () async {
-      final registry = registryOf(
-        _RefusingExecutor(const RpcDispatchRejected(locked), dispatches: false),
-      );
-
-      await expectLater(
-        registry.start(quoteOf(), registry.beginSubmission()),
-        refused,
-      );
-    });
-
-    for (final Object error in [locked, const RpcDispatchRejected(locked)]) {
-      test('is never read into ${error.runtimeType} once dispatch began, '
-          'which only the executor can place', () async {
-        final registry = registryOf(_RefusingExecutor(error, dispatches: true));
-
-        await expectLater(
-          registry.start(quoteOf(), registry.beginSubmission()),
-          throwsA(same(error)),
-        );
-      });
-    }
   });
 
   test('two watches handed the same handle both follow it, and it stays '
@@ -238,52 +135,6 @@ void main() {
     await subscription.cancel();
     await registry.dispose();
   });
-}
-
-/// Asks to dispatch only once [ready] completes, then sends.
-class _PreparingExecutor implements SwapExecutor {
-  final Completer<void> ready = Completer<void>();
-  bool sent = false;
-
-  @override
-  SwapLiquiditySource get source => SwapLiquiditySource.routed;
-
-  @override
-  Future<SwapExecutionHandle> start(
-    SwapQuote quote, {
-    required SwapExecutionAuthorization authorization,
-  }) async {
-    await ready.future;
-    authorization.beforeDispatch();
-    sent = true;
-    return FakeHandle(snapshotOf(id: 'routed-1'));
-  }
-
-  @override
-  Future<SwapExecutionHandle?> resume(String id) async => null;
-}
-
-/// Throws [error], before or after the registry's dispatch boundary.
-class _RefusingExecutor implements SwapExecutor {
-  _RefusingExecutor(this.error, {required this.dispatches});
-
-  final Object error;
-  final bool dispatches;
-
-  @override
-  SwapLiquiditySource get source => SwapLiquiditySource.routed;
-
-  @override
-  Future<SwapExecutionHandle> start(
-    SwapQuote quote, {
-    required SwapExecutionAuthorization authorization,
-  }) async {
-    if (dispatches) authorization.beforeDispatch();
-    throw error;
-  }
-
-  @override
-  Future<SwapExecutionHandle?> resume(String id) async => null;
 }
 
 /// Opens a handle only once [gate] completes, as an engine slow to answer.

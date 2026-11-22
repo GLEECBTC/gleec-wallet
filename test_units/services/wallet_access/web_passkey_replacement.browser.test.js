@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const path=require('node:path');
 const {LocalBrowser,delay}=require('./web_release_test_driver.js');
-const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady,passkeyUnlock}=require('./web_credential_release.browser.test.js');
+const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady}=require('./web_credential_release.browser.test.js');
 
 async function main(){
   const browser=new LocalBrowser(path.resolve(__dirname,'../../..'));
@@ -26,7 +26,7 @@ async function main(){
 
     await browser.click(page,'Replace passkey using password');
     console.log('CHECK: explicit password recovery dialog opened');
-    await browser.fill(page,'Wallet password','Wrong-unfunded-fixture-password!');await browser.click(page,'Continue');
+    await browser.fill(page,'Enter your password','Wrong-unfunded-fixture-password!');await browser.click(page,'Continue');
     await browser.wait(page,"document.body.textContent.includes('Password not accepted')",{label:'wrong-password rejection'});
     assert.equal(replacement.counts.created,0);assert.equal(replacement.counts.asserted,0);
     assert.deepEqual(await page.evaluate(credentialsSummary),before);
@@ -35,7 +35,7 @@ async function main(){
 
     await page.send('WebAuthn.setAutomaticPresenceSimulation',{authenticatorId:replacement.authenticatorId,enabled:false});
     await browser.click(page,'Replace passkey using password');
-    await browser.fill(page,'Wallet password',credential);await browser.click(page,'Continue');
+    await browser.fill(page,'Enter your password',credential);await browser.click(page,'Continue');
     const registrations=await browser.wait(page,'__gleecReleaseProbe.metrics().registrations>=2',{label:'explicit replacement ceremony'});
     assert.ok(registrations);await page.evaluate('gleecWalletCredentials.cancel();true');
     await browser.wait(page,"Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true')",{label:'usable replacement action after cancellation'});
@@ -45,7 +45,7 @@ async function main(){
     await page.send('WebAuthn.setAutomaticPresenceSimulation',{authenticatorId:replacement.authenticatorId,enabled:true});
 
     await browser.click(page,'Replace passkey using password');
-    await browser.fill(page,'Wallet password',credential);await browser.click(page,'Continue');
+    await browser.fill(page,'Enter your password',credential);await browser.click(page,'Continue');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.fingerprint!==${JSON.stringify(before.fingerprint)})`,{label:'verified replacement persisted'});
     const after=await page.evaluate(credentialsSummary);
     assert.equal(after.active,1);assert.equal(after.unattended,0);assert.equal(after.staged,0);
@@ -64,7 +64,7 @@ async function main(){
     await browser.navigate(page);await browser.semantics(page);
     await browser.wait(page,'__gleecReleaseProbe.metrics().challenges===1',{label:'single automatic returning challenge'});
     await page.evaluate('gleecWalletCredentials.cancel();true');
-    await browser.wait(page,`Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(passkeyUnlock)}&&el.getAttribute('aria-disabled')!=='true')`,
+    await browser.wait(page,`${buttonPresent('Unlock')}||${buttonPresent('Unlock with passkey')}`,
       {label:'usable returning-unlock fallback after cancellation'});
     await delay(350);
     assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'),1,
@@ -81,21 +81,8 @@ async function main(){
     await page.send('WebAuthn.removeVirtualAuthenticator',{authenticatorId:replacement.authenticatorId});
     await browser.click(page,'Settings');await browser.click(page,'Security');
     await browser.click(page,'Review wallet removal');
-    // This wallet's recovery phrase was never backed up. Its review leads with
-    // the backup and keeps removal disabled until the loss is acknowledged.
-    const acknowledgement='I understand this wallet cannot be recovered without its recovery phrase.';
-    const removal="Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Remove wallet')";
-    const reviewing="(document.body.textContent.includes('Checking for pending transfers')||Array.from(document.querySelectorAll('[aria-label]')).some(el=>el.getAttribute('aria-label').includes('Checking for pending transfers')))";
-    await browser.wait(page,`!!(${removal})&&!(${reviewing})`,{label:'wallet removal review loaded'});
-    await delay(500);
-    assert.equal(await page.evaluate(buttonPresent('Back up recovery phrase first')),true);
-    assert.equal(await page.evaluate(`(${removal}).getAttribute('aria-disabled')`),'true',
-      'An unbacked wallet must not be removable before the acknowledgement');
-    await browser.click(page,acknowledgement);
-    await browser.wait(page,`Array.from(document.querySelectorAll('[role=checkbox]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(acknowledgement)}&&el.getAttribute('aria-checked')==='true')&&(${removal})?.getAttribute('aria-disabled')!=='true'`,
-      {label:'acknowledged removal enabled'});
     await browser.click(page,'Use password');await browser.fill(page,'Wallet password',credential);
-    await browser.click(page,'Remove wallet');
+    await browser.click(page,'Delete');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.active===0)`,{timeout:60000,label:'password-authorized active-wallet deletion'});
     const remainingWallets=await page.evaluate(`(async()=>{
       let count=0;
@@ -114,7 +101,6 @@ async function main(){
     console.log('PASS: known-password active deletion removes credentials and engine wallet after provider loss; cold return stays signed out');
     console.log('EVIDENCE',JSON.stringify({buildFingerprint:browser.buildFingerprint,wrongPasswordRejected:true,
       canceledReplacementPreservedRecord:true,newProviderUnlocks:true,coldAssertions:1,passwordDeletion:true,
-      unbackedRemovalAcknowledged:true,
       returningCancellationStable:true,returningExplicitRetry:true,
       engineWalletRemoved:true,deletionColdReturnSignedOut:true}));
   }finally{credential=null;await browser.cleanup();}

@@ -3,8 +3,6 @@ import 'dart:math';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show AuthSessionChangedException, AuthSessionContext;
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show RpcDispatchRejected;
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -195,9 +193,6 @@ class SwapExecutionRegistry {
   bool get acceptsSubmissions => _acceptingSession() != null;
 
   /// A start confirmed now, in this session.
-  ///
-  /// Throws [SwapStartRejectedException] without a current session, and
-  /// [WalletOperationDenied] while the app lock takes no new operations.
   SwapSubmission beginSubmission() {
     final session = _acceptingSession();
     if (session == null) throw _staleSubmission;
@@ -228,27 +223,10 @@ class SwapExecutionRegistry {
     detail: 'The swap confirmation is no longer current.',
   );
 
-  static const _unsentSubmission = SwapStartRejectedException(
-    SwapStartRejection.notAvailable,
-    detail: 'The start was refused locally before its request was sent.',
-  );
-
-  /// Refuses [submission] once the app lock has revoked the permit it was
-  /// confirmed under. Read only on the way to the request, so a refusal here
-  /// means nothing was sent.
-  static void _ensurePermitted(SwapSubmission submission) {
-    try {
-      submission._permit.ensureCurrent();
-    } on WalletOperationDenied {
-      throw _unsentSubmission;
-    }
-  }
-
   /// Starts executing [quote], confirmed as [submission], and follows it.
   ///
   /// Throws [SwapStartRejectedException] without asking the engine when
-  /// [submission] was confirmed in a session that has since ended, or the app
-  /// lock revoked it before the request was sent. Rethrows
+  /// [submission] was confirmed in a session that has since ended. Rethrows
   /// [SwapStartRejectedException] and [SwapStartUnconfirmedException] from
   /// the executor unchanged.
   Future<SwapExecutionSnapshot> start(
@@ -262,44 +240,32 @@ class SwapExecutionRegistry {
         !(stillCurrent?.call() ?? true)) {
       throw _staleSubmission;
     }
-    _ensurePermitted(submission);
+    submission._permit.ensureCurrent();
     submission._claimed = true;
     final executor = _executors[quote.source];
     if (executor == null) {
       throw const SwapStartRejectedException(SwapStartRejection.unknown);
     }
-    final SwapExecutionHandle handle;
-    try {
-      handle = await executor.start(
-        quote,
-        authorization: SwapExecutionAuthorization(
-          session: submission.session,
-          beforeDispatch: () {
-            // Preparation may await an auth lease. Validate the original
-            // intent again at the executor's actual submission boundary.
-            if (submission._dispatched ||
-                !isCurrent(submission) ||
-                !(stillCurrent?.call() ?? true)) {
-              throw _staleSubmission;
-            }
-            _ensurePermitted(submission);
-            submission._dispatched = true;
-            onDispatch?.call();
-            // The callback is synchronous, but may itself revoke the session.
-            if (!isCurrent(submission)) throw _staleSubmission;
-          },
-        ),
-      );
-    } on WalletOperationDenied {
-      // A local refusal raised before the executor asked to dispatch sent
-      // nothing. Past that boundary only the executor can tell, and whatever
-      // it leaves unmapped stays in doubt.
-      if (submission._dispatched) rethrow;
-      throw _unsentSubmission;
-    } on RpcDispatchRejected {
-      if (submission._dispatched) rethrow;
-      throw _unsentSubmission;
-    }
+    final handle = await executor.start(
+      quote,
+      authorization: SwapExecutionAuthorization(
+        session: submission.session,
+        beforeDispatch: () {
+          // Preparation may await an auth lease. Validate the original intent
+          // again at the executor's actual submission boundary.
+          if (submission._dispatched ||
+              !isCurrent(submission) ||
+              !(stillCurrent?.call() ?? true)) {
+            throw _staleSubmission;
+          }
+          submission._permit.ensureCurrent();
+          submission._dispatched = true;
+          onDispatch?.call();
+          // The callback is synchronous, but may itself revoke the session.
+          if (!isCurrent(submission)) throw _staleSubmission;
+        },
+      ),
+    );
     // Auth notifications may lag behind synchronous session revocation.
     if (!isCurrent(submission)) {
       unawaited(handle.close());

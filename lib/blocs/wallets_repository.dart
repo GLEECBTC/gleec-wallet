@@ -13,7 +13,6 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
         CoinSubClass,
         KdfUser,
         RpcDispatchGuard,
-        RpcDispatchRejected,
         WalletId,
         WalletChangedDisconnectException;
 import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
@@ -335,10 +334,7 @@ class WalletsRepository {
               removeReviewedWallet,
               methods: const {'delete_wallet'},
             );
-      if (result.status != WalletDeletionStatus.deleted) {
-        await _abandonUncommittedDeletion(wallet);
-        return result;
-      }
+      if (result.status != WalletDeletionStatus.deleted) return result;
       await _walletAccess?.finishDeletion(wallet);
       _cachedWallets?.removeWhere((w) => w.name == wallet.name);
       _emitCachedWalletsIfAvailable();
@@ -376,25 +372,12 @@ class WalletsRepository {
       }
       rethrow;
     } catch (e) {
-      await _abandonUncommittedDeletion(wallet);
       log(
         'Failed to delete wallet: $e',
         path: 'wallet_bloc => deleteWallet',
         isError: true,
       ).ignore();
       rethrow;
-    }
-  }
-
-  /// The proof prepared for a deletion belongs to that one attempt. Left
-  /// behind after a refusal, its journaled intent would later read as an
-  /// interrupted deletion of a wallet that still exists.
-  Future<void> _abandonUncommittedDeletion(Wallet wallet) async {
-    try {
-      await _walletAccess?.abandonDeletion(wallet);
-    } on Object {
-      // The deletion's own outcome is what the caller needs. Startup also
-      // withdraws an intent whose wallet the engine still lists.
     }
   }
 
@@ -806,10 +789,6 @@ class WalletsRepository {
     } on FileSaveCancelledException {
       rethrow;
     } on FileSaveUnconfirmedException {
-      rethrow;
-    } on RpcDispatchRejected {
-      // Not a failed export: the authorization ended before anything was
-      // read, and the caller ends the attempt quietly.
       rethrow;
     } catch (e) {
       throw Exception('Failed to download encrypted wallet: $e');

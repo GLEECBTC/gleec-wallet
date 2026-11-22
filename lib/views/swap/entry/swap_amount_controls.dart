@@ -1,7 +1,7 @@
 part of 'swap_amount_cards.dart';
 
 /// The button that opens the asset picker for one side.
-class SwapAssetPill extends StatefulWidget {
+class SwapAssetPill extends StatelessWidget {
   const SwapAssetPill({
     required this.asset,
     required this.network,
@@ -18,67 +18,9 @@ class SwapAssetPill extends StatefulWidget {
   final bool hasError;
 
   @override
-  State<SwapAssetPill> createState() => _SwapAssetPillState();
-}
-
-class _SwapAssetPillState extends State<SwapAssetPill>
-    with SingleTickerProviderStateMixin {
-  late final AppLifecycleListener _lifecycle;
-  late final AnimationController _selection = AnimationController(
-    vsync: this,
-    duration: SwapMotion.selection,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _lifecycle = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state != AppLifecycleState.resumed) _selection.value = 0;
-      },
-    );
-  }
-
-  bool get _canAnimate {
-    final lifecycle = WidgetsBinding.instance.lifecycleState;
-    return SwapMotion.enabled(context) &&
-        TickerMode.valuesOf(context).enabled &&
-        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_canAnimate) _selection.value = 0;
-  }
-
-  @override
-  void didUpdateWidget(covariant SwapAssetPill oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.asset != widget.asset && _canAnimate) {
-      _selection.reverse(from: 1);
-    }
-  }
-
-  @override
-  void dispose() {
-    _lifecycle.dispose();
-    _selection.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _selection,
-    builder: (context, _) => _button(context),
-  );
-
-  Widget _button(BuildContext context) {
+  Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final asset = widget.asset;
-    final network = widget.network;
-    final onTap = widget.onTap;
-    final semanticLabel = widget.semanticLabel;
+    final asset = this.asset;
     // Nothing chosen yet, it reads as the next thing to do, with its whole
     // label: no icon takes the room a phone has for it.
     final choose = asset == null;
@@ -88,17 +30,11 @@ class _SwapAssetPillState extends State<SwapAssetPill>
           : '$semanticLabel: ${SwapFormat.ticker(asset)}, $network',
       onTap: onTap,
       child: Material(
-        color: choose
-            ? palette.selected
-            : Color.lerp(
-                palette.surfaceHigh,
-                palette.selected,
-                _selection.value,
-              ),
+        color: choose ? palette.selected : palette.surfaceHigh,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(
-            color: widget.hasError
+            color: hasError
                 ? palette.danger
                 : choose
                 ? palette.brand
@@ -109,17 +45,17 @@ class _SwapAssetPillState extends State<SwapAssetPill>
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
+            constraints: const BoxConstraints(minHeight: 52),
             child: Padding(
               padding: EdgeInsets.fromLTRB(choose ? 14 : 10, 8, 8, 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (asset != null) ...[
-                    SwapTokenIcon(asset: asset, size: 28),
+                    SwapTokenIcon(asset: asset, size: 30),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(
+                  Flexible(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -134,11 +70,14 @@ class _SwapAssetPillState extends State<SwapAssetPill>
                         ),
                         if (asset != null && network != null) ...[
                           const SizedBox(height: 3),
+                          // Two lines before a long network name is cut: the
+                          // amount beside the pill is taller anyway.
                           Text(
-                            network,
-                            style: SwapText.small(context)
-                                .copyWith(height: 1.25),
-                            maxLines: 1,
+                            network!,
+                            style: SwapText.small(
+                              context,
+                            ).copyWith(height: 1.25),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -161,64 +100,100 @@ class _SwapAssetPillState extends State<SwapAssetPill>
   }
 }
 
+/// "From 0x5520…7B91" / "To 0x80A1…42F0": tap copies the full address.
+class _AddressFooterButton extends StatelessWidget {
+  const _AddressFooterButton({
+    required this.prefix,
+    required this.address,
+    required this.asset,
+  });
+
+  final String Function(String) prefix;
+  final String? address;
+
+  /// The asset the wallet could be paid in at [address].
+  final AssetId? asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = this.address;
+    final palette = SwapPalette.of(context);
+    if (address == null) {
+      return const SizedBox(height: 48);
+    }
+    void copy() => copyPayableAddress(
+      context,
+      address,
+      asset: asset,
+      successMessage: LocaleKeys.swapAddressCopied.tr(),
+    );
+    return SwapButtonSemantics(
+      label: '${prefix(address)}. ${LocaleKeys.swapCopyAddress.tr()}',
+      onTap: copy,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: copy,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    prefix(SwapFormat.short(address)),
+                    style: SwapText.small(
+                      context,
+                    ).copyWith(color: palette.textSecondary),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.content_copy_rounded,
+                  size: 14,
+                  color: palette.textTertiary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The round button between the cards that swaps the two sides.
-class SwapSwitchButton extends StatefulWidget {
+class SwapSwitchButton extends StatelessWidget {
   const SwapSwitchButton({required this.onPressed, super.key});
 
   final VoidCallback? onPressed;
 
   @override
-  State<SwapSwitchButton> createState() => _SwapSwitchButtonState();
-}
-
-class _SwapSwitchButtonState extends State<SwapSwitchButton> {
-  double _turns = 0;
-
-  void _switch() {
-    final action = widget.onPressed;
-    if (action == null) return;
-    action();
-    SwapHaptics.selection();
-    setState(() => _turns += 0.5);
-  }
-
-  @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final onTap = widget.onPressed == null ? null : _switch;
-    // The whole 48 dp circle takes the tap. Its outer band is drawn in the
-    // canvas colour, which lifts the disc off the two cards it straddles.
     return SwapButtonSemantics(
       label: LocaleKeys.swapSwitchDirection.tr(),
-      onTap: onTap,
+      onTap: onPressed,
       child: Tooltip(
         message: LocaleKeys.swapSwitchDirection.tr(),
-        child: Material(
-          color: palette.canvas,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox.square(
-              dimension: SwapGeometry.touchTarget,
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: Ink(
-                  decoration: ShapeDecoration(
-                    color: palette.surfaceHighest,
-                    shape: const CircleBorder(),
-                  ),
-                  child: AnimatedRotation(
-                    turns: _turns,
-                    duration: SwapMotion.of(context, SwapMotion.pair),
-                    curve: SwapMotion.standard,
-                    child: Icon(
-                      Icons.swap_vert_rounded,
-                      size: 20,
-                      color: palette.text,
-                    ),
-                  ),
-                ),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: palette.canvas, width: 6),
+          ),
+          child: Material(
+            color: palette.surfaceHighest,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: Icon(
+                Icons.swap_vert_rounded,
+                size: 20,
+                color: palette.text,
               ),
             ),
           ),
