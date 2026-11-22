@@ -84,7 +84,7 @@ void main() {
         expect(find.text(label), findsOneWidget, reason: label);
       }
       expect(find.text('swap-1'), findsOneWidget);
-      expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
+      expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
       expect(find.text(SwapFormat.time(started)), findsOneWidget);
       expect(
         find.text('0x5520D7F51C8e3108FA2d9C6220bF4Aa8F9c17B91'),
@@ -208,7 +208,7 @@ void main() {
 
       expect(copied, [
         'Swap ID: swap-1\n'
-            'Route: 1 ETH → 3,000 USDC\n'
+            'Route: 1 ETH → ≈ 3,000 USDC\n'
             'Status: Confirming on Ethereum\n'
             'Started: 2026-09-24T12:00:00.000Z\n'
             'Last update: 2026-09-24T12:05:00.000Z\n'

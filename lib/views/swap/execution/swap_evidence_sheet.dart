@@ -6,6 +6,7 @@ import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
+import 'package:web_dex/views/swap/execution/swap_execution_display.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
@@ -32,7 +33,7 @@ Future<void> contactSwapSupport(
   required SwapExecutionSnapshot snapshot,
   required SwapServices services,
 }) async {
-  final payload = SwapExecutionCopy(
+  final payload = SwapExecutionDisplay(
     snapshot,
     services.networks(),
   ).supportPayload();
@@ -63,7 +64,7 @@ class SwapEvidenceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final evidence = snapshot.evidence;
-    final copy = SwapExecutionCopy(snapshot, services.networks());
+    final copy = SwapExecutionDisplay(snapshot, services.networks());
     final hasTransactions =
         evidence.approvalTxHashes.isNotEmpty ||
         evidence.sourceTxHash != null ||
@@ -94,11 +95,11 @@ class SwapEvidenceSheet extends StatelessWidget {
                 style: SwapText.body(context),
               ),
             ),
-          if (snapshot.updatedAt != null)
+          if ((snapshot.updatedAt ?? snapshot.finishedAt) case final updated?)
             _Field(
               label: LocaleKeys.swapEvidenceUpdated.tr(),
               child: Text(
-                SwapFormat.time(snapshot.updatedAt!),
+                SwapFormat.time(updated),
                 style: SwapText.body(context),
               ),
             ),

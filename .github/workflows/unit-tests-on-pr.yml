@@ -72,6 +72,7 @@ jobs:
         timeout-minutes: 20
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SWAP_CAPTURE_DIR: build/swap-ux
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
         run: |
@@ -99,5 +100,14 @@ jobs:
         with:
           name: onboarding-ui-states
           path: build/auth-ux/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain public Swap state renders
+        if: ${{ always() && hashFiles('build/swap-ux/*.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: swap-ui-states
+          path: build/swap-ux/*.png
           if-no-files-found: error
           retention-days: 14
