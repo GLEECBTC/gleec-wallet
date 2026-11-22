@@ -160,5 +160,39 @@ void main() {
         const Duration(minutes: 3), // Capped
       ]);
     });
+
+    test('stays at the maximum interval however long a session runs', () {
+      // 2^48 minutes in milliseconds no longer fits a 64-bit integer; attempt
+      // 96 is reached after about four days of hourly refreshes.
+      for (var attempt = 0; attempt < 400; attempt++) {
+        final interval = strategy.getNextInterval();
+        if (attempt >= 12) {
+          expect(
+            interval,
+            const Duration(hours: 1),
+            reason: 'attempt $attempt must stay capped',
+          );
+        }
+        expect(interval, greaterThanOrEqualTo(const Duration(minutes: 1)));
+      }
+    });
+
+    test('previews of late attempts stay at the maximum interval', () {
+      for (var attempt = 0; attempt < 190; attempt++) {
+        strategy.getNextInterval();
+      }
+      expect(
+        strategy.previewNextIntervals(10),
+        List.filled(10, const Duration(hours: 1)),
+      );
+    });
+
+    test('a base interval above the maximum is capped from the start', () {
+      strategy = UpdateFrequencyBackoffStrategy(
+        baseInterval: const Duration(hours: 2),
+        maxInterval: const Duration(hours: 1),
+      );
+      expect(strategy.getNextInterval(), const Duration(hours: 1));
+    });
   });
 }

@@ -5,6 +5,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/app_config/app_config.dart';
+import 'package:web_dex/bloc/cex_market_data/common/price_history_coverage.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
@@ -67,6 +68,11 @@ class PriceChartBloc extends Bloc<PriceChartEvent, PriceChartState> {
                 symbol,
                 dates,
               );
+              // What the SDK still knows during a provider outage would be
+              // drawn, and its change reported, as the whole period's.
+              if (isPartialPriceHistory(ohlcData, dates)) {
+                throw PartialPriceHistoryException(symbol.id);
+              }
 
               final rangeChangePercent = _calculatePercentageChange(
                 ohlcData.values.firstOrNull,
