@@ -167,6 +167,44 @@ class DockerBuildTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any(call.startswith("dart ") for call in calls))
 
+    def test_web_compiles_with_the_options_of_the_hosted_bundle(self):
+        result, calls = self.run_container_command(target="web")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        final = calls[-1].split()
+        self.assertEqual(final[:3], ["flutter", "build", "web"])
+        self.assertIn("--csp", final)
+        self.assertIn("--no-web-resources-cdn", final)
+
+    def test_native_targets_receive_no_web_options(self):
+        for target in ("linux", "apk"):
+            self.calls.unlink(missing_ok=True)
+            result, calls = self.run_container_command(target=target)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for call in calls:
+                self.assertNotIn("--csp", call)
+                self.assertNotIn("--no-web-resources-cdn", call)
+
+    def test_web_bundle_carrying_a_local_fixture_is_rejected(self):
+        fixture = self.work / "build/web/assets/debug_data.json"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text("synthetic fixture")
+        result = self.build("web")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Artifact privacy check failed", result.stderr)
+        # Only the web target gained the check.
+        self.assertEqual(self.build("linux").returncode, 0)
+
+    def test_web_bundle_with_an_unreviewed_offline_game_is_rejected(self):
+        helper = self.work / ("build/web/assets/packages/flutter_inappwebview/"
+                              "assets/t_rex_runner/t-rex.html")
+        helper.parent.mkdir(parents=True)
+        helper.write_text("<script>unreviewed()</script>")
+        result = self.build("web")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prepare_wallet_web_assets.py: error:", result.stderr)
+        self.assertEqual(helper.read_text(), "<script>unreviewed()</script>")
+        self.assertEqual(self.build("linux").returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
