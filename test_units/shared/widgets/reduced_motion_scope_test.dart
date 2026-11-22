@@ -72,6 +72,20 @@ void main() {
       expect(seen.last, isFalse);
     });
 
+    testWidgets('honors the desktop preference in the first build', (
+      tester,
+    ) async {
+      signal.dispose();
+      signal = ReducedMotionSignal(
+        isWeb: false,
+        platform: TargetPlatform.macOS,
+        desktopQuery: () => true,
+      );
+
+      await pumpScope(tester);
+      expect(seen.first, isTrue);
+    });
+
     testWidgets('keeps the flag Android and Linux set themselves', (
       tester,
     ) async {
@@ -121,13 +135,41 @@ void main() {
 
     for (final platform in [TargetPlatform.macOS, TargetPlatform.windows]) {
       test(
+        'reads ${platform.name} synchronously and follows changes',
+        () async {
+          final calls = <String>[];
+          _messenger.setMockMethodCallHandler(_channel, (call) async {
+            calls.add(call.method);
+            return true;
+          });
+          final signal = ReducedMotionSignal(
+            isWeb: false,
+            platform: platform,
+            desktopQuery: () => false,
+          );
+          addTearDown(signal.dispose);
+
+          expect(signal.value, isFalse);
+          await pumpEventQueue();
+          expect(calls, isEmpty);
+
+          await _push(true);
+          expect(signal.value, isTrue);
+        },
+      );
+
+      test(
         'asks the ${platform.name} runner and follows its changes',
         () async {
           _messenger.setMockMethodCallHandler(_channel, (call) async {
             expect(call.method, 'get');
             return true;
           });
-          final signal = ReducedMotionSignal(isWeb: false, platform: platform);
+          final signal = ReducedMotionSignal(
+            isWeb: false,
+            platform: platform,
+            desktopQuery: () => null,
+          );
           addTearDown(signal.dispose);
           await pumpEventQueue();
           expect(signal.value, isTrue);
@@ -167,6 +209,7 @@ void main() {
       final signal = ReducedMotionSignal(
         isWeb: false,
         platform: TargetPlatform.macOS,
+        desktopQuery: () => null,
       );
       addTearDown(signal.dispose);
       await pumpEventQueue();
@@ -181,11 +224,38 @@ void main() {
       final signal = ReducedMotionSignal(
         isWeb: false,
         platform: TargetPlatform.windows,
+        desktopQuery: () => null,
       );
       addTearDown(signal.dispose);
       await pumpEventQueue();
       expect(signal.value, isFalse);
     });
+
+    test(
+      'keeps a change that arrives before the initial channel reply',
+      () async {
+        final answer = Completer<bool>();
+        var requested = false;
+        _messenger.setMockMethodCallHandler(_channel, (_) {
+          requested = true;
+          return answer.future;
+        });
+        final signal = ReducedMotionSignal(
+          isWeb: false,
+          platform: TargetPlatform.macOS,
+          desktopQuery: () => null,
+        );
+        addTearDown(signal.dispose);
+
+        await pumpEventQueue();
+        expect(requested, isTrue);
+        await _push(true);
+        answer.complete(false);
+        await pumpEventQueue();
+
+        expect(signal.value, isTrue);
+      },
+    );
 
     test('ignores an answer that arrives after it is disposed', () async {
       final answer = Completer<bool>();
@@ -193,6 +263,7 @@ void main() {
       ReducedMotionSignal(
         isWeb: false,
         platform: TargetPlatform.macOS,
+        desktopQuery: () => null,
       ).dispose();
       answer.complete(true);
       await pumpEventQueue();
