@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
@@ -94,7 +95,7 @@ void main() {
             _expectFullLabel(
               tester,
               find.byKey(const Key('managed-wallet-unlock')),
-              'authUseDeviceUnlock'.tr(),
+              'authUnlockWithDevice'.tr(),
             );
             for (final label in [
               'authUsePassword',
@@ -454,6 +455,12 @@ void main() {
       testWidgets(
         'setup card $brightness has labeled touch targets and readable contrast',
         (tester) async {
+          // The kit takes its custom colours from the app-wide theme mode,
+          // which the app keeps in step with the Material theme.
+          theme.mode = brightness == Brightness.dark
+              ? ThemeMode.dark
+              : ThemeMode.light;
+          addTearDown(() => theme.mode = ThemeMode.dark);
           final harness = LegalFormHarness();
           final semantics = tester.ensureSemantics();
           await harness.pump(

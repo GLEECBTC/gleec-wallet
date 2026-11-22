@@ -1,6 +1,9 @@
 // Compiled app lifecycle regression using only unfunded disposable wallets.
-// Dispatch blur/focus while the document stays visible: Flutter web translates
-// these into inactive/resumed, without a hidden/paused event in between.
+// Leaving is a hidden page: Flutter web translates 'visibilitychange' into
+// hidden/resumed, which covers the wallet and starts its re-lock clock. The
+// driver reports the document hidden while the renderer keeps painting, so
+// the cover itself is observed. A window blur alone (inactive) is another
+// window taking focus on desktop and web: nothing is covered or locked.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -9,13 +12,12 @@ const os = require('node:os');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {LocalBrowser, delay} = require('./web_release_test_driver.js');
-const {probe, credentialsSummary, buttonPresent, virtualAuthenticator, unlockApp, waitForPasskeySettingsReady} =
-  require('./web_credential_release.browser.test.js');
+const {probe, credentialsSummary, buttonPresent, virtualAuthenticator, unlockApp, waitForPasskeySettingsReady,
+  passkeyUnlock, privacyCover: hidden} = require('./web_credential_release.browser.test.js');
 const {publicIdentity} = require('./web_wallet_recovery.browser.test.js');
 const {directoryDigest, toolsFingerprint} = require('./rollback_evidence.js');
 
 const digest = filename => createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-const hidden = "document.body.textContent.includes('Wallet content hidden')||Array.from(document.querySelectorAll('[aria-label]')).some(el=>el.getAttribute('aria-label')==='Wallet content hidden')";
 const storedGrace = `(()=>{
   const key=Object.keys(localStorage).find(key=>key.endsWith('wallet_access_grace_seconds_v1'));
   let value=key?localStorage.getItem(key):null;
@@ -33,7 +35,7 @@ async function main() {
   const evidence = {schema: 1, sourceSha256: manifest.sourceSha256, buildSha256: hashes,
     buildDirectorySha256: Object.fromEntries(Object.entries(builds).map(([name, directory]) => [name, directoryDigest(directory)])),
     validationTools: toolsFingerprint(path.basename(__filename)),
-    scope: 'compiled-app-inactive-resumed-no-hidden', virtualProvider: true, rounds: []};
+    scope: 'compiled-app-hidden-resumed-with-focus-loss', virtualProvider: true, rounds: [], focusLoss: []};
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gleec-rollback-lifecycle-'));
   fs.mkdirSync(path.join(fixtureRoot, 'build'));
   fs.symlinkSync(builds.normal, path.join(fixtureRoot, 'build', 'web'));
@@ -69,14 +71,16 @@ async function main() {
     const envelope = await page.evaluate(credentialsSummary);
     let privacyPixels;
 
-    async function inactiveRound(profile, graceSeconds, awayMilliseconds, expectsChallenge) {
+    async function hiddenRound(profile, graceSeconds, awayMilliseconds, expectsChallenge) {
       await browser.wait(page, buttonPresent('Gleec Wallet'), {label: 'foreground wallet before interruption'});
       await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       await delay(250);
       await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: false});
       const before = await page.evaluate('__gleecReleaseProbe.metrics().challenges');
-      const start = await page.evaluate("__lifecycleEvents=[];window.dispatchEvent(new Event('blur'));performance.now()");
-      await browser.wait(page, `!(${buttonPresent('Gleec Wallet')})`, {timeout: 2000, label: 'wallet semantics excluded on inactivity'});
+      await page.evaluate('__lifecycleEvents=[];true');
+      await browser.visibility(page, 'hidden');
+      const start = await page.evaluate('performance.now()');
+      await browser.wait(page, `!(${buttonPresent('Gleec Wallet')})`, {timeout: 2000, label: 'wallet semantics excluded while hidden'});
       await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       // Only capture an already-covered disposable app. PNG bytes remain in
       // process memory; evidence records Booleans, never images. Flutter web can
@@ -87,18 +91,20 @@ async function main() {
       const shot = await page.send('Page.captureScreenshot', {format: 'png'});
       const pixels = createHash('sha256').update(shot.data).digest('hex');
       if (!privacyPixels) privacyPixels = pixels;
-      assert.equal(pixels, privacyPixels, 'Each inactive view must match the identified opaque privacy cover');
+      assert.equal(pixels, privacyPixels, 'Each hidden view must match the identified opaque privacy cover');
       const privacyCoverObservedMs = Math.round(await page.evaluate('performance.now()') - start);
       assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')), false);
       const remaining = awayMilliseconds - (await page.evaluate('performance.now()') - start);
       if (remaining > 0) await delay(remaining);
-      const elapsedMs = await page.evaluate(`(()=>{const elapsed=performance.now()-${start};window.dispatchEvent(new Event('focus'));return elapsed;})()`);
+      const elapsedMs = await page.evaluate(`performance.now()-${start}`);
+      await browser.visibility(page, 'visible');
       if (awayMilliseconds < 30000) assert.ok(elapsedMs < 30000, 'Short return must remain inside the grace window');
       if (expectsChallenge) {
         await browser.wait(page, `__gleecReleaseProbe.metrics().challenges===${before + 1}`, {label: 'one automatic return challenge'});
         assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')), false);
         await page.evaluate('gleecWalletCredentials.cancel();true');
-        await browser.wait(page, `${buttonPresent('Unlock')}||${buttonPresent('Unlock with passkey')}`, {label: 'stable explicit unlock after cancellation'});
+        await browser.wait(page, `Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(passkeyUnlock)}&&el.getAttribute('aria-disabled')!=='true')`,
+          {label: 'stable explicit unlock after cancellation'});
         await delay(500);
         assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'), before + 1, 'Cancellation must not loop');
         await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: true});
@@ -109,26 +115,55 @@ async function main() {
         await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: true});
       }
       const events = await page.evaluate('__lifecycleEvents');
-      assert.deepEqual(events.map(event => event.name), ['blur', 'focus']);
-      assert.ok(events.every(event => event.visibility === 'visible'));
+      assert.deepEqual(events.map(event => event.name), ['visibilitychange', 'visibilitychange']);
+      assert.deepEqual(events.map(event => event.visibility), ['hidden', 'visible']);
       assert.deepEqual(await page.evaluate(publicIdentity), identity);
       assert.deepEqual(await page.evaluate(credentialsSummary), envelope);
       assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().cspViolations'), 0);
       evidence.rounds.push({profile, graceSeconds, requestedAwayMs: awayMilliseconds,
         elapsedMs: Math.round(elapsedMs), hiddenImmediately: true, events: events.map(event => event.name),
+        reportedVisibility: events.map(event => event.visibility),
         privacyCoverObservedMs, privacyLabelAvailable, privacyPixelsMatched: true,
-        remainedVisible: true, automaticChallenges: expectsChallenge ? 1 : 0,
+        automaticChallenges: expectsChallenge ? 1 : 0,
         cancellationStable: expectsChallenge, identityPreserved: true, credentialEnvelopePreserved: true});
-      console.log(`PASS: ${profile}, grace ${graceSeconds}s, inactive-only ${Math.round(elapsedMs)}ms, ${expectsChallenge ? 'locked with one challenge' : 'session restored'}`);
+      console.log(`PASS: ${profile}, grace ${graceSeconds}s, hidden ${Math.round(elapsedMs)}ms, ${expectsChallenge ? 'locked with one challenge' : 'session restored'}`);
+    }
+
+    // Even where the wallet locks the moment it is left, a window that only
+    // loses focus is still in front of its user: no cover, lock or prompt.
+    async function focusLossRound(profile, graceSeconds, awayMilliseconds) {
+      await browser.wait(page, buttonPresent('Gleec Wallet'), {label: 'foreground wallet before focus loss'});
+      await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: false});
+      const before = await page.evaluate('__gleecReleaseProbe.metrics().challenges');
+      const start = await page.evaluate("__lifecycleEvents=[];window.dispatchEvent(new Event('blur'));performance.now()");
+      await delay(awayMilliseconds);
+      assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')), true, 'Losing window focus must not cover the wallet');
+      assert.equal(await page.evaluate(hidden), false, 'Losing window focus must not show the privacy cover');
+      const elapsedMs = await page.evaluate(`(()=>{const elapsed=performance.now()-${start};window.dispatchEvent(new Event('focus'));return elapsed;})()`);
+      await delay(500);
+      assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')), true, 'Regaining focus must find the session open');
+      assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'), before, 'Focus loss must not prompt');
+      await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: true});
+      const events = await page.evaluate('__lifecycleEvents');
+      assert.deepEqual(events.map(event => event.name), ['blur', 'focus']);
+      assert.ok(events.every(event => event.visibility === 'visible'));
+      assert.deepEqual(await page.evaluate(publicIdentity), identity);
+      assert.deepEqual(await page.evaluate(credentialsSummary), envelope);
+      evidence.focusLoss.push({profile, graceSeconds, elapsedMs: Math.round(elapsedMs), events: events.map(event => event.name),
+        remainedVisible: true, covered: false, automaticChallenges: 0});
+      console.log(`PASS: ${profile}, grace ${graceSeconds}s, focus lost ${Math.round(elapsedMs)}ms, wallet stayed open`);
     }
 
     async function setGrace(label) {
       await browser.click(page, 'Settings'); await browser.click(page, 'Security');
+      // One of four radio options; choosing the one in force asks for nothing.
+      const selected = `Array.from(document.querySelectorAll('[role=radio]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-checked')==='true')`;
+      assert.equal(await page.evaluate(selected), false, 'The requested lock timing must differ from the one in force');
       await browser.click(page, label);
       await browser.wait(page, buttonPresent('Continue'), {label: 'fresh authorization for lock preference'});
       await browser.click(page, 'Continue');
       await browser.wait(page, `(${storedGrace})===${label === 'Immediately' ? 0 : 30}`, {label: 'lock preference persisted'});
-      await browser.wait(page, `!(${buttonPresent('Continue')})`, {label: 'lock preference authorization completed'});
+      await browser.wait(page, `!(${buttonPresent('Continue')})&&(${selected})`, {label: 'lock preference authorization completed'});
       await delay(500);
     }
 
@@ -146,22 +181,25 @@ async function main() {
     }
 
     if (process.argv.includes('--privacy-diagnostic')) {
-      await inactiveRound('normal', 30, 1000, false);
-      await inactiveRound('normal', 30, 1000, false);
+      await hiddenRound('normal', 30, 1000, false);
+      await hiddenRound('normal', 30, 1000, false);
+      await focusLossRound('normal', 30, 1000);
       return;
     }
-    await inactiveRound('normal', 30, 29000, false);
-    await inactiveRound('normal', 30, 31000, true);
+    await hiddenRound('normal', 30, 29000, false);
+    await hiddenRound('normal', 30, 31000, true);
     await setGrace('Immediately');
-    await inactiveRound('normal', 0, 1000, true);
+    await hiddenRound('normal', 0, 1000, true);
+    await focusLossRound('normal', 0, 1000);
     await setGrace('After 30 seconds');
     assert.equal(await page.evaluate(storedGrace), 30);
     await replaceBuild('rollback');
     assert.equal(await page.evaluate(storedGrace), 30);
-    await inactiveRound('rollback', 0, 1000, true);
+    await hiddenRound('rollback', 0, 1000, true);
+    await focusLossRound('rollback', 0, 1000);
     await replaceBuild('normal');
     assert.equal(await page.evaluate(storedGrace), 30);
-    await inactiveRound('normal-after-rollback', 30, 1000, false);
+    await hiddenRound('normal-after-rollback', 30, 1000, false);
     evidence.storedGracePreserved = true;
     for (const [name, directory] of Object.entries(builds)) assert.equal(directoryDigest(directory), evidence.buildDirectorySha256[name]);
     assert.deepEqual(toolsFingerprint(path.basename(__filename)), evidence.validationTools);

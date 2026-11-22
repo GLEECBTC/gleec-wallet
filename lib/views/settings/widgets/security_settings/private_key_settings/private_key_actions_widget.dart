@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 
 /// Bulk export actions.
 ///
@@ -113,9 +114,15 @@ class _ActionButton extends StatelessWidget {
     // old Wrap it could reflow onto its own line, detached from whatever it
     // was reporting on.
     final child = busy
-        ? const SizedBox.square(
-            dimension: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+        ? Builder(
+            // Drawn in the label's colour, read inside the button: the
+            // theme's progress colour is the primary button's own fill.
+            builder: (context) => ProgressIndicatorTheme(
+              data: ProgressIndicatorThemeData(
+                color: DefaultTextStyle.of(context).style.color,
+              ),
+              child: WalletAccessProgress(label: LocaleKeys.pleaseWait.tr()),
+            ),
           )
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,

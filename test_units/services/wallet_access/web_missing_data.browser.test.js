@@ -56,7 +56,9 @@ async function check(kind){
       assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'),0);
       assert.equal(await page.evaluate(walletRows),0);
       await browser.wait(page,buttonPresent('Create a new wallet'),{label:'clean-origin create/import choice'});
-      assert.equal(await page.evaluate(buttonPresent('Log In')),false);
+      // Nothing to unlock, open or sign in to: no stored wallet is listed.
+      for(const label of ['Unlock','Unlock with passkey','Unlock with this device','Open wallet','Use password','Sign in','Wallet options'])
+        assert.equal(await page.evaluate(buttonPresent(label)),false,'A clean origin must not offer a stored wallet');
       console.log('PASS: retained provider passkey and known password cannot restore a clean local origin without wallet data');
       return;
     }
@@ -64,7 +66,7 @@ async function check(kind){
     else assert.equal(await page.evaluate(removeWallet),1);
     await browser.stopBrowser();await browser.launch();
     page=await browser.page({initialize:probe,existing:true});await browser.navigate(page);await browser.semantics(page);
-    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Log In')}||${buttonPresent('Connect wallet')}`,{timeout:60000,label:'data-loss fallback'});
+    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Unlock')}||${buttonPresent('Connect wallet')}`,{timeout:60000,label:'data-loss fallback'});
     await delay(1000);
     assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().observedCredentials'),0,'A missing record must not silently create another credential');
     const after=await page.evaluate(credentialsSummary);
@@ -80,11 +82,11 @@ async function check(kind){
       await browser.wait(page,`!!(${stored})`,{label:'preserved wallet catalog entry'});
       await page.evaluate(`(${stored}).click();true`);
     }
-    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Log In')}`,{label:'explicit recovery form'});
+    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Unlock')}`,{label:'explicit recovery form'});
     if(await page.evaluate(buttonPresent('Use password')))await browser.click(page,'Use password');
     if(kind==='credential'){
       assert.equal(after.active,0);assert.equal(await page.evaluate(walletRows),1);
-      await browser.fill(page,'Wallet password',credential);await browser.click(page,'Log In');
+      await browser.fill(page,'Wallet password',credential);await browser.click(page,'Unlock');
       await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'known-password missing-credential recovery'});
       assert.deepEqual(await page.evaluate(publicIdentity),identity);
       console.log('PASS: missing local credential preserves encrypted wallet; known password restores same verified identity');

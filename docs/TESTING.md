@@ -241,6 +241,33 @@ path for your platform. Native harness secure-storage mocks verify SDK behavior
 and cache continuity, not operating-system keychain protection. The browser
 platform-key test registers the real WebCrypto storage implementation.
 
+Full application acceptance must also exercise Dart2Wasm when validating a
+Flutter upgrade. A passing Wasm compilation or SDK transport test does not
+cover the app's authentication transitions. From the wallet root:
+
+```bash
+fvm flutter build web --release --no-pub --wasm --csp \
+  --no-web-resources-cdn --output=build/web-wasm \
+  --dart-define-from-file=docs/LIFI_PRODUCTION_BUILD_DEFINES.json \
+  --dart-define=ANALYTICS_DISABLED=true \
+  --dart-define=BYPASS_LEGAL_DOCUMENT_GATE=false \
+  --dart-define=TRON_GASLESS_ENABLED=true \
+  --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+  --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+  --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+python3 tool/prepare_wallet_web_assets.py build/web-wasm
+GLEEC_TEST_WEB_COMPILER=wasm \
+  node test_units/services/wallet_access/web_wallet_recovery.browser.test.js
+```
+
+Use Node 22 or later and an installed Chrome, optionally selected with
+`GLEEC_TEST_CHROME`. The disposable local server serves Wasm JavaScript modules
+with the correct MIME type. The driver fingerprints `main.dart.wasm`, requires
+that runtime to load and rejects JavaScript fallback. The recovery flow creates
+only unfunded test wallets and checks phrase/file restoration, identity,
+derivation and diagnostic canaries. Hosted acceptance remains tied to the
+deployed JavaScript digest.
+
 The explicit geo-disable branch has a separate compile-time regression. From
 the wallet root, run:
 

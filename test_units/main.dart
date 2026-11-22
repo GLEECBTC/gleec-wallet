@@ -59,6 +59,18 @@ import 'tests/swap/solana_atomic_lifecycle_test.dart'
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'views/wallets_manager/widgets/wallet_list_item_test.dart'
+    as wallet_list_item_test;
+import 'views/settings/security_recovery_flow_test.dart'
+    as security_recovery_flow_test;
+import 'views/settings/recovery_plates_test.dart' as recovery_plates_test;
+import 'views/common/wallet_access/wallet_protection_states_test.dart'
+    as wallet_protection_states_test;
+import 'views/common/wallet_access/wallet_lock_screen_test.dart'
+    as wallet_lock_screen_test;
+import 'views/common/wallet_access/wallet_authorization_form_test.dart'
+    as wallet_authorization_form_test;
+
 import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
 import 'services/file_loader/guarded_file_saver_test.dart'
@@ -586,6 +598,12 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  group('wallet_list_item_test', wallet_list_item_test.main);
+  group('security_recovery_flow_test', security_recovery_flow_test.main);
+  group('recovery_plates_test', recovery_plates_test.main);
+  group('wallet_protection_states_test', wallet_protection_states_test.main);
+  group('wallet_lock_screen_test', wallet_lock_screen_test.main);
+  group('wallet_authorization_form_test', wallet_authorization_form_test.main);
   auth_setup_flow_test.main();
   wallet_protection_bloc_test.main();
   swap_submission_lock_test.main();

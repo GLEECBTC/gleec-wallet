@@ -1,5 +1,5 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,15 +9,18 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
-import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/validators.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/views/common/page_header/page_header.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
+
+part 'password_update_fields.dart';
 
 class PasswordUpdatePage extends StatefulWidget {
   const PasswordUpdatePage({super.key});
@@ -27,7 +30,8 @@ class PasswordUpdatePage extends StatefulWidget {
 }
 
 class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
-  bool _passwordUpdated = false;
+  /// Set once the engine uses the new password.
+  PasswordChangeOutcome? _outcome;
   final _scrollController = ScrollController();
 
   @override
@@ -42,16 +46,10 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
     const event = ResetEvent();
     gotoSecurityMain() => bloc.add(event);
 
-    late Widget pageContent;
-    if (_passwordUpdated) {
-      pageContent = _SuccessView(back: gotoSecurityMain);
-    } else {
-      pageContent = _FormView(
-        onSuccess: () {
-          setState(() => _passwordUpdated = true);
-        },
-      );
-    }
+    final outcome = _outcome;
+    final Widget pageContent = outcome != null
+        ? _SuccessView(outcome: outcome, back: gotoSecurityMain)
+        : _FormView(onSuccess: (outcome) => setState(() => _outcome = outcome));
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       decoration: BoxDecoration(
@@ -122,7 +120,7 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
 class _FormView extends StatefulWidget {
   const _FormView({required this.onSuccess});
 
-  final VoidCallback onSuccess;
+  final ValueChanged<PasswordChangeOutcome> onSuccess;
 
   @override
   State<_FormView> createState() => _FormViewState();
@@ -135,6 +133,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
   final _confirmController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   String? _error;
+  WalletAccessTone _errorTone = WalletAccessTone.error;
   bool _busy = false;
   bool _managed = false;
   WalletId? _walletId;
@@ -148,7 +147,9 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
+    // Clicking another window on desktop or web is not leaving: a password
+    // being typed, or pasted from a manager beside the app, must survive it.
+    if (!lifecycleLeavesApp(state)) return;
     _oldController.clear();
     _newController.clear();
     _confirmController.clear();
@@ -182,7 +183,9 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
       builder: (context, snapshot) {
         _managed = snapshot.data?.hasManagedCredential == true;
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: WalletAccessProgress(label: 'authProtectionChecking'.tr()),
+          );
         }
         return AutofillGroup(
           onDisposeAction: AutofillContextAction.cancel,
@@ -206,7 +209,10 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
                   ),
                 ),
                 if (_managed) ...[
-                  Text('authPersonalPasswordOptional'.tr()),
+                  WalletAccessNotice(
+                    text: 'authPersonalPasswordOptional'.tr(),
+                    announce: false,
+                  ),
                   const SizedBox(height: 16),
                 ] else
                   _CurrentField(
@@ -227,20 +233,23 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
                   newController: _newController,
                   isObscured: _isObscured,
                   onVisibilityChange: _onVisibilityChange,
+                  onSubmitted: _onUpdate,
                 ),
                 const SizedBox(height: 30),
-                if (_error != null) ...{
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      color: theme.currentGlobal.colorScheme.error,
-                    ),
+                if (_error != null) ...[
+                  WalletAccessNotice(
+                    key: const Key('password-update-error'),
+                    text: _error!,
+                    tone: _errorTone,
                   ),
-                  const SizedBox(height: 10),
-                },
+                  const SizedBox(height: 12),
+                ],
+                // Stays enabled while busy: a disabled button drops keyboard
+                // focus, and a failed change should leave the user on it.
                 UiPrimaryButton(
+                  key: const Key('password-update-submit'),
                   expandForText: true,
-                  onPressed: _busy ? null : _onUpdate,
+                  onPressed: _onUpdate,
                   text: _busy
                       ? LocaleKeys.pleaseWait.tr()
                       : LocaleKeys.updatePassword.tr(),
@@ -265,6 +274,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
     if (currentPassword == newPassword) {
       setState(() {
         _error = LocaleKeys.usedSamePassword.tr();
+        _errorTone = WalletAccessTone.error;
       });
       return;
     }
@@ -275,8 +285,9 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
     });
     try {
       final access = context.read<WalletAccessService?>();
+      var outcome = PasswordChangeOutcome.completed;
       if (access != null) {
-        await access.changePassword(
+        outcome = await access.changePasswordWithOutcome(
           walletId: expected,
           currentPassword: currentPassword,
           newPassword: newPassword,
@@ -299,17 +310,25 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
       if (!_ownsWallet(expected, expectedEntry)) return;
       _newController.clear();
       _confirmController.clear();
-      widget.onSuccess();
+      // The stored credential may no longer follow the password, so whether
+      // the wallet is opened for the user is read again, not remembered.
+      _accessStatus = null;
+      widget.onSuccess(outcome);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        if (e is WalletAccessException &&
-            e.failure == WalletAccessFailure.canceled) {
-          _error = 'authUnlockCanceled'.tr();
-          return;
-        }
+        // Cancelling the confirmation is the user's own choice, not a fault.
+        _errorTone =
+            e is WalletAccessException &&
+                e.failure == WalletAccessFailure.canceled
+            ? WalletAccessTone.info
+            : WalletAccessTone.error;
         if (e is! AuthException) {
-          _error = LocaleKeys.passwordNotAccepted.tr();
+          _error = walletAccessFailureText(
+            e,
+            passwordEntered: currentPassword != null,
+            unlocking: false,
+          );
           return;
         }
 
@@ -396,183 +415,5 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
     setState(() {
       _isObscured = isPasswordObscured;
     });
-  }
-}
-
-class _CurrentField extends StatefulWidget {
-  const _CurrentField({
-    required this.controller,
-    required this.isObscured,
-    required this.onVisibilityChange,
-    required this.formKey,
-  });
-
-  final TextEditingController controller;
-  final bool isObscured;
-  final Function(bool) onVisibilityChange;
-  final GlobalKey<FormState> formKey;
-
-  @override
-  State<_CurrentField> createState() => _CurrentFieldState();
-}
-
-class _CurrentFieldState extends State<_CurrentField> {
-  @override
-  Widget build(BuildContext context) {
-    final currentWallet = context.read<AuthBloc>().state.currentUser?.wallet;
-    return _PasswordField(
-      hintText: LocaleKeys.currentPassword.tr(),
-      controller: widget.controller,
-      isObscured: widget.isObscured,
-      autofillHints: const [AutofillHints.password],
-      validator: (String? password) {
-        if (password == null || password.isEmpty) {
-          return LocaleKeys.passwordIsEmpty.tr();
-        }
-
-        if (currentWallet == null) return LocaleKeys.walletNotFound.tr();
-
-        return null;
-      },
-      suffixIcon: PasswordVisibilityControl(
-        isObscured: widget.isObscured,
-        onVisibilityChange: widget.onVisibilityChange,
-      ),
-    );
-  }
-}
-
-class _NewField extends StatelessWidget {
-  const _NewField({
-    required this.controller,
-    required this.isObscured,
-    required this.onVisibilityChange,
-  });
-
-  final TextEditingController controller;
-  final bool isObscured;
-  final void Function(bool) onVisibilityChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return _PasswordField(
-      hintText: LocaleKeys.enterNewPassword.tr(),
-      controller: controller,
-      isObscured: isObscured,
-      autofillHints: const [AutofillHints.newPassword],
-      validator: (password) => _validatePassword(password, context),
-      suffixIcon: PasswordVisibilityControl(
-        isObscured: isObscured,
-        onVisibilityChange: onVisibilityChange,
-      ),
-    );
-  }
-
-  String? _validatePassword(String? passwordText, BuildContext context) {
-    final settingsBlocState = context.read<SettingsBloc>().state;
-    final allowWeakPassword = settingsBlocState.weakPasswordsAllowed;
-    final password = passwordText ?? '';
-
-    if (allowWeakPassword) {
-      return null;
-    }
-
-    return validatePassword(password);
-  }
-}
-
-class _ConfirmField extends StatelessWidget {
-  const _ConfirmField({
-    required this.confirmController,
-    required this.newController,
-    required this.isObscured,
-    required this.onVisibilityChange,
-  });
-
-  final TextEditingController confirmController;
-  final TextEditingController newController;
-  final bool isObscured;
-  final Function(bool) onVisibilityChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return _PasswordField(
-      hintText: LocaleKeys.confirmNewPassword.tr(),
-      controller: confirmController,
-      isObscured: isObscured,
-      autofillHints: const [AutofillHints.newPassword],
-      validator: (String? confirmPassword) =>
-          validateConfirmPassword(newController.text, confirmPassword ?? ''),
-      suffixIcon: PasswordVisibilityControl(
-        isObscured: isObscured,
-        onVisibilityChange: onVisibilityChange,
-      ),
-    );
-  }
-}
-
-class _PasswordField extends StatelessWidget {
-  const _PasswordField({
-    required this.controller,
-    required this.isObscured,
-    required this.suffixIcon,
-    required this.validator,
-    required this.hintText,
-    this.autofillHints,
-  });
-
-  final TextEditingController controller;
-  final bool isObscured;
-  final PasswordVisibilityControl suffixIcon;
-  final String? Function(String?)? validator;
-  final String hintText;
-  final Iterable<String>? autofillHints;
-
-  @override
-  Widget build(BuildContext context) {
-    return UiTextFormField(
-      controller: controller,
-      // Use .next, rather than done or go, as this is a generic password field
-      // that is not guaranteed to be the last field in the forms it is
-      // referenced in
-      textInputAction: TextInputAction.next,
-      autocorrect: false,
-      enableSuggestions: false,
-      enableIMEPersonalizedLearning: false,
-      enableInteractiveSelection: true,
-      obscureText: isObscured,
-      maxLength: passwordMaxLength,
-      counterText: '',
-      autofillHints: autofillHints,
-      validator: validator,
-      errorMaxLines: 6,
-      hintText: hintText,
-      suffixIcon: suffixIcon,
-    );
-  }
-}
-
-class _SuccessView extends StatelessWidget {
-  const _SuccessView({required this.back});
-
-  final VoidCallback back;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.only(top: 30),
-          child: UiPrimaryButton(
-            expandForText: true,
-            prefix: const Icon(Icons.check, color: Colors.white),
-            backgroundColor: theme.custom.passwordButtonSuccessColor,
-            onPressed: back,
-            text: LocaleKeys.passwordHasChanged.tr(),
-          ),
-        ),
-      ],
-    );
   }
 }

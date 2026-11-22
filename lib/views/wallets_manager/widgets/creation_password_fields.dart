@@ -15,6 +15,7 @@ class CreationPasswordFields extends StatefulWidget {
     this.onValidityChanged,
     this.onFieldSubmitted,
     this.enforceStrongPassword = false,
+    this.autofocus = false,
   });
 
   final TextEditingController passwordController;
@@ -24,6 +25,9 @@ class CreationPasswordFields extends StatefulWidget {
   /// When true, weak passwords are never allowed regardless of settings.
   final bool enforceStrongPassword;
 
+  /// Whether the first field takes focus as the step opens.
+  final bool autofocus;
+
   @override
   State<CreationPasswordFields> createState() => _CreationPasswordFieldsState();
 }
@@ -32,25 +36,45 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields>
     with WidgetsBindingObserver {
   final TextEditingController _confirmPasswordController =
       TextEditingController(text: '');
+  final FocusNode _passwordFocus = FocusNode(debugLabel: 'new password');
+  final FocusNode _confirmFocus = FocusNode(debugLabel: 'confirm password');
   bool _isObscured = true;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildPasswordField(),
+        if (!_weakPasswordAllowed) ...[
+          const SizedBox(height: 8),
+          // The rules up front, so they are not discovered one error at a
+          // time.
+          Text(
+            'authPasswordRequirementsHint'.tr(),
+            key: const Key('create-password-requirements'),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+          ),
+        ],
         const SizedBox(height: 20),
         _buildPasswordConfirmationField(),
       ],
     );
   }
 
+  bool get _weakPasswordAllowed =>
+      !widget.enforceStrongPassword &&
+      context.watch<SettingsBloc>().state.weakPasswordsAllowed;
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _confirmPasswordController.clear();
     _confirmPasswordController.dispose();
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -61,6 +85,13 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields>
     }
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.autofocus) {
+      // Requested, not `autofocus`: the field this step replaces still holds
+      // the scope's focus while this one is built, which cancels an autofocus.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _passwordFocus.requestFocus();
+      });
+    }
   }
 
   @override
@@ -74,6 +105,7 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields>
     return UiTextFormField(
       key: const Key('create-password-field-confirm'),
       controller: _confirmPasswordController,
+      focusNode: _confirmFocus,
       textInputAction: TextInputAction.done,
       autocorrect: false,
       enableSuggestions: false,
@@ -96,6 +128,7 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields>
     return UiTextFormField(
       key: const Key('create-password-field'),
       controller: widget.passwordController,
+      focusNode: _passwordFocus,
       textInputAction: TextInputAction.next,
       autocorrect: false,
       enableSuggestions: false,
@@ -107,6 +140,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields>
       validator: _validatePasswordField,
       validationMode: InputValidationMode.passive,
       onChanged: (_) => _notifyValidityChanged(),
+      // "Next" would otherwise stop on the show-password control.
+      onFieldSubmitted: (_) => _confirmFocus.requestFocus(),
       errorMaxLines: 6,
       autofillHints: const [AutofillHints.newPassword],
       hintText: LocaleKeys.walletCreationPasswordHint.tr(),

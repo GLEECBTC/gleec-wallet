@@ -10,7 +10,9 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/shared/utils/validators.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/password_update_page.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 
@@ -27,8 +29,11 @@ class _PasswordAccess extends AccessibilityAccess {
   PasswordManagerOutcome outcome = PasswordManagerOutcome.accepted;
   WalletAccessFailure? saveFailure;
 
+  PasswordChangeOutcome changeOutcome = PasswordChangeOutcome.completed;
+  Object? changeFailure;
+
   @override
-  Future<void> changePassword({
+  Future<PasswordChangeOutcome> changePasswordWithOutcome({
     required WalletId walletId,
     String? currentPassword,
     required String newPassword,
@@ -36,6 +41,8 @@ class _PasswordAccess extends AccessibilityAccess {
     changesMade.add((walletId, currentPassword));
     expect(newPassword, _newPassword);
     await confirmChange?.call();
+    if (changeFailure case final failure?) throw failure;
+    return changeOutcome;
   }
 
   @override
@@ -52,6 +59,9 @@ class _PasswordAccess extends AccessibilityAccess {
   }
 }
 
+/// The page's host of the last [_pump], which receives its way back.
+late AccessibilitySecurity _security;
+
 Future<LegalFormHarness> _pump(
   WidgetTester tester,
   _PasswordAccess access, {
@@ -59,7 +69,7 @@ Future<LegalFormHarness> _pump(
   Size size = const Size(800, 1100),
 }) async {
   final harness = LegalFormHarness();
-  final security = AccessibilitySecurity();
+  final security = _security = AccessibilitySecurity();
   // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
   harness.auth.emit(AuthBlocState.loggedIn(accessibilityUser()));
   addTearDown(access.unlockCoordinator.dispose);
@@ -233,6 +243,173 @@ void main() {
         expect(find.text('passwordHasChanged'.tr()), findsNothing);
         expect(tester.takeException(), isNull);
       },
+    );
+
+    testWidgets('Enter on the last field submits the form', (tester) async {
+      final access = _PasswordAccess();
+      await _pump(tester, access);
+      final fields = _newFields();
+      await tester.enterText(fields.first, _newPassword);
+      await tester.enterText(fields.last, _newPassword);
+      expect(
+        tester.widget<EditableText>(fields.first).textInputAction,
+        TextInputAction.next,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(access.changesMade, hasLength(1));
+    });
+
+    testWidgets(
+      'success is a status with its own way back, not a button dressed as one',
+      (tester) async {
+        final access = _PasswordAccess();
+        await _pump(tester, access);
+        await _submit(tester);
+        final status = find.byKey(const Key('password-update-success'));
+        expect(
+          find.descendant(
+            of: status,
+            matching: find.text('passwordHasChanged'.tr()),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: status, matching: find.byType(ElevatedButton)),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('password-update-device-unlock-reset')),
+          findsNothing,
+        );
+        await tester.tap(find.byKey(const Key('password-update-done')));
+        expect(_security.events.whereType<ResetEvent>(), hasLength(1));
+      },
+    );
+
+    testWidgets('says when device unlock did not follow the new password', (
+      tester,
+    ) async {
+      final access = _PasswordAccess()
+        ..changeOutcome = PasswordChangeOutcome.deviceUnlockNeedsSetup;
+      await _pump(tester, access);
+      await _submit(tester);
+      expect(find.text('passwordHasChanged'.tr()), findsOneWidget);
+      expect(
+        find.byKey(const Key('password-update-device-unlock-reset')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'a password that breaks the rules shows the rule and is never sent',
+      (tester) async {
+        final access = _PasswordAccess();
+        await _pump(tester, access);
+        for (final field in [_newFields().first, _newFields().last]) {
+          await tester.enterText(field, 'weak');
+        }
+        await tester.tap(find.byKey(const Key('password-update-submit')));
+        await tester.pumpAndSettle();
+        expect(find.text(validatePassword('weak')!), findsOneWidget);
+        expect(access.changesMade, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'a cancelled confirmation is announced, and the button keeps its place',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        final access = _PasswordAccess()
+          ..changeFailure = const WalletAccessException(
+            WalletAccessFailure.canceled,
+          );
+        await _pump(tester, access);
+        await _submit(tester);
+        final error = find.byKey(const Key('password-update-error'));
+        expect(
+          find.descendant(
+            of: error,
+            matching: find.text('authConfirmationCanceled'.tr()),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .getSemantics(error)
+              .getSemanticsData()
+              .flagsCollection
+              .isLiveRegion,
+          isTrue,
+        );
+        // Still enabled, so it kept keyboard focus for the retry.
+        expect(
+          tester
+              .widget<ElevatedButton>(
+                find.descendant(
+                  of: find.byKey(const Key('password-update-submit')),
+                  matching: find.byType(ElevatedButton),
+                ),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        semantics.dispose();
+      },
+    );
+
+    testWidgets('a second press while the change runs starts nothing', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final access = _PasswordAccess()..confirmChange = () => gate.future;
+      await _pump(tester, access);
+      final fields = _newFields();
+      await tester.enterText(fields.first, _newPassword);
+      await tester.enterText(fields.last, _newPassword);
+      final submit = find.byKey(const Key('password-update-submit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pump();
+      await tester.tap(submit);
+      await tester.pump();
+      expect(access.changesMade, hasLength(1));
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('passwordHasChanged'.tr()), findsOneWidget);
+    });
+
+    testWidgets(
+      'on desktop, clicking another window keeps what was typed',
+      (tester) async {
+        final access = _PasswordAccess();
+        await _pump(tester, access);
+        final field = _newFields().first;
+        await tester.enterText(field, _newPassword);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        expect(
+          tester.widget<EditableText>(field).controller.text,
+          _newPassword,
+        );
+        // Hiding the window is leaving: nothing typed stays behind.
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        await tester.pump();
+        expect(tester.widget<EditableText>(field).controller.text, isEmpty);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      }),
     );
 
     testWidgets('remasks immediately and remains usable with large text', (

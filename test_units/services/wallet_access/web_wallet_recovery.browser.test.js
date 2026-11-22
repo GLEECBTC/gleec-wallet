@@ -42,14 +42,17 @@ const recoverySummary=`(async()=>{
     exportConfirmed:metadata.encrypted_file_exported===true};
 })()`;
 
+// Shape only: whether a rendered field carries this label. Never its value.
+const fieldPresent=label=>`Array.from(document.querySelectorAll('input,textarea')).some(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n').some(part=>part.trim()===${JSON.stringify(label)})&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
+
 async function signOut(browser,page,{contend=false}={}){
-  await browser.click(page,'Settings');await browser.click(page,'Log out');
+  await browser.click(page,'Settings');await browser.click(page,'Sign out');
   await browser.wait(page,"!!document.querySelector('[role=dialog]')",{label:'sign-out confirmation'});
   if(contend){
     await page.evaluate("window.__heldAccessLock=navigator.locks.request('gleec-wallet-access',()=>new Promise(resolve=>{window.__releaseAccessLock=resolve;}));true");
     await browser.wait(page,"typeof window.__releaseAccessLock==='function'",{label:'short access-lock contention fixture'});
   }
-  await browser.click(page,'Log out');
+  await browser.click(page,'Sign out');
   if(contend){
     await delay(250);
     assert.equal(await page.evaluate(buttonPresent('Connect wallet')),false,
@@ -92,6 +95,10 @@ async function main(){
   let phrase;
   const evidence={};
   const consoleMessages=[];
+  // Chosen in this fixture, as a user would: the generated password is never
+  // typed anywhere. Both are canaries for the diagnostics checked at the end.
+  const filePassword='Unfunded-file-fixture-73!';
+  const restoreCredential='Unfunded-restore-fixture-42!';
   try{
     await browser.serve();await browser.launch();
     evidence.buildFingerprint=browser.buildFingerprint;
@@ -99,12 +106,17 @@ async function main(){
       if(message.method==='Runtime.consoleAPICalled')consoleMessages.push((message.params.args??[])
         .map(arg=>typeof arg.value==='string'?arg.value:'').join(' '));
     });
-    // Hold the optional provider reply to reproduce setup racing the automatic
-    // password save. This fixture never saves or returns a password credential.
+    // Hold the first, automatic provider reply to reproduce setup racing the
+    // automatic password save. Later requests answer at once. This fixture
+    // never saves or returns a password credential.
     const providerPending=`(() => {
+      window.__providerSaves=0;
       navigator.credentials.store=async()=>{
-        window.__providerSaveReached=true;
-        await new Promise(resolve=>{window.__completeProviderSave=resolve;});
+        window.__providerSaves++;
+        if(window.__providerSaves===1){
+          window.__providerSaveReached=true;
+          await new Promise(resolve=>{window.__completeProviderSave=resolve;});
+        }
         return null;
       };
     })();`;
@@ -141,52 +153,45 @@ async function main(){
     evidence.passkeySetup={registrations:1,verificationAssertions:1,extraPromptsOnNavigation:0};
     console.log('CHECK: recovery wallet protected with one registration and one verification');
 
-    // Download before phrase confirmation so existing phrase evidence cannot
-    // hide an incorrect claim that a browser download completed a backup.
+    // A file sealed with a password nobody has seen could not be opened again
+    // by its owner. While the password is the generated one and no password
+    // manager confirmed holding it, the file is not offered: a known wallet
+    // password is.
     const initialRecovery=await page.evaluate(recoverySummary);
     assert.deepEqual(initialRecovery,{hasBackup:false,evidence:'none',exportRequested:false,exportConfirmed:false});
-    const filesBefore=new Set(fs.readdirSync(browser.downloads));
-    const beforeExport=virtual.counts.asserted;
-    await browser.click(page,'Download as file');
-    await browser.wait(page,buttonPresent('Continue'),{label:'encrypted export authorization'});
-    assert.equal(await page.evaluate("document.querySelectorAll('input[type=password]').length"),0);
-    await browser.click(page,'Continue');
-    const exported=await newDownload(browser,filesBefore);
-    const ciphertext=fs.readFileSync(exported,'utf8');
-    assert.equal(ciphertext.includes(generatedCredential),false);
-    assert.ok(virtual.counts.asserted>beforeExport);
-    await browser.wait(page,`(${recoverySummary}).then(value=>value.exportRequested)`,{label:'unconfirmed browser export evidence'});
-    assert.deepEqual(await page.evaluate(recoverySummary),
-      {hasBackup:false,evidence:'none',exportRequested:true,exportConfirmed:false});
-    assert.equal(await page.evaluate(buttonPresent('Backup seed phrase')),true);
-    const importFile=path.join(browser.downloads,'File Restore.txt');fs.copyFileSync(exported,importFile);
-    evidence.encryptedExport={downloaded:true,unknownCredentialNeverTyped:true,
-      requestedOnly:true,confirmedBackupNotClaimed:true,phraseReminderRetained:true};
-    console.log('PASS: encrypted browser download remains requested-only and preserves the recovery reminder');
+    await browser.wait(page,buttonPresent('Set a wallet password'),{label:'known-password route to the encrypted file'});
+    assert.equal(await page.evaluate(buttonPresent('Download as file')),false,
+      'A file locked by the generated password must not be offered');
+    assert.equal(await page.evaluate(buttonPresent('Back up now')),true);
+    evidence.generatedPasswordFile={downloadOffered:false,knownPasswordOffered:true};
+    console.log('PASS: generated-password wallet is offered a known password instead of an unopenable file');
 
     const beforeBackup=virtual.counts.asserted;
-    await browser.click(page,'Backup seed phrase');
+    await browser.click(page,'Back up now');
     console.log('CHECK: requested fresh authorization for phrase backup');
     await browser.wait(page,buttonPresent('Continue'),{label:'sensitive-action confirmation'});
     assert.equal(await page.evaluate("document.querySelectorAll('input[type=password]').length"),0,
       'Generated-password authorization must not ask the user to type that credential');
     await browser.click(page,'Continue');
-    await browser.wait(page,"Array.from(document.querySelectorAll('[role]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Show my seed phrase')",{label:'authorized phrase screen'});
-    await browser.click(page,'Show my seed phrase');
+    await browser.wait(page,"Array.from(document.querySelectorAll('[role]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Show my recovery phrase')",{label:'authorized phrase screen'});
+    await browser.click(page,'Show my recovery phrase');
     const wordCount=await page.evaluate("Array.from(document.querySelectorAll('input')).filter(el=>/^\\d+\\.$/.test(el.getAttribute('aria-label')||'')).length");
     assert.ok([12,24].includes(wordCount),'The accessible fixture phrase must expose numbered fields');
     const words=[];
     for(let index=1;index<=wordCount;index++){
-      await page.evaluate(`(()=>{const field=Array.from(document.querySelectorAll('input')).find(el=>el.getAttribute('aria-label')===${JSON.stringify(index+'.')});field.focus();field.click();return true;})()`);
+      // Move accessibility focus as a screen reader or the Tab key does. A
+      // synthetic click would also land on the page behind the field, which
+      // takes text focus away again.
+      await page.evaluate(`(()=>{const field=Array.from(document.querySelectorAll('input')).find(el=>el.getAttribute('aria-label')===${JSON.stringify(index+'.')});field.focus();return true;})()`);
       await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-      await browser.wait(page,"/^[a-z]+$/.test(document.activeElement?.value||'')",{label:'focused fixture phrase field'});
+      await browser.wait(page,`document.activeElement?.getAttribute('aria-label')===${JSON.stringify(index+'.')}&&/^[a-z]+$/.test(document.activeElement.value||'')`,{label:'focused fixture phrase field'});
       words.push(await page.evaluate('document.activeElement.value'));
     }
     phrase=words.join(' ');words.fill('');
     console.log('CHECK: fixture phrase word count and distinct count',phrase.split(' ').length,new Set(phrase.split(' ')).size);
     assert.ok([12,24].includes(phrase.split(' ').length),'The fixture phrase must have the expected word count');
     await page.evaluate(`__gleecReleaseProbe.testAddCanary(${JSON.stringify(phrase)});true`);
-    await browser.click(page,'I saved my seed phrase');
+    await browser.click(page,'I saved my recovery phrase');
     await browser.wait(page,buttonPresent('Confirm'),{label:'phrase confirmation choices'});
     await page.evaluate('window.__usedSeedChoices=new Set();true');
     for(const word of phrase.split(' ')){
@@ -199,15 +204,73 @@ async function main(){
     await browser.click(page,'I got it');
     assert.ok(virtual.counts.asserted>beforeBackup);
     await browser.wait(page,`(${recoverySummary}).then(value=>value.evidence==='phraseConfirmed'&&value.hasBackup)`,{label:'confirmed phrase evidence'});
-    assert.equal((await page.evaluate(recoverySummary)).exportConfirmed,false);
+    assert.deepEqual(await page.evaluate(recoverySummary),
+      {hasBackup:true,evidence:'phraseConfirmed',exportRequested:false,exportConfirmed:false});
     evidence.generatedPasswordBackup={phraseConfirmed:true,unknownCredentialNeverTyped:true,customPasswordNotRequired:true};
     console.log('PASS: generated-password wallet completes phrase confirmation through device authorization');
-    assert.equal(ciphertext.includes(phrase),false);
-    evidence.encryptedExport.plaintextPhraseAbsent=true;
+
+    // Choosing a wallet password is authorized by the passkey: the generated
+    // password is never asked for, and the passkey keeps unlocking the wallet.
+    const beforePassword=await page.evaluate('__gleecReleaseProbe.metrics()');
+    const savesBeforePassword=await page.evaluate('window.__providerSaves');
+    await browser.click(page,'Set a wallet password');
+    await browser.wait(page,buttonPresent('Update password'),{label:'wallet password form'});
+    assert.equal(await page.evaluate(fieldPresent('Current password')),false,
+      'A passkey-protected wallet must not ask for its generated password');
+    await browser.fill(page,'Enter new password',filePassword);
+    await browser.fill(page,'Confirm new password',filePassword);
+    await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await browser.click(page,'Update password');
+    await browser.wait(page,buttonPresent('Back to Security settings'),{timeout:60000,label:'wallet password set'});
+    assert.equal(await page.evaluate("document.body.textContent.includes('Password changed.')"),true);
+    assert.equal(await page.evaluate("document.body.textContent.includes('Your passkey is off')"),false,
+      'A password change must not turn off a working passkey');
+    const afterPassword=await page.evaluate('__gleecReleaseProbe.metrics()');
+    assert.equal(afterPassword.registrations,beforePassword.registrations,'A password change must not create another passkey');
+    const passwordChangeAssertions=afterPassword.challenges-beforePassword.challenges;
+    // Read the former credential, rewrite it under the passkey, read it back.
+    assert.ok(passwordChangeAssertions>=1&&passwordChangeAssertions<=3,
+      'A password change is authorized by the passkey and never prompts beyond its verified rewrite');
+    assert.equal(afterPassword.fulfilledAssertions-beforePassword.fulfilledAssertions,passwordChangeAssertions);
+    const rotated=await page.evaluate(credentialsSummary);
+    assert.equal(rotated.active,1);assert.equal(rotated.staged,0);assert.equal(rotated.unattended,0);
+    assert.deepEqual(rotated.protections,['passkeyPrf']);
+    assert.equal(await page.evaluate('window.__providerSaves'),savesBeforePassword+1,
+      'The chosen password is offered to the password manager once');
+    await browser.click(page,'Back to Security settings');
+    await waitForPasskeySettingsReady(browser,page);
+    await browser.wait(page,buttonPresent('Download as file'),{label:'encrypted file offered for a known password'});
+    assert.equal(await page.evaluate(buttonPresent('Set a wallet password')),false);
+    assert.deepEqual(await page.evaluate(publicIdentity),originalIdentity);
+    evidence.walletPassword={currentPasswordNotRequested:true,passkeyAssertions:passwordChangeAssertions,
+      passkeyRetained:true,identityPreserved:true,downloadOffered:true};
+    console.log('PASS: wallet password set through passkey authorization keeps the passkey and unlocks the encrypted file');
+
+    const filesBefore=new Set(fs.readdirSync(browser.downloads));
+    const beforeExport=virtual.counts.asserted;
+    await browser.click(page,'Download as file');
+    await browser.wait(page,buttonPresent('Continue'),{label:'encrypted export authorization'});
+    assert.equal(await page.evaluate("document.querySelectorAll('input[type=password]').length"),0);
+    await browser.click(page,'Continue');
+    const exported=await newDownload(browser,filesBefore);
+    const ciphertext=fs.readFileSync(exported,'utf8');
+    for(const secret of [generatedCredential,filePassword,phrase])assert.equal(ciphertext.includes(secret),false);
+    assert.ok(virtual.counts.asserted>beforeExport);
+    await browser.wait(page,`(${recoverySummary}).then(value=>value.exportRequested)`,{label:'unconfirmed browser export evidence'});
+    // A browser download proves nothing about where the file went. It is
+    // recorded as requested and leaves the confirmed phrase evidence as it was.
+    assert.deepEqual(await page.evaluate(recoverySummary),
+      {hasBackup:true,evidence:'phraseConfirmed',exportRequested:true,exportConfirmed:false});
+    // The restored wallet takes its name from this file, and its own export
+    // is then named after the wallet: keep the copy out of the download folder.
+    const importFolder=path.join(browser.profile,'test-import');fs.mkdirSync(importFolder);
+    const importFile=path.join(importFolder,'File Restore.txt');fs.copyFileSync(exported,importFile);
+    evidence.encryptedExport={downloaded:true,unknownCredentialNeverTyped:true,
+      requestedOnly:true,phraseEvidenceUnchanged:true,plaintextPhraseAbsent:true};
+    console.log('PASS: encrypted browser download remains requested-only and excludes the phrase and both passwords');
     if(process.env.GLEEC_TEST_NARROW_AUTH==='true'){
       for(const diagnostic of consoleMessages){
-        assert.equal(diagnostic.includes(phrase),false);
-        assert.equal(diagnostic.includes(generatedCredential),false);
+        for(const secret of [phrase,generatedCredential,filePassword])assert.equal(diagnostic.includes(secret),false);
       }
       evidence.consoleCanaries={phraseLeaked:false,passwordLeaked:false};
       console.log('EVIDENCE',JSON.stringify(evidence));
@@ -216,9 +279,8 @@ async function main(){
 
     await signOut(browser,page,{contend:true});await openImport(browser,page);
     await browser.fill(page,'Wallet name','Seed Restore');
-    await browser.fill(page,'Enter seed phrase',phrase);
+    await browser.fill(page,'Recovery phrase',phrase);
     await browser.click(page,'Continue');
-    const restoreCredential='Unfunded-restore-fixture-42!';
     await browser.fill(page,'Wallet password',restoreCredential);
     await browser.fill(page,'Confirm password',restoreCredential);
     await browser.click(page,'Import');
@@ -232,7 +294,7 @@ async function main(){
     await signOut(browser,page);await openImport(browser,page);
     console.log('CHECK: encrypted-file import entry opened');
     await browser.upload(page,'Import encrypted wallet file',importFile);
-    await browser.fill(page,'Wallet password',generatedCredential);
+    await browser.fill(page,'Wallet password',filePassword);
     await browser.click(page,'Import');
     await browser.wait(page,buttonPresent('File Restore'),{timeout:60000,label:'file-restored wallet opened'});
     const fileIdentity=await page.evaluate(publicIdentity);
@@ -242,13 +304,39 @@ async function main(){
     evidence.encryptedFileRestoration={verifiedIdentityMatches:true,separateEntry:true,hdOptionsPreserved:true};
     console.log('PASS: encrypted-file restoration independently preserves verified wallet identity');
 
+    // A wallet restored from a file holds no evidence that its owner has the
+    // phrase. Export from it, so existing phrase evidence cannot hide a wrong
+    // claim that a browser download completed a backup.
+    assert.deepEqual(await page.evaluate(recoverySummary),
+      {hasBackup:false,evidence:'none',exportRequested:false,exportConfirmed:false});
+    await browser.click(page,'Settings');await browser.click(page,'Security');
+    await browser.wait(page,buttonPresent('Download as file'),{label:'encrypted file offered for the imported password'});
+    assert.equal(await page.evaluate(buttonPresent('Back up now')),true);
+    const filesBeforeSecond=new Set(fs.readdirSync(browser.downloads));
+    await browser.click(page,'Download as file');
+    // Imported with a typed password and no device unlock: the password its
+    // owner chose authorizes the export.
+    await browser.wait(page,`(${buttonPresent('Continue')})&&(${fieldPresent('Wallet password')})`,
+      {label:'file-restored export authorization'});
+    await browser.fill(page,'Wallet password',filePassword);
+    await browser.click(page,'Continue');
+    const secondCiphertext=fs.readFileSync(await newDownload(browser,filesBeforeSecond),'utf8');
+    for(const secret of [generatedCredential,filePassword,phrase])assert.equal(secondCiphertext.includes(secret),false);
+    await browser.wait(page,`(${recoverySummary}).then(value=>value.exportRequested)`,{label:'file-restored export evidence'});
+    assert.deepEqual(await page.evaluate(recoverySummary),
+      {hasBackup:false,evidence:'none',exportRequested:true,exportConfirmed:false});
+    assert.equal(await page.evaluate(buttonPresent('Back up now')),true);
+    evidence.unbackedExport={requestedOnly:true,confirmedBackupNotClaimed:true,phraseReminderRetained:true};
+    console.log('PASS: export from a wallet without phrase evidence stays requested-only and preserves the recovery reminder');
+
     await browser.click(page,'Settings');await browser.click(page,'General');
     const beforeLogs=new Set(fs.readdirSync(browser.downloads));
     await browser.click(page,'Download logs');
     const logs=gunzipSync(fs.readFileSync(await newDownload(browser,beforeLogs,{suffix:'.txt.zip'}))).toString('utf8');
     for(const diagnostic of [logs,...consoleMessages]){
       assert.equal(diagnostic.includes(phrase),false,'A fixture phrase must not enter diagnostics');
-      assert.equal(diagnostic.includes(generatedCredential),false,'A fixture password must not enter diagnostics');
+      for(const password of [generatedCredential,filePassword,restoreCredential])
+        assert.equal(diagnostic.includes(password),false,'A fixture password must not enter diagnostics');
     }
     evidence.secretDiagnostics={phraseCanaryLeaked:false,passwordCanaryLeaked:false,downloadBytes:Buffer.byteLength(logs)};
     console.log('PASS: backup/export/import console and support diagnostics exclude phrase and password canaries');

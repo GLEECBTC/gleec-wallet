@@ -21,11 +21,19 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
 import '../../support/legal_onboarding_harness.dart';
 import '../../support/wallet_access_ui_fixture.dart';
 
-KdfUser _user() => KdfUser(
+// The shared flow tests remove a wallet whose recovery phrase is confirmed;
+// the unconfirmed variant is covered separately.
+KdfUser _user({bool backedUp = true}) => KdfUser(
   walletId: accessibilityUser().walletId,
   isBip39Seed: true,
-  metadata: const {'type': 'hdwallet', '_wallet_entry_id': 'removal-fixture'},
+  metadata: {
+    'type': 'hdwallet',
+    '_wallet_entry_id': 'removal-fixture',
+    if (backedUp) 'recovery_evidence': RecoveryEvidence.phraseConfirmed.name,
+  },
 );
+
+const _confirm = Key('wallet-removal-confirm');
 
 class _PendingTransfers extends Fake
     implements PendingGaslessTransferRepository {
@@ -63,12 +71,11 @@ class _Wallets extends Fake implements WalletsRepository {
     manager = WalletDeletionManager(
       readWallets: () async => [_user()],
       pendingTransfers: _PendingTransfers(),
-      deleteWallet:
-          ({
-            required walletName,
-            required password,
-            required validateTarget,
-          }) async {},
+      deleteWallet: ({
+        required walletName,
+        required password,
+        required validateTarget,
+      }) async {},
     );
   }
   final LegalFormAuth auth;
@@ -103,10 +110,12 @@ Future<(_RemovalAccess, _Wallets, LegalFormAuth)> _pump(
   WidgetTester tester, {
   Brightness brightness = Brightness.dark,
   double textScale = 1,
+  bool backedUp = true,
+  void Function(BuildContext context)? onBackUp,
 }) async {
   final auth = LegalFormAuth();
   // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
-  auth.emit(AuthBlocState.loggedIn(_user()));
+  auth.emit(AuthBlocState.loggedIn(_user(backedUp: backedUp)));
   final access = _RemovalAccess(auth);
   final wallets = _Wallets(auth);
   addTearDown(() async {
@@ -144,8 +153,10 @@ Future<(_RemovalAccess, _Wallets, LegalFormAuth)> _pump(
                 ),
                 child: child!,
               ),
-              home: const Scaffold(
-                body: SingleChildScrollView(child: WalletRemovalSection()),
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  child: WalletRemovalSection(onBackUpRecoveryPhrase: onBackUp),
+                ),
               ),
             ),
           ),
@@ -173,8 +184,8 @@ Future<void> _submitPassword(WidgetTester tester, String password) async {
     find.byKey(const Key('delete-wallet-password')),
     password,
   );
-  await tester.ensureVisible(find.byType(UiPrimaryButton));
-  await tester.tap(find.byType(UiPrimaryButton));
+  await tester.ensureVisible(find.byKey(_confirm));
+  await tester.tap(find.byKey(_confirm));
   await tester.pumpAndSettle();
 }
 
@@ -217,7 +228,7 @@ void main() {
         final (access, wallets, auth) = await _pump(tester);
         await _open(tester);
         expect(find.byType(WalletDeleting), findsOneWidget);
-        expect(find.text('deleteWalletInfo'.tr()), findsOneWidget);
+        expect(find.text('authRemoveWalletDialogBody'.tr()), findsOneWidget);
         expect(
           find.text('authRemoveWalletActivityWarning'.tr()),
           findsOneWidget,
@@ -235,6 +246,109 @@ void main() {
         expect(auth.events, isEmpty);
       },
     );
+
+    testWidgets(
+      'a wallet without a confirmed recovery phrase cannot be removed in one step',
+      (tester) async {
+        final (access, wallets, auth) = await _pump(tester, backedUp: false);
+        await _open(tester);
+        expect(
+          find.byKey(const Key('wallet-removal-not-backed-up')),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<ButtonStyleButton>(find.byKey(_confirm)).enabled,
+          isFalse,
+        );
+        await tester.ensureVisible(find.byKey(_confirm));
+        await tester.tap(find.byKey(_confirm));
+        await tester.pumpAndSettle();
+        expect(access.deletionProofs, isEmpty);
+        expect(wallets.deletions, isEmpty);
+        final acknowledge = find.byKey(const Key('wallet-removal-acknowledge'));
+        await tester.ensureVisible(acknowledge);
+        await tester.tap(acknowledge);
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<ButtonStyleButton>(find.byKey(_confirm)).enabled,
+          isTrue,
+        );
+        // The safe action leads and keeps the wallet.
+        final safe = find.byKey(const Key('wallet-removal-safe-action'));
+        await tester.ensureVisible(safe);
+        await tester.tap(safe);
+        await tester.pumpAndSettle();
+        expect(find.byType(WalletDeleting), findsNothing);
+        expect(wallets.deletions, isEmpty);
+        expect(auth.state.currentUser?.walletId, accessibilityUser().walletId);
+      },
+    );
+
+    testWidgets(
+      'backing up first closes the review and starts the backup from Settings',
+      (tester) async {
+        var backups = 0;
+        final (access, wallets, auth) = await _pump(
+          tester,
+          backedUp: false,
+          onBackUp: (_) => backups++,
+        );
+        await _open(tester);
+        final safe = find.byKey(const Key('wallet-removal-safe-action'));
+        await tester.ensureVisible(safe);
+        expect(
+          find.descendant(
+            of: safe,
+            matching: find.text('authBackUpRecoveryPhraseFirst'.tr()),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(safe);
+        await tester.pumpAndSettle();
+        expect(backups, 1);
+        expect(find.byType(WalletDeleting), findsNothing);
+        expect(access.deletionProofs, isEmpty);
+        expect(wallets.deletions, isEmpty);
+        expect(auth.state.currentUser?.walletId, accessibilityUser().walletId);
+      },
+    );
+
+    for (final backedUp in [true, false]) {
+      for (final brightness in Brightness.values) {
+        testWidgets('removal review holds at 320 dp and 200% text '
+            '(backed up: $backedUp, $brightness)', (tester) async {
+          tester.view.physicalSize = const Size(320, 568);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await _pump(
+            tester,
+            brightness: brightness,
+            textScale: 2,
+            backedUp: backedUp,
+          );
+          await _open(tester);
+          for (final key in [
+            'wallet-removal-back',
+            'wallet-removal-confirm',
+            if (backedUp) 'wallet-removal-cancel',
+            if (!backedUp) 'wallet-removal-safe-action',
+            if (!backedUp) 'wallet-removal-acknowledge',
+          ]) {
+            final control = find.byKey(Key(key));
+            await tester.ensureVisible(control);
+            await tester.pumpAndSettle();
+            expect(control.hitTestable(), findsOneWidget, reason: key);
+            expect(
+              tester.getSize(control).height,
+              greaterThanOrEqualTo(48),
+              reason: key,
+            );
+          }
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
 
     testWidgets('wrong password cannot remove or sign out the active wallet', (
       tester,
@@ -254,14 +368,17 @@ void main() {
     ) async {
       final (access, wallets, auth) = await _pump(tester);
       await _open(tester);
-      await tester.ensureVisible(find.byType(UiPrimaryButton));
-      await tester.tap(find.byType(UiPrimaryButton));
+      await tester.ensureVisible(find.byKey(_confirm));
+      await tester.tap(find.byKey(_confirm));
       await tester.pumpAndSettle();
       expect(access.deletionProofs.single.$2, isNull);
       expect(wallets.deletions, isEmpty);
       expect(auth.state.currentUser?.walletId, accessibilityUser().walletId);
       expect(auth.events, isEmpty);
-      expect(find.text('authUnlockCanceled'.tr()), findsOneWidget);
+      // Nothing was being unlocked: the message says the removal was not
+      // confirmed, and never blames a password nobody typed.
+      expect(find.text('authConfirmationCanceled'.tr()), findsOneWidget);
+      expect(find.text('passwordNotAccepted'.tr()), findsNothing);
     });
 
     testWidgets(
@@ -282,6 +399,7 @@ void main() {
         expect(identical(wallets.deletions.single.$3, wallets.review), isTrue);
         expect(find.byType(WalletDeleting), findsNothing);
         expect(find.byKey(const Key('settings-delete-wallet')), findsNothing);
+        expect(find.text('authWalletRemoved'.tr()), findsOneWidget);
         expect(auth.state.currentUser, isNull);
         expect(
           auth.events,

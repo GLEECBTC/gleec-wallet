@@ -6,6 +6,7 @@ import 'package:web_dex/views/settings/widgets/security_settings/change_password
 import 'package:web_dex/views/settings/widgets/security_settings/legacy_migration_cleanup_plate.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/plate_seed_backup.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/plate_private_key_backup.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/security_section_card.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/unban_pubkeys_plate.dart';
 
 class SecuritySettingsMainPage extends StatelessWidget {
@@ -13,10 +14,15 @@ class SecuritySettingsMainPage extends StatelessWidget {
     super.key,
     required this.onViewSeedPressed,
     required this.onViewPrivateKeysPressed,
+    this.notice,
   });
 
   final Function(BuildContext context) onViewSeedPressed;
   final Function(BuildContext context) onViewPrivateKeysPressed;
+
+  /// Something the user needs to know on arriving at the list, such as why
+  /// the step they were in was closed.
+  final Widget? notice;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +30,10 @@ class SecuritySettingsMainPage extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (notice != null) ...[
+          SecuritySectionCard(child: notice!),
+          const SizedBox(height: 12),
+        ],
         const DeviceProtectionSection(),
         const SizedBox(height: 12),
         const WalletDisplayNameSection(),
@@ -45,7 +55,7 @@ class SecuritySettingsMainPage extends StatelessWidget {
         const SizedBox(height: 12),
         const ChangePasswordSection(),
         const SizedBox(height: 12),
-        const WalletRemovalSection(),
+        WalletRemovalSection(onBackUpRecoveryPhrase: onViewSeedPressed),
       ],
     );
   }

@@ -13,6 +13,7 @@ import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/analytics/analytics_event.dart';
 import 'package:web_dex/bloc/analytics/analytics_state.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
@@ -23,6 +24,8 @@ import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/password_dialog_content.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_show.dart';
+
+part 'seed_backup_gate_lifecycle_cases.dart';
 
 class _EmptyAssetLoader extends AssetLoader {
   const _EmptyAssetLoader();
@@ -410,37 +413,7 @@ void testSeedBackupGate() {
       },
     );
 
-    testWidgets('secret view closes on inactivity without a grace period', (
-      tester,
-    ) async {
-      final authBloc = _FakeAuthBloc(
-        AuthBlocState.loggedIn(_user(hasBackup: false)),
-      );
-      addTearDown(authBloc.close);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      addTearDown(
-        () => tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        ),
-      );
-      final results = await _pumpGate(tester, authBloc: authBloc);
-      await tester.tap(find.text('reveal'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('seed-backup-gate-backup-button')));
-      await tester.pumpAndSettle();
-      tester
-          .widget<PasswordDialogContent>(find.byType(PasswordDialogContent))
-          .onSuccess('test-password');
-      await tester.pumpAndSettle();
-      expect(find.byType(SeedShow), findsOneWidget);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      await tester.pumpAndSettle();
-      expect(find.byType(SeedShow), findsNothing);
-      expect(results, [false]);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
-      expect(find.byType(SeedShow), findsNothing);
-    });
+    _seedBackupLifecycleCases();
 
     testWidgets('a late mnemonic cannot reopen after backgrounding', (
       tester,
@@ -477,7 +450,9 @@ void testSeedBackupGate() {
       phrase.complete(Mnemonic.plaintext('single-token-test-seed'));
       await tester.pumpAndSettle();
       expect(find.byType(SeedShow), findsNothing);
-      expect(results, [false]);
+      // Back on the notice, which says why the phrase never appeared.
+      expect(find.byKey(_interrupted), findsOneWidget);
+      expect(results, isEmpty);
     });
 
     for (final interruption in ['lock', 'pause', 'wallet switch']) {
@@ -554,7 +529,21 @@ void testSeedBackupGate() {
             boundary == 'before dispatch' ? 0 : 1,
           );
           expect(find.byType(SeedShow), findsNothing);
-          expect(results, [false]);
+          if (interruption == 'wallet switch') {
+            // Another wallet's gate has nothing left to say.
+            expect(results, [false]);
+          } else {
+            expect(find.byKey(_interrupted), findsOneWidget);
+            expect(
+              find.text(
+                interruption == 'lock'
+                    ? 'authRecoveryHiddenLocked'
+                    : 'authRecoveryHiddenLeftApp',
+              ),
+              findsOneWidget,
+            );
+            expect(results, isEmpty);
+          }
           expect(tester.takeException(), isNull);
         });
       }

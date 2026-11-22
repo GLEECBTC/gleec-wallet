@@ -2,18 +2,23 @@ import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/logout_popup.dart';
 import 'package:web_dex/views/common/wallet_access/app_lock_boundary.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
+import 'package:web_dex/views/common/wallet_password_dialog/wallet_access_actions.dart';
+import 'package:web_dex/views/common/wallet_password_dialog/wallet_password_input.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
@@ -29,6 +34,7 @@ class WalletAccessBoundary extends StatefulWidget {
 class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
     with WidgetsBindingObserver {
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode(debugLabel: 'wallet lock password');
   WalletAccessService? _access;
   StreamSubscription<void>? _changes;
   WalletId? _walletId;
@@ -40,6 +46,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
   Object? _previousSignOutError;
   int? _automaticGeneration;
   String? _error;
+  WalletAccessTone _errorTone = WalletAccessTone.error;
 
   @override
   void initState() {
@@ -56,14 +63,17 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
     _access = access;
     _changes = access?.changes.listen((_) {
       if (mounted && _walletId != null) {
-        setState(() => _status = access.status(walletId: _walletId));
+        // A block body: an arrow would hand setState the Future it assigns.
+        setState(() {
+          _status = access.status(walletId: _walletId);
+        });
       }
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _password.clear();
+    if (lifecycleLeavesApp(state)) _password.clear();
   }
 
   @override
@@ -72,6 +82,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
     _changes?.cancel();
     _password.clear();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -93,6 +104,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
             auth.authError != null &&
             !identical(auth.authError, _previousSignOutError)) {
           _waitingForSignOut = false;
+          _errorTone = WalletAccessTone.error;
           _error = 'authSignOutFailed'.tr();
         }
         if (_waitingForSignOut &&
@@ -102,6 +114,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
           _waitingForSignOut = false;
           WidgetsBinding.instance.addPostFrameCallback((_) => _openManager());
         }
+        final walletName = auth.currentUser?.wallet.displayName;
         return StreamBuilder<WalletUnlockState>(
           stream: access.unlockCoordinator.changes,
           initialData: access.unlockCoordinator.state,
@@ -110,7 +123,14 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
             return FutureBuilder<WalletAccessStatus?>(
               future: _status,
               builder: (context, details) {
-                final managed = details.data?.hasManagedCredential == true;
+                final status = details.data;
+                final managed = status?.hasManagedCredential == true;
+                // A refresh keeps the last answer on screen, so the face in
+                // use (and what is typed in it) does not blink away.
+                final resolved =
+                    details.connectionState == ConnectionState.done ||
+                    details.hasData ||
+                    details.hasError;
                 if (id != null &&
                     managed &&
                     state.canStartUnlock &&
@@ -123,123 +143,74 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                     if (mounted) unawaited(_unlock(access, automatic: true));
                   });
                 }
+                final title = walletUnlockTitle(walletName);
+                final message = walletName == null || walletName.isEmpty
+                    ? 'authUnlockDescription'.tr()
+                    : null;
                 Widget? authentication;
                 if (_waitingForSignOut) {
                   authentication = Center(
-                    child: Semantics(
-                      liveRegion: true,
-                      label: LocaleKeys.pleaseWait.tr(),
-                      child: TickerMode(
-                        enabled: !MediaQuery.disableAnimationsOf(context),
-                        child: const CircularProgressIndicator(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: WalletAccessProgress(
+                        label: 'authSigningOut'.tr(),
+                        showLabel: true,
                       ),
                     ),
                   );
                 } else if (_confirmExit) {
-                  authentication = _AccessPanel(
-                    child: LogOutPopup(
-                      onCancel: () => setState(() {
-                        _confirmExit = false;
-                      }),
-                      onConfirm: () => setState(() {
-                        _confirmExit = false;
-                        _previousSignOutError = context
-                            .read<AuthBloc>()
-                            .state
-                            .authError;
-                        _waitingForSignOut = true;
-                      }),
-                    ),
+                  authentication = _ExitConfirmation(
+                    recover: _recover,
+                    walletName: walletName,
+                    onCancel: () => setState(() => _confirmExit = false),
+                    onConfirm: () => setState(() {
+                      _confirmExit = false;
+                      _previousSignOutError = context
+                          .read<AuthBloc>()
+                          .state
+                          .authError;
+                      _waitingForSignOut = true;
+                    }),
                   );
-                } else if (_usePassword ||
-                    (details.connectionState == ConnectionState.done &&
-                        !managed)) {
-                  authentication = _AccessPanel(
-                    child: AutofillGroup(
-                      onDisposeAction: AutofillContextAction.cancel,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Semantics(
-                            header: true,
-                            child: Text(
-                              'authUnlockTitle'.tr(),
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            key: const Key('wallet-lock-password'),
-                            controller: _password,
-                            autofocus: true,
-                            obscureText: true,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            enableIMEPersonalizedLearning: false,
-                            autofillHints: const [AutofillHints.password],
-                            enabled: !state.unlockInProgress,
-                            decoration: InputDecoration(
-                              labelText: LocaleKeys.enterThePassword.tr(),
-                            ),
-                            onSubmitted: (_) => _unlock(access, password: true),
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Semantics(liveRegion: true, child: Text(_error!)),
-                          ],
-                          const SizedBox(height: 20),
-                          UiPrimaryButton(
-                            expandForText: true,
-                            key: const Key('wallet-lock-password-submit'),
-                            text: 'authUnlock'.tr(),
-                            onPressed: state.unlockInProgress
-                                ? null
-                                : () => _unlock(access, password: true),
-                          ),
-                          if (managed)
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface,
-                              ),
-                              onPressed: state.unlockInProgress
-                                  ? null
-                                  : () => setState(() {
-                                      _password.clear();
-                                      _usePassword = false;
-                                    }),
-                              child: Text(
-                                (details.data?.protection ==
-                                            CredentialProtection.passkey
-                                        ? 'authUnlockWithPasskey'
-                                        : 'authUseDeviceUnlock')
-                                    .tr(),
-                              ),
-                            ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurface,
-                            ),
-                            onPressed: () => _exit(recover: false),
-                            child: Text('authSwitchWallet'.tr()),
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurface,
-                            ),
-                            onPressed: () => _exit(recover: true),
-                            child: Text('authRecoverWallet'.tr()),
-                          ),
-                        ],
+                } else if (id == null || !resolved) {
+                  // Neither face is known to apply yet; showing one would
+                  // flash the wrong method.
+                  authentication = WalletLockPanel(
+                    title: title,
+                    message: message,
+                    children: [
+                      Center(
+                        child: WalletAccessProgress(
+                          label: 'authProtectionChecking'.tr(),
+                          showLabel: true,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      _LockExits(
+                        onSwitchWallet: () => _exit(recover: false),
+                        onRecover: () => _exit(recover: true),
+                      ),
+                    ],
+                  );
+                } else if (_usePassword || !managed) {
+                  authentication = _PasswordFace(
+                    title: title,
+                    message: message,
+                    loginName: id.name,
+                    details: details,
+                    controller: _password,
+                    focusNode: _passwordFocus,
+                    busy: state.unlockInProgress,
+                    error: _error,
+                    errorTone: _errorTone,
+                    onSubmit: () => _unlock(access, password: true),
+                    onUseEnrolled: () => setState(() {
+                      _password.clear();
+                      _usePassword = false;
+                      _error = null;
+                    }),
+                    onSwitchWallet: () => _exit(recover: false),
+                    onRecover: () => _exit(recover: true),
                   );
                 }
                 return AppLockBoundary(
@@ -253,15 +224,11 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                   onRecoverWallet: () => _exit(recover: true),
                   authenticationContent: authentication,
                   errorMessage: _error,
+                  errorTone: _errorTone,
                   labels: WalletLockLabels(
-                    title: 'authUnlockTitle'.tr(),
-                    message: 'authUnlockDescription'.tr(),
-                    unlock:
-                        (details.data?.protection ==
-                                    CredentialProtection.passkey
-                                ? 'authUnlockWithPasskey'
-                                : 'authUseDeviceUnlock')
-                            .tr(),
+                    title: title,
+                    message: message,
+                    unlock: walletUnlockMethodLabel(status),
                     unlocking: LocaleKeys.pleaseWait.tr(),
                     usePassword: 'authUsePassword'.tr(),
                     switchWallet: 'authSwitchWallet'.tr(),
@@ -286,7 +253,10 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
     final expected = _walletId;
     if (expected == null || _confirmExit || _waitingForSignOut) return;
     final entered = password ? _password.text : null;
-    if (password && (entered?.isEmpty ?? true)) return;
+    if (password && (entered?.isEmpty ?? true)) {
+      _passwordFocus.requestFocus();
+      return;
+    }
     _password.clear();
     if (mounted && !automatic) setState(() => _error = null);
     try {
@@ -303,13 +273,12 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
       }
     } catch (error) {
       if (!mounted || _walletId != expected) return;
-      setState(
-        () => _error =
-            error is WalletAccessException &&
-                error.failure == WalletAccessFailure.canceled
-            ? 'authUnlockCanceled'.tr()
-            : LocaleKeys.passwordNotAccepted.tr(),
-      );
+      setState(() {
+        _errorTone = walletAccessFailureTone(error);
+        _error = walletAccessFailureText(error, passwordEntered: password);
+      });
+      // Submitting takes focus off the field; hand it back for the retry.
+      if (password) _passwordFocus.requestFocus();
     }
   }
 
@@ -357,4 +326,177 @@ class _AccessPanel extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Leaving the locked wallet signs it out first, so say what for and what it
+/// costs before it happens.
+class _ExitConfirmation extends StatelessWidget {
+  const _ExitConfirmation({
+    required this.recover,
+    required this.walletName,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final bool recover;
+  final String? walletName;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = walletName;
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): onCancel},
+      // Escape needs focus inside the panel. It rests on no button, so Enter
+      // cannot sign out by accident.
+      child: Focus(
+        autofocus: true,
+        skipTraversal: true,
+        child: _AccessPanel(
+          child: LogOutPopup(
+            title:
+                (recover
+                        ? 'authRecoverWalletConfirmTitle'
+                        : 'authSwitchWalletConfirmTitle')
+                    .tr(),
+            description: name == null || name.isEmpty
+                ? null
+                : (recover
+                          ? 'authRecoverWalletConfirmBody'
+                          : 'authSwitchWalletConfirmBody')
+                      .tr(args: [name]),
+            confirmLabel:
+                (recover ? 'authSignOutAndRecover' : 'authSignOutAndSwitch')
+                    .tr(),
+            onCancel: onCancel,
+            onConfirm: onConfirm,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LockExits extends StatelessWidget {
+  const _LockExits({
+    required this.onSwitchWallet,
+    required this.onRecover,
+    this.showRecover = true,
+  });
+
+  final VoidCallback onSwitchWallet;
+  final VoidCallback onRecover;
+  final bool showRecover;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      WalletAccessTertiaryButton(
+        key: const Key('wallet-lock-switch-wallet'),
+        text: 'authSwitchWallet'.tr(),
+        onPressed: onSwitchWallet,
+      ),
+      if (showRecover)
+        WalletAccessTertiaryButton(
+          key: const Key('wallet-lock-recover-wallet'),
+          text: 'authRecoverWallet'.tr(),
+          onPressed: onRecover,
+        ),
+    ],
+  );
+}
+
+class _PasswordFace extends StatelessWidget {
+  const _PasswordFace({
+    required this.title,
+    required this.message,
+    required this.loginName,
+    required this.details,
+    required this.controller,
+    required this.focusNode,
+    required this.busy,
+    required this.error,
+    required this.errorTone,
+    required this.onSubmit,
+    required this.onUseEnrolled,
+    required this.onSwitchWallet,
+    required this.onRecover,
+  });
+
+  final String title;
+  final String? message;
+  final String loginName;
+  final AsyncSnapshot<WalletAccessStatus?> details;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool busy;
+  final String? error;
+  final WalletAccessTone errorTone;
+  final VoidCallback onSubmit;
+  final VoidCallback onUseEnrolled;
+  final VoidCallback onSwitchWallet;
+  final VoidCallback onRecover;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = details.data;
+    final enrolled = status?.hasManagedCredential == true;
+    final guidance = WalletPasswordGuidance.of(details);
+    // Without another way in, a user who never chose this password needs the
+    // recovery phrase more than a list of exits.
+    final recoverFirst = !enrolled && guidance.passwordMayBeUnknown;
+    return AutofillGroup(
+      onDisposeAction: AutofillContextAction.cancel,
+      child: WalletLockPanel(
+        title: title,
+        message: message,
+        children: [
+          guidance,
+          WalletPasswordInput(
+            fieldKey: const Key('wallet-lock-password'),
+            controller: controller,
+            focusNode: focusNode,
+            walletName: loginName,
+            busy: busy,
+            onSubmitted: onSubmit,
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            WalletAccessNotice(text: error!, tone: errorTone),
+          ],
+          const SizedBox(height: 24),
+          WalletAccessPrimaryButton(
+            buttonKey: const Key('wallet-lock-password-submit'),
+            text: 'authUnlock'.tr(),
+            busy: busy,
+            onPressed: onSubmit,
+          ),
+          if (enrolled) ...[
+            const SizedBox(height: 8),
+            WalletAccessSecondaryButton(
+              key: const Key('wallet-lock-use-enrolled'),
+              text: walletUnlockMethodLabel(status),
+              onPressed: onUseEnrolled,
+            ),
+          ] else if (recoverFirst) ...[
+            const SizedBox(height: 8),
+            WalletAccessSecondaryButton(
+              key: const Key('wallet-lock-recover-wallet'),
+              text: 'authRecoverWallet'.tr(),
+              onPressed: onRecover,
+            ),
+          ],
+          const SizedBox(height: 16),
+          _LockExits(
+            onSwitchWallet: onSwitchWallet,
+            onRecover: onRecover,
+            showRecover: !recoverFirst,
+          ),
+        ],
+      ),
+    );
+  }
 }
