@@ -13,12 +13,16 @@ import 'package:web_dex/shared/widgets/update_popup.dart';
 
 final updateBloc = UpdateBloc();
 
-typedef UpdatePopupPresenter =
-    void Function(
-      UpdateVersionInfo versionInfo, {
-      required VoidCallback onAccept,
-      required VoidCallback onCancel,
-    });
+/// Shows the update popup and returns whether it is on screen.
+///
+/// [onDismiss] runs when a shown popup leaves the screen for any reason; after
+/// [onAccept] or [onCancel] when one of its buttons closed it.
+typedef UpdatePopupPresenter = bool Function(
+  UpdateVersionInfo versionInfo, {
+  required VoidCallback onAccept,
+  required VoidCallback onCancel,
+  required VoidCallback onDismiss,
+});
 
 class UpdateBloc extends BlocBase {
   UpdateBloc({
@@ -120,33 +124,47 @@ class UpdateBloc extends BlocBase {
       return;
     }
 
-    _isPopupShown = true;
-    try {
-      (_presentPopup ?? _showPopup)(
-        versionInfo,
-        onAccept: () => _isPopupShown = false,
-        onCancel: () {
-          _isPopupShown = false;
-          if (versionInfo.status != UpdateStatus.required) {
-            _dismissedOptionalVersions.add(versionInfo.version);
-          }
-          // Keep polling: a newer release or required-policy escalation must
-          // still be able to notify the user during this session.
-        },
-      );
-    } catch (_) {
-      _isPopupShown = false;
-      rethrow;
+    var answered = false;
+    void remindLater() {
+      if (versionInfo.status != UpdateStatus.required) {
+        _dismissedOptionalVersions.add(versionInfo.version);
+      }
+      // Keep polling: a newer release or required-policy escalation must
+      // still be able to notify the user during this session.
     }
+
+    // Set only from the presenter's answer: a popup that could not be shown
+    // must not block the next check from offering the update.
+    _isPopupShown = (_presentPopup ?? _showPopup)(
+      versionInfo,
+      onAccept: () {
+        answered = true;
+        _isPopupShown = false;
+      },
+      onCancel: () {
+        answered = true;
+        _isPopupShown = false;
+        remindLater();
+      },
+      // The system back gesture closes the popup without pressing a button.
+      // That is a "remind later" for an optional update, and leaves a
+      // required one free to return on the next check.
+      onDismiss: () {
+        _isPopupShown = false;
+        if (!answered) remindLater();
+      },
+    );
   }
 
-  void _showPopup(
+  bool _showPopup(
     UpdateVersionInfo versionInfo, {
     required VoidCallback onAccept,
     required VoidCallback onCancel,
+    required VoidCallback onDismiss,
   }) {
-    PopupDispatcher(
+    final popup = PopupDispatcher(
       barrierDismissible: false,
+      onDismiss: onDismiss,
       contentPadding: isMobile
           ? const EdgeInsets.all(15.0)
           : const EdgeInsets.fromLTRB(26, 15, 26, 42),
@@ -155,7 +173,11 @@ class UpdateBloc extends BlocBase {
         onAccept: onAccept,
         onCancel: onCancel,
       ),
-    ).show();
+    );
+    // Without a scaffold context `show` returns before opening anything, and
+    // never calls `onDismiss`; `isShown` is set before its first await.
+    unawaited(popup.show());
+    return popup.isShown;
   }
 
   /// Whether reloading this page could actually install the announced release.

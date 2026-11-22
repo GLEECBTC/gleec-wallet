@@ -548,6 +548,8 @@ import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_confirm_receipt_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_fill_section_test.dart';
+import 'tests/wallet/coin_details/withdraw_solana_unknown_status_test.dart'
+    as withdraw_solana_unknown_status_test;
 import 'tests/wallet/coin_details/coin_addresses_bloc_gasless_revalidation_test.dart';
 import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
@@ -798,6 +800,10 @@ void main() {
   fiat_default_preference_test.main();
   tron_fiat_mapping_test.main();
   fiat_provider_failure_test.main();
+  group(
+    'withdraw_solana_unknown_status_test',
+    withdraw_solana_unknown_status_test.main,
+  );
   tron_gasless_provider_config_test.main();
   lifi_proxy_url_test.main();
   unified_swap_repository_test.main();
