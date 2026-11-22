@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -69,6 +70,43 @@ class SnapshotSelectionTest(unittest.TestCase):
         })
         self.assertEqual(set(snapshot.NORMAL_DEFINES), set(snapshot.ROLLBACK_DEFINES))
         json.dumps(snapshot.ROLLBACK_DEFINES)
+
+    def test_flutter_version_is_the_fvmrc_pin(self):
+        self.write(".fvmrc", json.dumps({"flutter": "9.8.7"}))
+        self.assertEqual(snapshot.flutter_version(self.root), "9.8.7")
+        repository = Path(snapshot.__file__).resolve().parents[1]
+        self.assertEqual(snapshot.flutter_version(repository),
+                         json.loads((repository / ".fvmrc").read_text())["flutter"])
+
+    def test_missing_or_unparseable_flutter_pin_is_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "fvmrc"):
+            snapshot.flutter_version(self.root)
+        for content in ["not json", "[]", "{}", '{"flutter": 3}', '{"flutter": "stable"}',
+                        '{"flutter": "3.50"}']:
+            self.write(".fvmrc", content)
+            with self.assertRaisesRegex(SystemExit, "fvmrc", msg=content):
+                snapshot.flutter_version(self.root)
+
+    def test_manifest_records_the_pinned_flutter_version(self):
+        def commit(repository):
+            subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(repository), "-c", "user.name=Test",
+                            "-c", "user.email=test@example.invalid",
+                            "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"],
+                           check=True)
+        self.write(".fvmrc", json.dumps({"flutter": "9.8.7"}))
+        self.write("lib/reader.dart")
+        commit(self.root)
+        subprocess.run(["git", "init", "-q", str(self.root / "sdk")], check=True)
+        self.write("sdk/pubspec.yaml")
+        commit(self.root / "sdk")
+        with tempfile.TemporaryDirectory(prefix="gleec-rollback-output-") as directory:
+            output = Path(directory) / "candidate"
+            subprocess.run([sys.executable, snapshot.__file__, "--root", str(self.root),
+                            "--output", str(output)], check=True, capture_output=True)
+            manifest = json.loads((output / "manifest.json").read_text())
+        self.assertEqual(manifest["flutterVersion"], "9.8.7")
+        self.assertIn(".fvmrc", {entry["path"] for entry in manifest["files"]})
 
 
 if __name__ == "__main__":
