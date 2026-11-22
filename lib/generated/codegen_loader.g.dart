@@ -2087,4 +2087,9 @@ abstract class LocaleKeys {
   static const authPasswordManagerPending = 'authPasswordManagerPending';
   static const authProtectionBusy = 'authProtectionBusy';
   static const authProtectionStale = 'authProtectionStale';
+  static const portfolioStatUnavailable = 'portfolioStatUnavailable';
+  static const portfolioProfitLossUnavailable =
+      'portfolioProfitLossUnavailable';
+  static const portfolioExcludesUnpricedAssets =
+      'portfolioExcludesUnpricedAssets';
 }

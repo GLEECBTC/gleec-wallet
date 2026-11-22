@@ -32,7 +32,7 @@ class ProfitLossCalculator {
     }
 
     final orderedTransactions = List<Transaction>.of(transactions)
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      ..sort(_compareChronologically);
 
     final todayAtMidnight = _getDateAtMidnight(DateTime.now());
     final transactionDates = _getTransactionDates(orderedTransactions);
@@ -58,6 +58,19 @@ class ProfitLossCalculator {
     );
 
     return _calculateProfitLosses(priceStampedTransactions, currentPrice);
+  }
+
+  /// Transactions in one block share its timestamp, and `List.sort` is not
+  /// stable. Counting what came in first keeps a receive ahead of the spend
+  /// that consumes it; block height and id then make the order reproducible.
+  static int _compareChronologically(Transaction a, Transaction b) {
+    final byTime = a.timestamp.compareTo(b.timestamp);
+    if (byTime != 0) return byTime;
+    final byDirection = b.amount.sign.compareTo(a.amount.sign);
+    if (byDirection != 0) return byDirection;
+    final byBlock = a.blockHeight.compareTo(b.blockHeight);
+    if (byBlock != 0) return byBlock;
+    return a.internalId.compareTo(b.internalId);
   }
 
   /// Missing acquisition or sale prices make the entire result unavailable.

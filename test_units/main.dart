@@ -118,6 +118,10 @@ import 'bloc/cex_market_data/profit_loss/profit_loss_repository_test.dart'
     as profit_loss_repository_test;
 import 'bloc/assets_overview/asset_overview_bloc_test.dart'
     as asset_overview_bloc_test;
+import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
+    as portfolio_growth_repository_test;
+import 'views/wallet/portfolio_profit_loss_views_test.dart'
+    as portfolio_profit_loss_views_test;
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
@@ -772,6 +776,14 @@ void main() {
   profit_loss_calculator_test.main();
   profit_loss_repository_test.main();
   asset_overview_bloc_test.main();
+  group(
+    'portfolio_growth_repository_test',
+    portfolio_growth_repository_test.main,
+  );
+  group(
+    'portfolio_profit_loss_views_test',
+    portfolio_profit_loss_views_test.main,
+  );
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
