@@ -49,6 +49,7 @@ import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
 import 'tests/swap/solana_trade_dispatch_test.dart'
     as solana_trade_dispatch_test;
 import 'tests/mm2/mm2_initialization_test.dart' as mm2_initialization_test;
+import 'tests/mm2/kdf_data_directory_test.dart' as kdf_data_directory_test;
 import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
 import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
 import 'tests/swap/solana_atomic_lifecycle_test.dart'
@@ -604,6 +605,7 @@ void main() {
   solana_build_config_test.main();
   solana_trade_dispatch_test.main();
   mm2_initialization_test.main();
+  kdf_data_directory_test.main();
   prefetch_native_kdf_test.main();
   integration_test_runner_test.main();
   solana_trading_test.main();
