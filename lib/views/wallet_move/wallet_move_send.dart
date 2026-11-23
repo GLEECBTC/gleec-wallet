@@ -9,7 +9,6 @@ import 'package:web_dex/services/device/device_controls.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/services/wallet_move/wallet_move_types.dart';
-import 'package:web_dex/services/wallet_transfer/wallet_transfer_secret.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_section_card.dart';
