@@ -23,6 +23,7 @@ import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 part 'wallet_access_review_cases.dart';
 part 'wallet_access_rotation_cases.dart';
 part 'wallet_access_session_cases.dart';
+part 'wallet_access_sign_in_status_cases.dart';
 part 'wallet_access_test_harness.dart';
 
 const _password = 'Synthetic-password-123456!';
@@ -120,8 +121,10 @@ class _Backend extends CredentialBackend {
     protection: CredentialProtection.appLocal,
     deviceAuthentication: deviceAuthentication,
   );
+  int metadataReads = 0;
   @override
   Future<CredentialRecordInfo?> metadata(String key) async {
+    metadataReads++;
     if (metadataFailure != null &&
         (metadataFailureFor == null || metadataFailureFor == key)) {
       throw WalletAccessException(metadataFailure!);
@@ -551,6 +554,7 @@ void main() {
   _rotationCases();
   _sessionCases();
   _reviewCases();
+  _signInStatusCases();
   group('WalletAccessService authority and recovery', () {
     late _Storage storage;
     late _Backend backend;

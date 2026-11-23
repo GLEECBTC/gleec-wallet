@@ -52,6 +52,10 @@ class WalletAccessRecord {
   final PasswordManagerOutcome manager;
   final String? rotationEnvelope;
   String get credentialKey => credentialKeyFor(entryId);
+
+  /// The wallet opens with a password created for it that its owner never
+  /// saw. A journaled change means the owner typed a new one.
+  bool get passwordUnseen => generated && rotationEnvelope == null;
   static String credentialKeyFor(String entryId) => 'gleec.wallet.$entryId';
 
   /// The record stored under [key], or null when this build cannot read it:

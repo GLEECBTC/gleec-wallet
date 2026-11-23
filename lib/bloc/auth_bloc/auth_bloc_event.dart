@@ -62,9 +62,14 @@ class AuthManagedSignInRequested extends AuthBlocEvent {
   const AuthManagedSignInRequested({
     required this.wallet,
     this.automatic = false,
+    this.generatedPassword = false,
   });
   final Wallet wallet;
   final bool automatic;
+
+  /// The wallet's password was created for it and never shown, so a failure
+  /// must not advise typing it.
+  final bool generatedPassword;
 }
 
 class AuthRestoreRequested extends AuthBlocEvent {

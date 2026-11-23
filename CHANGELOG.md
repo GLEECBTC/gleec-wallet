@@ -19,6 +19,10 @@
   - Profit/loss stays unavailable when acquisition or sale prices are missing, instead of inventing a historical cost basis.
   - A coin whose profit/loss still fails is retried after 1, 1, 2, 2, 4… minutes, up to hourly, instead of every minute.
   - The wallet overview no longer starts a refresh while the previous one is still running.
+- **Restored Wallets at Sign-in** ([@CharlVS]) — A wallet whose files came back from a backup or a move to a new device, without this device's unlock, now says so instead of showing a bare password field.
+  - A wallet whose password was created for it leads with its recovery phrase, and offers the password when a password manager may have saved it.
+  - A password you chose is still asked for.
+  - A failed unlock no longer suggests a password the owner never saw.
 
 # Gleec Wallet v0.10.0 Release Notes
 

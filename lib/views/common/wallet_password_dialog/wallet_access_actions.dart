@@ -29,6 +29,9 @@ String walletUnlockMethodLabel(WalletAccessStatus? status) {
       .tr();
 }
 
+String walletUnlockLostMessage() =>
+    (kIsWeb ? 'authBrowserUnlockLost' : 'authDeviceUnlockLost').tr();
+
 /// A cancelled prompt is the user's own choice, not a fault to alarm about.
 WalletAccessTone walletAccessFailureTone(Object error) =>
     error is WalletAccessException &&
@@ -162,6 +165,7 @@ class WalletPasswordGuidance extends StatelessWidget {
   const WalletPasswordGuidance({
     required this.unlockUnavailable,
     required this.generatedPassword,
+    this.unlockLost = false,
     super.key,
   });
 
@@ -173,11 +177,16 @@ class WalletPasswordGuidance extends StatelessWidget {
   }) : this(
          unlockUnavailable: snapshot.hasError,
          generatedPassword: snapshot.data?.generatedPassword ?? false,
+         unlockLost: snapshot.data?.lostProtection != null,
          key: key,
        );
 
   final bool unlockUnavailable;
   final bool generatedPassword;
+
+  /// The status reports the stored unlock lost; [unlockUnavailable] only
+  /// means the lookup failed.
+  final bool unlockLost;
 
   /// Whether the user may be asked for a password they never chose, so the
   /// recovery phrase should be offered as the prominent alternative.
@@ -185,6 +194,36 @@ class WalletPasswordGuidance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (unlockLost) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            WalletAccessNotice(
+              key: const Key('wallet-unlock-lost'),
+              tone: WalletAccessTone.warning,
+              text: walletUnlockLostMessage(),
+            ),
+            const SizedBox(height: 8),
+            WalletAccessNotice(
+              key: Key(
+                generatedPassword
+                    ? 'wallet-generated-password-hint'
+                    : 'wallet-unlock-lost-hint',
+              ),
+              announce: false,
+              text:
+                  (generatedPassword
+                          ? 'authGeneratedPasswordHint'
+                          : 'authUnlockLostPasswordHint')
+                      .tr(),
+            ),
+          ],
+        ),
+      );
+    }
     if (!passwordMayBeUnknown) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
