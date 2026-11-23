@@ -5,6 +5,7 @@ import UIKit
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var fdMonitorChannel: FlutterMethodChannel?
   private var credentialVault: WalletCredentialVault?
+  private var passkeyBridge: WalletPasskeyBridge?
 
   override func application(
     _ application: UIApplication,
@@ -28,6 +29,7 @@ import UIKit
     NSLog("AppDelegate: Setting up FD Monitor channel...")
     setupFdMonitorChannel(binaryMessenger: engineBridge.applicationRegistrar.messenger())
     credentialVault = WalletCredentialVault(messenger: engineBridge.applicationRegistrar.messenger())
+    passkeyBridge = WalletPasskeyBridge(messenger: engineBridge.applicationRegistrar.messenger())
   }
 
   private func setupFdMonitorChannel(binaryMessenger: FlutterBinaryMessenger) {

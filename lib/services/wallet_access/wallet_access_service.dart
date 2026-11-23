@@ -37,8 +37,10 @@ class WalletAccessService {
     CredentialBackend? backend,
     WalletUnlockCoordinator? unlockCoordinator,
     Duration Function()? monotonicNow,
+    bool existingPasskeyEnrollment = existingPasskeyEnrollmentEnabled,
   }) : _sdk = sdk,
        _storage = storage,
+       _existingPasskeyEnrollment = existingPasskeyEnrollment,
        _backend = backend ?? createCredentialBackend(),
        _monotonicNow = monotonicNow ?? _createMonotonicClock(),
        unlockCoordinator = unlockCoordinator ?? WalletUnlockCoordinator() {
@@ -75,6 +77,13 @@ class WalletAccessService {
     'WALLET_PASSKEY_ENROLLMENT_ENABLED',
     defaultValue: true,
   );
+
+  /// Native apps bind a passkey the user already holds for the web wallet.
+  /// Off until the site's association files and signed builds are verified;
+  /// wallets already bound keep unlocking with it either way.
+  static const existingPasskeyEnrollmentEnabled = bool.fromEnvironment(
+    'WALLET_EXISTING_PASSKEY_ENABLED',
+  );
   static const immediateLockRequired = bool.fromEnvironment(
     'WALLET_IMMEDIATE_LOCK_REQUIRED',
   );
@@ -87,6 +96,7 @@ class WalletAccessService {
   final BaseStorage _storage;
   final CredentialBackend _backend;
   final Duration Function() _monotonicNow;
+  final bool _existingPasskeyEnrollment;
   late final WalletCredentialCleanup _cleanup;
   final WalletUnlockCoordinator unlockCoordinator;
   final _changes = StreamController<void>.broadcast();
@@ -136,6 +146,8 @@ class WalletAccessService {
       deviceAuthentication:
           deviceEnrollmentEnabled && actual.deviceAuthentication,
       passkeyCandidate: passkeyEnrollmentEnabled && actual.passkeyCandidate,
+      existingPasskeyCandidate:
+          _existingPasskeyEnrollment && actual.existingPasskeyCandidate,
     );
   }
 
@@ -666,6 +678,7 @@ class WalletAccessService {
     required String reason,
     required _AccessRevision revision,
     bool forUnlock = false,
+    String? purpose,
   }) async {
     _ensureRevision(revision);
     if (!forUnlock) _ensureSensitiveForeground();
@@ -689,6 +702,7 @@ class WalletAccessService {
         reason: reason,
         revision: revision,
         waitForForeground: !forUnlock,
+        purpose: purpose,
       );
       if (record.rotationEnvelope != null) pendingRotation = record;
     } else {
@@ -1197,16 +1211,28 @@ class WalletAccessService {
     }
   }
 
+  /// Also returns a native passkey-protected wallet to device unlock; a
+  /// supplied [password] makes that possible without the passkey.
   Future<void> enrollDevice({required WalletId walletId, String? password}) =>
-      _enroll(walletId, password, passkey: false);
+      _enroll(walletId, password, lock: _WalletLock.device);
   Future<void> enrollPasskey({required WalletId walletId, String? password}) =>
-      _enroll(walletId, password, passkey: true);
+      _enroll(walletId, password, lock: _WalletLock.newPasskey);
+
+  /// Binds a passkey the user already holds for the web wallet to this
+  /// device's copy of the wallet, with its own PRF salt.
+  Future<void> useExistingPasskey({
+    required WalletId walletId,
+    String? password,
+  }) => _enroll(walletId, password, lock: _WalletLock.existingPasskey);
 
   Future<void> replacePasskeyUsingPassword({
     required WalletId walletId,
     required String password,
   }) => _runAccessOperation((revision) async {
-    if (!passkeyEnrollmentEnabled) {
+    // Where passkeys are bound rather than created, the replacement is
+    // another passkey the user already holds, under that rollout's flag.
+    final binds = (await _backend.capabilities()).existingPasskeyCandidate;
+    if (binds ? !_existingPasskeyEnrollment : !passkeyEnrollmentEnabled) {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     }
     final user = await _resolve(walletId);
@@ -1214,7 +1240,7 @@ class WalletAccessService {
     await _authorize(
       walletId,
       password: password,
-      reason: 'Replace this browser passkey',
+      reason: 'Replace this passkey',
       revision: revision,
     );
     final ensureCurrent = captureSensitiveOperation(walletId);
@@ -1266,12 +1292,70 @@ class WalletAccessService {
     _changes.add(null);
   });
 
+  /// Lets a native wallet whose passkey is gone open with its password
+  /// alone, once the engine has verified that password. Not behind a rollout
+  /// flag: it is the way out, and it removes protection only when asked.
+  Future<void> stopUsingPasskey({
+    required WalletId walletId,
+    required String password,
+  }) => _runAccessOperation((revision) async {
+    final user = await _resolve(walletId);
+    final session = await _sdk.auth.captureSessionContext();
+    await _authorize(
+      walletId,
+      password: password,
+      reason: 'Stop using this passkey',
+      revision: revision,
+    );
+    final ensureCurrent = captureSensitiveOperation(walletId);
+    await _ensureUserCurrent(user, session, revision);
+    final record = await _recordFor(entryId(user));
+    if (record == null || !record.managed) {
+      throw const WalletAccessException(WalletAccessFailure.missingCredential);
+    }
+    final actual = await _backend.metadata(record.credentialKey);
+    if (actual == null ||
+        actual.protection != CredentialProtection.passkey ||
+        actual.revision < 1) {
+      throw const WalletAccessException(WalletAccessFailure.unavailable);
+    }
+    ensureCurrent();
+    final token = await _backend.prepareDeleteAfterPasswordVerification(
+      record.credentialKey,
+      expectedRevision: actual.revision,
+    );
+    await _ensureUserCurrent(user, session, revision);
+    ensureCurrent();
+    await _backend.delete(record.credentialKey, authorization: token);
+    if (await _backend.metadata(record.credentialKey) != null) {
+      throw const WalletAccessException(WalletAccessFailure.storageFailed);
+    }
+    // As after a replaced passkey: the engine just verified this password,
+    // which settles any change still journaled for the old credential.
+    await _saveRecord(
+      record.copyWith(
+        phase: 'ready',
+        managed: false,
+        requiresAuthentication: true,
+        protection: CredentialProtection.password,
+        clearRotation: true,
+      ),
+    );
+    await _ensureUserCurrent(user, session, revision);
+    _changes.add(null);
+  });
+
   Future<void> _enroll(
     WalletId walletId,
     String? suppliedPassword, {
-    required bool passkey,
+    required _WalletLock lock,
   }) => _runAccessOperation((revision) async {
-    if (passkey ? !passkeyEnrollmentEnabled : !deviceEnrollmentEnabled) {
+    final passkey = lock != _WalletLock.device;
+    if (!switch (lock) {
+      _WalletLock.device => deviceEnrollmentEnabled,
+      _WalletLock.newPasskey => passkeyEnrollmentEnabled,
+      _WalletLock.existingPasskey => _existingPasskeyEnrollment,
+    }) {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     }
     final user = await _resolve(walletId);
@@ -1281,6 +1365,9 @@ class WalletAccessService {
       password: suppliedPassword,
       reason: 'Protect this wallet',
       revision: revision,
+      // Lets the vault remove the record being replaced without a second
+      // device prompt once the passkey is verified.
+      purpose: lock == _WalletLock.existingPasskey ? 'delete' : null,
     );
     final ensureCurrent = captureSensitiveOperation(walletId);
     final prior = await _recordFor(entryId(user));
@@ -1297,24 +1384,28 @@ class WalletAccessService {
           managed: false,
           generated: false,
         );
+    // A passkey takes effect inside the vault before the record says so.
+    // Recording the wallet first means a crash in between leaves an
+    // envelope that deletion still finds.
+    if (prior == null && lock == _WalletLock.existingPasskey) {
+      await _saveRecord(record);
+    }
     await _ensureUserCurrent(user, session, revision);
     ensureCurrent();
-    if (passkey) {
-      await unlockCoordinator.runSystemPrompt(
-        () => _backend.enrollPasskey(
-          record.credentialKey,
-          password,
-          label: user.wallet.displayName,
-        ),
-        waitForForeground: true,
-      );
-    } else {
-      await _writeProtectedVerified(
-        record.credentialKey,
-        password,
-        revision,
-        waitForForeground: true,
-      );
+    switch (lock) {
+      case _WalletLock.newPasskey:
+        await unlockCoordinator.runSystemPrompt(
+          () => _backend.enrollPasskey(
+            record.credentialKey,
+            password,
+            label: user.wallet.displayName,
+          ),
+          waitForForeground: true,
+        );
+      case _WalletLock.existingPasskey:
+        await _bindPasskey(record.credentialKey, password, user);
+      case _WalletLock.device:
+        await _writeDeviceProtection(record.credentialKey, password, revision);
     }
     _ensureRevision(revision);
     _sdk.auth.ensureSessionContextCurrent(session);
@@ -1339,9 +1430,8 @@ class WalletAccessService {
     final info = await _backend.metadata(record.credentialKey);
     if (info == null ||
         !info.enrolled ||
-        (passkey &&
-            (info.protection != CredentialProtection.passkey ||
-                info.revision < 1))) {
+        (passkey != (info.protection == CredentialProtection.passkey)) ||
+        (passkey && info.revision < 1)) {
       throw const WalletAccessException(WalletAccessFailure.invalidResponse);
     }
     _ensureRevision(revision);
@@ -1493,6 +1583,62 @@ class WalletAccessService {
     );
   }
 
+  /// A passkey envelope left behind by a password change the vault could not
+  /// follow no longer governs the wallet; the verified password replaces it.
+  Future<void> _bindPasskey(String key, String password, KdfUser user) async {
+    CredentialRecordInfo? stale;
+    try {
+      stale = await _backend.metadata(key);
+    } on WalletAccessException {
+      // Binding replaces a record nobody can open.
+    }
+    _ensureSensitiveForeground();
+    await unlockCoordinator.runSystemPrompt(
+      () => stale?.protection == CredentialProtection.passkey
+          ? _backend.replacePasskeyAfterPasswordVerification(
+              key,
+              password,
+              expectedRevision: stale!.revision,
+              label: user.wallet.displayName,
+            )
+          : _backend.bindExistingPasskey(key, password),
+      waitForForeground: true,
+    );
+  }
+
+  /// A protected write would reseal a passkey record under the same passkey,
+  /// so a passkey-protected wallet changes to device unlock explicitly.
+  Future<void> _writeDeviceProtection(
+    String key,
+    String password,
+    _AccessRevision revision,
+  ) async {
+    CredentialRecordInfo? current;
+    try {
+      current = await _backend.metadata(key);
+    } on WalletAccessException {
+      // An unusable record is the repair path's to replace.
+    }
+    if (current?.protection != CredentialProtection.passkey) {
+      return _writeProtectedVerified(
+        key,
+        password,
+        revision,
+        waitForForeground: true,
+      );
+    }
+    _ensureSensitiveForeground();
+    await unlockCoordinator.runSystemPrompt(
+      () => _backend.replacePasskeyWithDevice(
+        key,
+        password,
+        expectedRevision: current!.revision,
+      ),
+      waitForForeground: true,
+    );
+    _ensureRevision(revision);
+  }
+
   /// Both callers freshly verified this password against KDF first. Native
   /// repair must additionally prove that the old cryptographic key is invalid.
   Future<void> _writeProtectedVerified(
@@ -1623,3 +1769,6 @@ class _AccessRevision {
   final int service;
   final int authorization;
 }
+
+/// The lock an enrollment turns on.
+enum _WalletLock { device, newPasskey, existingPasskey }

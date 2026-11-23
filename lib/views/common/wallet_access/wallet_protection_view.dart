@@ -32,12 +32,20 @@ class _ProtectionView {
   bool get showsProgress =>
       state.busy || collectingInput || state.waitingForPasswordManager;
 
-  /// The one-step way to turn the lock on, when this device offers one.
+  /// The one-step way to turn the lock on, when this device offers one. An
+  /// existing passkey is never it: most people have none for the web wallet,
+  /// so it stays an alternative beside this.
   WalletProtectionAction? get setupAction => state.canCreatePasskey
       ? WalletProtectionAction.passkey
       : state.canEnableDevice
       ? WalletProtectionAction.device
       : null;
+
+  /// Names the lock that stopped working. Native apps can lose either kind,
+  /// and what is offered in its place may be the other one.
+  bool get _lostPasskey => _storedInBrowser
+      ? setupAction == WalletProtectionAction.passkey
+      : status?.lostProtection == CredentialProtection.passkey;
 
   /// The wallet fell back to a password it created itself: the passkey or
   /// device unlock it had stopped working, and can be set up again.
@@ -58,7 +66,7 @@ class _ProtectionView {
 
   String get title =>
       (lockMethodLost
-              ? setupAction == WalletProtectionAction.passkey
+              ? _lostPasskey
                     ? 'authPasskeyOffTitle'
                     : 'authDeviceUnlockOffTitle'
               : passkey
@@ -77,11 +85,15 @@ class _ProtectionView {
   /// One sentence for the settings section.
   String get description =>
       (lockMethodLost
-              ? setupAction == WalletProtectionAction.passkey
+              ? !_lostPasskey
+                    ? 'authDeviceUnlockOffDescription'
+                    : _storedInBrowser
                     ? 'authPasskeyOffDescription'
-                    : 'authDeviceUnlockOffDescription'
+                    : 'authExistingPasskeyOffDescription'
               : passkey
-              ? 'authPasskeyProtected'
+              ? _storedInBrowser
+                    ? 'authPasskeyProtected'
+                    : 'authPasskeyProtectedDevice'
               : protected
               ? status?.protection == CredentialProtection.password
                     ? 'authPasswordProtected'
@@ -158,9 +170,18 @@ class _ProtectionView {
               : 'authCreatePasskey')
           .tr();
 
+  /// The passkey is chosen from those the user holds rather than created.
+  bool _choosesPasskey(WalletProtectionAction? action) =>
+      action == WalletProtectionAction.existingPasskey ||
+      (action == WalletProtectionAction.replacePasskey && !_storedInBrowser);
+
   String get pendingMessage =>
       (state.waitingForPasswordManager
               ? 'authPasswordManagerPending'
+              : _choosesPasskey(state.activeAction)
+              ? 'authExistingPasskeyPending'
+              : state.activeAction == WalletProtectionAction.passwordOnly
+              ? 'authPasskeyRemoving'
               : state.activeAction == WalletProtectionAction.passkey ||
                     state.activeAction == WalletProtectionAction.replacePasskey
               ? 'authPasskeySetupPending'
@@ -182,10 +203,15 @@ class _ProtectionView {
     final aboutPasskey =
         action == WalletProtectionAction.passkey ||
         action == WalletProtectionAction.replacePasskey;
+    final chosen = _choosesPasskey(action);
     return switch (failure) {
       WalletAccessFailure.busy => 'authProtectionBusy',
       WalletAccessFailure.staleOperation => 'authProtectionStale',
       WalletAccessFailure.canceled => 'authProtectionCanceled',
+      WalletAccessFailure.passkeyNotFound => 'authExistingPasskeyNotFound',
+      WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
+          when chosen =>
+        'authExistingPasskeyUnsupported',
       WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
           when aboutPasskey =>
         'authPasskeyUnsupported',
@@ -201,8 +227,11 @@ class _ProtectionView {
 
   String? get completedText => switch (state.completed) {
     null => null,
-    WalletProtectionAction.replacePasskey => 'authPasskeyReplaced'.tr(),
+    WalletProtectionAction.existingPasskey => 'authExistingPasskeyReady'.tr(),
+    WalletProtectionAction.replacePasskey =>
+      (_storedInBrowser ? 'authPasskeyReplaced' : 'authPasskeyChosen').tr(),
     WalletProtectionAction.grace => 'authLockPreferenceSaved'.tr(),
+    WalletProtectionAction.passwordOnly => 'authPasskeyRemoved'.tr(),
     _ => 'authProtectionEnabled'.tr(),
   };
 

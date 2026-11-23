@@ -48,7 +48,13 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
   bool _collectingInput = false;
   bool _typedPassword = false;
 
-  Future<void> _request(WalletProtectionAction action, {int? grace}) async {
+  /// [withPassword] asks for the wallet password even where a stored
+  /// credential could authorize the change: the way back from a lost passkey.
+  Future<void> _request(
+    WalletProtectionAction action, {
+    int? grace,
+    bool withPassword = false,
+  }) async {
     final bloc = context.read<WalletProtectionBloc>();
     final state = bloc.state;
     if (_collectingInput ||
@@ -71,9 +77,13 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
                 currentEntry != state.status!.entryId))) {
       return;
     }
+    final passwordOnly =
+        withPassword ||
+        action == WalletProtectionAction.replacePasskey ||
+        action == WalletProtectionAction.passwordOnly;
     final needsPassword =
         !state.status!.hasManagedCredential ||
-        action == WalletProtectionAction.replacePasskey ||
+        passwordOnly ||
         action == WalletProtectionAction.grace;
     String? password;
     if (needsPassword) {
@@ -81,7 +91,7 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
       try {
         password = await walletPasswordDialog(
           context,
-          passwordOnly: action == WalletProtectionAction.replacePasskey,
+          passwordOnly: passwordOnly,
         );
       } finally {
         if (mounted) setState(() => _collectingInput = false);
@@ -89,9 +99,7 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
       if (password == null) return;
     }
     if (!mounted || bloc.isClosed) return;
-    _typedPassword =
-        !state.status!.hasManagedCredential ||
-        action == WalletProtectionAction.replacePasskey;
+    _typedPassword = !state.status!.hasManagedCredential || passwordOnly;
     bloc.add(
       WalletProtectionRequested(
         action,

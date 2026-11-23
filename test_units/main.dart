@@ -1,5 +1,11 @@
 import 'views/common/wallet_access/auth_setup_flow_test.dart'
     as auth_setup_flow_test;
+import 'services/wallet_access/passkey/passkey_envelope_test.dart'
+    as passkey_envelope_test;
+import 'services/wallet_access/passkey/passkey_credential_backend_test.dart'
+    as passkey_credential_backend_test;
+import 'views/common/wallet_access/wallet_protection_native_passkey_test.dart'
+    as wallet_protection_native_passkey_test;
 import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
 import 'services/wallet_access/swap_submission_lock_test.dart'
     as swap_submission_lock_test;
@@ -624,6 +630,15 @@ void main() {
   group('security_recovery_flow_test', security_recovery_flow_test.main);
   group('recovery_plates_test', recovery_plates_test.main);
   group('wallet_protection_states_test', wallet_protection_states_test.main);
+  group('passkey_envelope_test', passkey_envelope_test.main);
+  group(
+    'passkey_credential_backend_test',
+    passkey_credential_backend_test.main,
+  );
+  group(
+    'wallet_protection_native_passkey_test',
+    wallet_protection_native_passkey_test.main,
+  );
   group('wallet_lock_screen_test', wallet_lock_screen_test.main);
   group('wallet_authorization_form_test', wallet_authorization_form_test.main);
   auth_setup_flow_test.main();

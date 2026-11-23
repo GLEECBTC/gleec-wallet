@@ -2196,6 +2196,30 @@ abstract class LocaleKeys {
       'authDeviceUnlockOffDescription';
   static const authPasskeyOffTitle = 'authPasskeyOffTitle';
   static const authPasskeyOffDescription = 'authPasskeyOffDescription';
+  static const authUseExistingPasskey = 'authUseExistingPasskey';
+  static const authExistingPasskeyPending = 'authExistingPasskeyPending';
+  static const authExistingPasskeyNotFound = 'authExistingPasskeyNotFound';
+  static const authExistingPasskeyUnsupported =
+      'authExistingPasskeyUnsupported';
+  static const authExistingPasskeyReady = 'authExistingPasskeyReady';
+  static const authExistingPasskeyOffDescription =
+      'authExistingPasskeyOffDescription';
+  static const authPasskeyProtectedDevice = 'authPasskeyProtectedDevice';
+  static const authUseDeviceUnlockInstead = 'authUseDeviceUnlockInstead';
+  static const authPasskeyLostDeviceDescription =
+      'authPasskeyLostDeviceDescription';
+  static const authPasskeyLostDeviceGeneratedDescription =
+      'authPasskeyLostDeviceGeneratedDescription';
+  static const authChooseAnotherPasskeyWithPassword =
+      'authChooseAnotherPasskeyWithPassword';
+  static const authUseDeviceUnlockWithPassword =
+      'authUseDeviceUnlockWithPassword';
+  static const authPasskeyChosen = 'authPasskeyChosen';
+  static const authStopUsingPasskey = 'authStopUsingPasskey';
+  static const authPasskeyRemoving = 'authPasskeyRemoving';
+  static const authPasskeyRemoved = 'authPasskeyRemoved';
+  static const authPasswordChangedDevicePasskeyOff =
+      'authPasswordChangedDevicePasskeyOff';
   static const swapAssetPreparationUnavailable =
       'swapAssetPreparationUnavailable';
   static const swapAvailabilityChecking = 'swapAvailabilityChecking';
