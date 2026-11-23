@@ -529,6 +529,57 @@ void testAuthBloc() {
       );
     }
 
+    // The settings plate shows progress until this fires, whatever happens.
+    for (final outcome in [
+      'saved',
+      'cancelled',
+      'failed',
+      'revoked',
+      'stale',
+    ]) {
+      test('a $outcome export request reports that it finished', () async {
+        final original = _user();
+        final auth = _FakeAuth()
+          ..userToReturn = outcome == 'stale' ? _user(name: 'Other') : original;
+        final repository = _FakeWalletsRepository()
+          ..onDownload = (_, __) async {
+            if (outcome == 'cancelled') {
+              throw const FileSaveCancelledException();
+            }
+            if (outcome == 'failed') throw StateError('synthetic failure');
+          };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          repository,
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        final gate = WalletOperationGate()
+          ..attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        if (outcome == 'revoked') gate.block();
+        final finished = Completer<void>();
+        bloc.add(
+          AuthWalletDownloadRequested(
+            password: 'pw',
+            expectedWalletId: original.walletId,
+            ensureAuthorized: permit.ensureCurrent,
+            onFinished: finished.complete,
+          ),
+        );
+        await finished.future.timeout(const Duration(seconds: 2));
+        expect(
+          repository.downloadWalletIds,
+          ['saved', 'cancelled', 'failed'].contains(outcome)
+              ? [original.walletId]
+              : isEmpty,
+        );
+        // A lock or switch is the user's doing, not a failed export.
+        expect(bloc.state.isError, outcome == 'failed');
+      });
+    }
+
     test(
       'a stale export request never downloads replacement wallet data',
       () async {

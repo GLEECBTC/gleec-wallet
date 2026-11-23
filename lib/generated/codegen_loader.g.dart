@@ -2155,6 +2155,13 @@ abstract class LocaleKeys {
       'authCredentialCleanupInProgress';
   static const authImportFailed = 'authImportFailed';
   static const authImportFileNotOpened = 'authImportFileNotOpened';
+  static const authImportFileOpening = 'authImportFileOpening';
+  static const authImportFileLegacyTypeHint = 'authImportFileLegacyTypeHint';
+  static const authImportFileLegacyNotice = 'authImportFileLegacyNotice';
+  static const authImportFileNewer = 'authImportFileNewer';
+  static const authImportFileDamaged = 'authImportFileDamaged';
+  static const authEncryptedWalletFilePreparing =
+      'authEncryptedWalletFilePreparing';
   static const authImportFileRejected = 'authImportFileRejected';
   static const authPasswordRequirementsHint = 'authPasswordRequirementsHint';
   static const authRecoveryBackedUp = 'authRecoveryBackedUp';
