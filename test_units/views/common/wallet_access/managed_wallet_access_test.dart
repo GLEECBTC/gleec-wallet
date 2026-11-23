@@ -56,6 +56,9 @@ class _Access extends Fake implements WalletAccessService {
     operationGate: WalletOperationGate(),
   );
   @override
+  void lockWalletSession() => unlockCoordinator.lock();
+
+  @override
   Future<bool> unlockCurrent({String? password, bool automatic = false}) async {
     final attempt = unlockCoordinator.beginUnlock(automatic: automatic);
     if (attempt == null) return false;
