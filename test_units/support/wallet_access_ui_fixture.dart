@@ -31,6 +31,9 @@ class AccessibilityAccess extends Fake implements WalletAccessService {
     operationGate: WalletOperationGate(),
   );
   @override
+  void lockWalletSession() => unlockCoordinator.lock();
+
+  @override
   Stream<void> get changes => const Stream.empty();
   @override
   Future<bool> get hasPendingCredentialCleanup async => false;

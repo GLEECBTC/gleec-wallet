@@ -288,12 +288,13 @@ extension _BrowserCredentialCrypto on BrowserCredentialVault {
 
   Future<web.CryptoKey> _unlockKey(
     BrowserCredentialRecord record,
-    _Operation operation,
-  ) async {
+    _Operation operation, {
+    bool allowHandoff = false,
+  }) async {
     if (record.protection == _browserLocal) {
       return record.unattendedKey ?? _fail('envelopeCorrupt');
     }
-    return _prfKey(record, operation);
+    return _prfKey(record, operation, allowHandoff: allowHandoff);
   }
 
   Uint8List _verifyClient(
@@ -368,10 +369,21 @@ extension _BrowserCredentialCrypto on BrowserCredentialVault {
     return credential.getClientExtensionResults()?.prf;
   }
 
+  void _discardPasskeyOutput(web.Credential? response) {
+    try {
+      if (response?.type != 'public-key') return;
+      final output = _prfResult(response as _PublicKeyResponse)?.results?.first;
+      if (output != null) _MutableBytes(_byteView(output)).fill(0);
+    } on Object {
+      // Discard malformed provider output without surfacing its details.
+    }
+  }
+
   Future<web.CryptoKey> _prfKey(
     BrowserCredentialRecord record,
     _Operation operation, {
     JSUint8Array? creationOutput,
+    bool allowHandoff = false,
   }) async {
     _assertCurrent(operation);
     final expected = _origin();
@@ -381,26 +393,27 @@ extension _BrowserCredentialCrypto on BrowserCredentialVault {
     final challenge = _random(32);
     final credentialId = _fromBase64Url(record.credentialId);
     final credentials = _credentials ?? _fail('unsupported');
-    final response = await credentials
-        .get(
-          web.CredentialRequestOptions(
-            publicKey: web.PublicKeyCredentialRequestOptions(
-              challenge: challenge,
-              rpId: expected.host,
-              timeout: const Duration(minutes: 1).inMilliseconds,
-              userVerification: 'required',
-              allowCredentials: [
-                web.PublicKeyCredentialDescriptor(
-                  type: 'public-key',
-                  id: credentialId.toJS,
-                ),
-              ].toJS,
-              extensions: _prfInput(record.prfInput!),
-            ),
-            signal: operation.signal,
+    final options = web.CredentialRequestOptions(
+      publicKey: web.PublicKeyCredentialRequestOptions(
+        challenge: challenge,
+        rpId: expected.host,
+        timeout: _passkeyPromptTimeout.inMilliseconds,
+        userVerification: 'required',
+        allowCredentials: [
+          web.PublicKeyCredentialDescriptor(
+            type: 'public-key',
+            id: credentialId.toJS,
           ),
-        )
-        .toDart;
+        ].toJS,
+        extensions: _prfInput(record.prfInput!),
+      ),
+      signal: operation.signal,
+    );
+    final response = await _completePasskeyPrompt(
+      operation,
+      () => credentials.get(options).toDart,
+      allowHandoff: allowHandoff,
+    );
     _assertCurrent(operation);
     if (response == null || response.type != 'public-key') {
       _fail('invalidResponse');
@@ -479,40 +492,37 @@ extension _BrowserCredentialCrypto on BrowserCredentialVault {
     final userHandle = _random(32);
     final enrollmentId = _identifier();
     final displayName = label.length <= 64 ? label : label.substring(0, 64);
-    _assertCurrent(operation);
-    final response = await _credentials!
-        .create(
-          web.CredentialCreationOptions(
-            publicKey: web.PublicKeyCredentialCreationOptions(
-              challenge: challenge,
-              rp: web.PublicKeyCredentialRpEntity(
-                id: expected.host,
-                name: 'Gleec Wallet',
-              ),
-              user: web.PublicKeyCredentialUserEntity(
-                id: userHandle,
-                name: '$displayName · ${enrollmentId.substring(0, 8)}',
-                displayName: displayName,
-              ),
-              pubKeyCredParams: [
-                web.PublicKeyCredentialParameters(type: 'public-key', alg: -7),
-                web.PublicKeyCredentialParameters(
-                  type: 'public-key',
-                  alg: -257,
-                ),
-              ].toJS,
-              authenticatorSelection: web.AuthenticatorSelectionCriteria(
-                residentKey: 'required',
-                userVerification: 'required',
-              ),
-              attestation: 'none',
-              timeout: const Duration(minutes: 1).inMilliseconds,
-              extensions: _prfInput(prfInput),
-            ),
-            signal: operation.signal,
-          ),
-        )
-        .toDart;
+    final options = web.CredentialCreationOptions(
+      publicKey: web.PublicKeyCredentialCreationOptions(
+        challenge: challenge,
+        rp: web.PublicKeyCredentialRpEntity(
+          id: expected.host,
+          name: 'Gleec Wallet',
+        ),
+        user: web.PublicKeyCredentialUserEntity(
+          id: userHandle,
+          name: '$displayName · ${enrollmentId.substring(0, 8)}',
+          displayName: displayName,
+        ),
+        pubKeyCredParams: [
+          web.PublicKeyCredentialParameters(type: 'public-key', alg: -7),
+          web.PublicKeyCredentialParameters(type: 'public-key', alg: -257),
+        ].toJS,
+        authenticatorSelection: web.AuthenticatorSelectionCriteria(
+          residentKey: 'required',
+          userVerification: 'required',
+        ),
+        attestation: 'none',
+        timeout: _passkeyPromptTimeout.inMilliseconds,
+        extensions: _prfInput(prfInput),
+      ),
+      signal: operation.signal,
+    );
+    final response = await _completePasskeyPrompt(
+      operation,
+      () => _credentials!.create(options).toDart,
+      allowHandoff: true,
+    );
     _assertCurrent(operation);
     if (response == null || response.type != 'public-key') {
       _fail('invalidResponse');
@@ -580,6 +590,7 @@ extension _BrowserCredentialCrypto on BrowserCredentialVault {
         next,
         operation,
         creationOutput: creationOutput,
+        allowHandoff: true,
       );
     } finally {
       if (creationOutput != null) _MutableBytes(creationOutput).fill(0);
