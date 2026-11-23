@@ -9,8 +9,22 @@ import 'package:path_provider/path_provider.dart';
 
 import '../wallet_access_types.dart';
 import 'credential_backend.dart';
+import 'passkey/passkey_authenticator.dart';
+import 'passkey/passkey_credential_backend.dart';
 
-CredentialBackend createCredentialBackend() => NativeCredentialBackend();
+/// Linux has no passkey bridge, so no envelope can exist there to be read.
+/// A test build may name a staging relying party; envelopes record theirs,
+/// so one build never opens another's.
+CredentialBackend createCredentialBackend() => Platform.isLinux
+    ? NativeCredentialBackend()
+    : PasskeyCredentialBackend(
+        base: NativeCredentialBackend(),
+        authenticator: MethodChannelPasskeyAuthenticator(),
+        rpId: const String.fromEnvironment(
+          'WALLET_PASSKEY_RP_ID',
+          defaultValue: PasskeyCredentialBackend.relyingParty,
+        ),
+      );
 
 /// Maps a native channel error code. `interrupted` means the OS dismissed the
 /// prompt (a call, an app switch, the device locking): the user declined

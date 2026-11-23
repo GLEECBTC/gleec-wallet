@@ -226,6 +226,13 @@ device; do not perform this round on a personal device containing real wallets.
   [the live test brief](SWAP_LIVE_TEST_BRIEF.md). New requests must be blocked
   while locked; mobile OS suspension may pause background execution.
 
+### 6. Native reuse of a web passkey — signed builds
+
+Run [the reuse acceptance round](AUTH_PASSKEY_REUSE.md#acceptance-round) on
+builds with `WALLET_EXISTING_PASSKEY_ENABLED=true`. It first needs the
+production (or staging) `apple-app-site-association` and `assetlinks.json`
+described there; production served neither on 2026-11-18.
+
 ## Evidence to return
 
 For each row record the build/commit, device model, OS version, provider,

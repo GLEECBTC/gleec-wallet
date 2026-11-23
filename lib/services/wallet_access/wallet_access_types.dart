@@ -29,6 +29,9 @@ enum WalletAccessFailure {
   incorrectPassword,
   walletUnavailable,
   prfUnavailable,
+
+  /// The user holds no passkey this device can use for the wallet's site.
+  passkeyNotFound,
   envelopeCorrupt,
   invalidName,
   nameAlreadyUsed,
@@ -69,11 +72,18 @@ class CredentialCapabilities {
     required this.protection,
     this.deviceAuthentication = false,
     this.passkeyCandidate = false,
+    this.existingPasskeyCandidate = false,
   });
   final bool available;
   final CredentialProtection protection;
   final bool deviceAuthentication;
+
+  /// A new passkey can be created here (browsers).
   final bool passkeyCandidate;
+
+  /// A passkey the user already holds for the wallet's site can be bound
+  /// here (native apps). Neither flag proves the provider returns PRF output.
+  final bool existingPasskeyCandidate;
 }
 
 class CredentialRecordInfo {

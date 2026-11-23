@@ -15,7 +15,18 @@ final class WalletProtectionRefreshed extends WalletProtectionEvent {
   List<Object?> get props => [manual];
 }
 
-enum WalletProtectionAction { passkey, device, replacePasskey, grace }
+enum WalletProtectionAction {
+  passkey,
+
+  /// Bind a passkey the user already holds for the web wallet (native apps).
+  existingPasskey,
+  device,
+  replacePasskey,
+
+  /// Remove a lost native passkey so the wallet opens with its password.
+  passwordOnly,
+  grace,
+}
 
 final class WalletProtectionRequested extends WalletProtectionEvent {
   const WalletProtectionRequested(
