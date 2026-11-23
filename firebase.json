@@ -60,7 +60,7 @@
         ]
       },
       {
-        "source": "/services/@(wallet_credentials.js|wallet_bootstrap.js|wallet_browser_support.js)",
+        "source": "/services/@(wallet_bootstrap.js|wallet_browser_support.js)",
         "headers": [
           {
             "key": "Cache-Control",

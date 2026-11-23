@@ -2,12 +2,39 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const { existsSync, mkdtempSync, readFileSync, rmSync } = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { webcrypto: crypto } = require('node:crypto');
-const { createWalletCredentials } = require('../../../web/services/wallet_credentials.js');
 const { LocalBrowser } = require('./web_release_test_driver.js');
+
+function loadDartVault() {
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'gleec-web-vault-'));
+  try {
+    const root = path.resolve(__dirname, '../../..');
+    const script = path.join(scratch, 'vault-fixture.js');
+    const sdkDart = process.env.FLUTTER_ROOT &&
+      path.join(process.env.FLUTTER_ROOT, 'bin', 'cache', 'dart-sdk', 'bin',
+        process.platform === 'win32' ? 'dart.exe' : 'dart');
+    const dart = process.env.GLEEC_TEST_DART || (sdkDart && existsSync(sdkDart) ? sdkDart : 'dart');
+    const result = spawnSync(dart, [
+      'compile', 'js', '--no-source-maps', '-o', script,
+      'test_units/services/wallet_access/web_credential_test_entry.dart',
+    ], {cwd: root, encoding: 'utf8', timeout: 30000});
+    if (result.error) throw result.error;
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    // The compiled Dart scheduler expects the browser's global alias.
+    globalThis.self ??= globalThis;
+    require(script);
+    return (environment, options) => globalThis.createGleecTestVault(environment, options ?? null);
+  } finally {
+    rmSync(scratch, {recursive: true, force: true});
+  }
+}
+
+const createWalletCredentials = loadDartVault();
 const text = new TextEncoder();
 const secret = 'Unfunded-test-credential-42@';
 const changedSecret = 'Rotated-unfunded-credential-84@';
@@ -114,7 +141,7 @@ test('wallet HTML and hosting policy exclude external and arbitrary inline scrip
   assert.ok(hosting.headers.find(rule => rule.source === '/')?.headers.some(header =>
     header.key === 'Cache-Control' && header.value.includes('no-cache')),
   'The root HTML entry must revalidate when the credential bridge is introduced');
-  assert.ok(hosting.headers.find(rule => rule.source === '/services/@(wallet_credentials.js|wallet_bootstrap.js|wallet_browser_support.js)')?.headers.some(header =>
+  assert.ok(hosting.headers.find(rule => rule.source === '/services/@(wallet_bootstrap.js|wallet_browser_support.js)')?.headers.some(header =>
     header.key === 'Cache-Control' && header.value.includes('no-cache')),
   'Wallet service bridges must revalidate with their compiled application caller');
   const association = JSON.parse(readFileSync(path.join(root, 'web/.well-known/apple-app-site-association'), 'utf8'));
@@ -308,6 +335,55 @@ test('unattended browser credentials are encrypted, durable and honestly classif
   assert.equal(record.unattendedKey.extractable, false);
   assert.equal(JSON.stringify(record).includes(secret), false);
   await assert.rejects(api.read({ key: 'wallet-1', requireAuthentication: true }), { code: 'unavailable' });
+});
+
+test('reads existing v1 browser-local and passkey envelopes', async () => {
+  const { env, api, store } = await environment();
+  const { hostname: rpId, origin } = env.location;
+  const writeV1 = async (record, encryptionKey) => {
+    const iv = random(12);
+    const additionalData = text.encode(JSON.stringify([
+      1, record.key, record.protection, origin,
+      record.rpId ?? '', record.credentialId ?? '', record.enrollmentId ?? '',
+    ]));
+    const ciphertext = await crypto.subtle.encrypt(
+      {name: 'AES-GCM', iv, additionalData, tagLength: 128}, encryptionKey, text.encode(secret),
+    );
+    store.records.set(record.key, {...record, schema: 1, revision: 3, origin, iv, ciphertext});
+  };
+  const unattendedKey = await crypto.subtle.generateKey(
+    {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt'],
+  );
+  await writeV1({key: 'legacy-local', protection: 'browserLocal', unattendedKey}, unattendedKey);
+
+  const prfInput = random(32), userHandle = random(32);
+  const signal = new AbortController().signal;
+  const extensions = {prf: {eval: {first: prfInput}}};
+  const credential = await env.navigator.credentials.create({
+    publicKey: {
+      challenge: random(32), rp: {id: rpId}, user: {id: userHandle},
+      authenticatorSelection: {residentKey: 'required', userVerification: 'required'},
+      attestation: 'none', extensions,
+    }, signal,
+  });
+  const assertion = await env.navigator.credentials.get({
+    publicKey: {
+      challenge: random(32), rpId, userVerification: 'required',
+      allowCredentials: [{id: credential.rawId}], extensions,
+    }, signal,
+  });
+  const prf = assertion.getClientExtensionResults().prf.results.first;
+  const key = await crypto.subtle.importKey('raw', prf, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  await writeV1({
+    key: 'legacy-passkey', protection: 'passkeyPrf', rpId,
+    credentialId: b64(credential.rawId), enrollmentId: 'legacy-enrollment',
+    prfInput, userHandle, publicKey: credential.response.getPublicKey(), algorithm: -7,
+  }, key);
+
+  assert.equal(await api.read({key: 'legacy-local'}), secret);
+  assert.equal(await api.read({key: 'legacy-passkey', requireAuthentication: true}), secret);
+  assert.equal((await api.metadata({key: 'legacy-passkey'})).revision, 3);
+  assert.equal(store.stages.size, 0, 'Reads must not rewrite persisted records');
 });
 
 for (const algorithm of [-7, -257]) {
