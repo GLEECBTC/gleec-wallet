@@ -317,6 +317,7 @@ async function environment(options = {}) {
     performance: { now: () => options.now?.() ?? performance.now() },
     BroadcastChannel: options.channelClass,
     PublicKeyCredential: class {}, addEventListener: window.addEventListener.bind(window),
+    removeEventListener: window.removeEventListener.bind(window),
     dispatchEvent: window.dispatchEvent.bind(window), CustomEvent,
   };
   env.top = env.self = env;
@@ -566,20 +567,24 @@ test('enrollment cancel releases busy state and preserves previous access', asyn
   while (!state.pendingGet.resolve) await new Promise(setImmediate);
   await assert.rejects(api.read({ key: 'wallet-1' }), { code: 'busy' });
   api.cancel();
-  await assert.rejects(pending, { code: 'aborted' });
+  await assert.rejects(pending, { code: 'staleOperation' });
   assert.equal(await api.read({ key: 'wallet-1' }), secret);
 });
 
-test('backgrounding aborts a pending ceremony without changing protection', async () => {
+test('backgrounding aborts an automatic assertion without changing protection', async () => {
   const { api, env, state } = await environment();
   await api.write({ key: 'wallet-1', value: secret });
+  await api.enrollPasskey({ key: 'wallet-1', value: secret });
   state.pendingGet = {};
-  const pending = api.enrollPasskey({ key: 'wallet-1', value: secret });
+  const pending = api.read({ key: 'wallet-1', trigger: 'automatic', purpose: 'unlock' });
+  const rejected = assert.rejects(pending, { code: 'aborted' });
   while (!state.pendingGet.resolve) await new Promise(setImmediate);
   env.document.visibilityState = 'hidden';
   env.document.dispatchEvent(new Event('visibilitychange'));
-  await assert.rejects(pending, { code: 'aborted' });
+  await rejected;
+  state.pendingGet = null;
   env.document.visibilityState = 'visible';
+  assert.equal((await api.metadata({ key: 'wallet-1' })).protection, 'passkeyPrf');
   assert.equal(await api.read({ key: 'wallet-1' }), secret);
 });
 
@@ -925,7 +930,7 @@ test('canceling password-verified replacement discards a pending assertion and p
   const {api,state,store,previous}=await lostProviderFixture();
   state.pendingGet={};
   const pending=api.replacePasskeyAfterPasswordVerification({key:'wallet-1',value:secret,expectedRevision:2});
-  const rejection=assert.rejects(pending,{code:'aborted'});
+  const rejection=assert.rejects(pending,{code:'staleOperation'});
   while(!state.pendingGet.resolve)await new Promise(resolve=>setImmediate(resolve));
   api.cancel();await rejection;
   assert.deepEqual(store.records.get('wallet-1'),previous);assert.equal(store.stages.size,0);
@@ -970,7 +975,7 @@ test('external revision notification cancels password-verified replacement befor
   const {api,state,store,previous}=await lostProviderFixture({channelClass:Channel});
   state.pendingGet={};
   const pending=api.replacePasskeyAfterPasswordVerification({key:'wallet-1',value:secret,expectedRevision:2});
-  const rejection=assert.rejects(pending,{code:'aborted'});
+  const rejection=assert.rejects(pending,{code:'staleOperation'});
   while(!state.pendingGet.resolve)await new Promise(resolve=>setImmediate(resolve));
   channel.onmessage({data:{key:'wallet-1',revision:3,protection:'passkeyPrf'}});
   await rejection;assert.deepEqual(store.records.get('wallet-1'),previous);assert.equal(store.stages.size,0);
