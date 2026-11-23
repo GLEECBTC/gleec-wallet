@@ -188,6 +188,8 @@ import 'views/wallets_manager/widgets/hardware_wallets_manager_test.dart'
     as hardware_wallets_manager_test;
 import 'views/wallets_manager/widgets/wallet_login_test.dart'
     as wallet_login_test;
+import 'views/wallets_manager/widgets/wallet_login_unlock_lost_test.dart'
+    as wallet_login_unlock_lost_test;
 import 'views/wallets_manager/widgets/wallets_manager_entry_test.dart'
     as wallets_manager_entry_test;
 import 'views/wallets_manager/widgets/wallet_opened_elsewhere_test.dart'
@@ -1054,6 +1056,7 @@ void main() {
   trezor_dialog_select_wallet_test.main();
   hardware_wallets_manager_test.main();
   wallet_login_test.main();
+  wallet_login_unlock_lost_test.main();
   wallets_manager_entry_test.main();
   wallet_opened_elsewhere_test.main();
   wallets_manager_test.main();

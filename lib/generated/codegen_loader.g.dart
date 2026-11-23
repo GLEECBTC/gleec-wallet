@@ -2022,6 +2022,19 @@ abstract class LocaleKeys {
   static const authCreationProtectionNotice = 'authCreationProtectionNotice';
   static const authManagedUnlockCanceled = 'authManagedUnlockCanceled';
   static const authManagedUnlockFailed = 'authManagedUnlockFailed';
+  static const authManagedUnlockFailedGenerated =
+      'authManagedUnlockFailedGenerated';
+  static const authManagedUnlockCanceledGenerated =
+      'authManagedUnlockCanceledGenerated';
+  static const authManagedUnlockGone = 'authManagedUnlockGone';
+  static const authManagedUnlockGoneGenerated =
+      'authManagedUnlockGoneGenerated';
+  static const authDeviceUnlockLost = 'authDeviceUnlockLost';
+  static const authBrowserUnlockLost = 'authBrowserUnlockLost';
+  static const authUnlockLostGeneratedHint = 'authUnlockLostGeneratedHint';
+  static const authUnlockLostPasswordHint = 'authUnlockLostPasswordHint';
+  static const authUseRecoveryPhrase = 'authUseRecoveryPhrase';
+  static const authUseSavedPassword = 'authUseSavedPassword';
   static const authSignOutFailed = 'authSignOutFailed';
   static const authCredentialCleanupPending = 'authCredentialCleanupPending';
   static const authRetryCredentialCleanup = 'authRetryCredentialCleanup';

@@ -95,6 +95,7 @@ class WalletAccessStatus {
     required this.requiresAuthentication,
     this.generatedPassword = false,
     this.passwordManager = PasswordManagerOutcome.unavailable,
+    this.lostProtection,
   });
   final String entryId;
   final CredentialProtection protection;
@@ -102,4 +103,8 @@ class WalletAccessStatus {
   final bool requiresAuthentication;
   final bool generatedPassword;
   final PasswordManagerOutcome passwordManager;
+
+  /// The lock that stopped working, when that is why the wallet now opens
+  /// with its password alone.
+  final CredentialProtection? lostProtection;
 }

@@ -144,6 +144,10 @@ class WalletCredentialCleanup {
       (await _read(journalKey)).values
           .any((value) => value is Map && value['engineDeleted'] == true);
 
+  /// Entries whose wallet is being removed.
+  Future<Set<String>> get intentEntryIds async =>
+      (await _read(journalKey)).keys.toSet();
+
   /// Explicit repair action; it is safe to retry after another process death.
   Future<void> retry(Future<String?> Function(String key) authorize) async {
     final journal = await _read(journalKey);
