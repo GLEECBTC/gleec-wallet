@@ -188,6 +188,10 @@ the recovery button appears after vault loss when the password manager may
 hold the generated password. It also checks that the app waits for the user's
 choice before asking for a password.
 
+The migration test also holds a successful PRF registration across a
+hidden/visible transition. It checks that the Dart vault rejects the stale
+result before verification and preserves the existing credential record.
+
 ### Android bridge on an emulator
 
 Build the signed internal release and the instrumentation APK with the pinned
@@ -227,6 +231,13 @@ Record the OS, provider, APK identity and result at each step. During enrollment
 and unlock, record which UI appears (Gleec recovery, browser autofill, or OS
 credential picker) and when. A real provider test is needed to verify any
 password prompt that appears outside the web page.
+
+Include a full-screen Android provider in this round. On Android 16 with
+Chrome 133 and KeePassDX 4.5.8, the pre-#3641 bundle received PRF output
+after the provider hid the browser tab, but went no further. Both vaults
+invalidate pending operations on `visibilitychange` to `hidden`. Confirm that
+the provider reaches the enrollment verification assertion before using that
+credential for cross-platform acceptance.
 
 For an Android binding failure, set the device's `log.tag.GleecPasskey` to
 `DEBUG` before reproducing and read `adb logcat -s GleecPasskey:D` with that
