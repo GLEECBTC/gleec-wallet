@@ -110,27 +110,24 @@ void main() {
       },
     );
 
-    test(
-      'tokens never persist or survive restart; protected cleanup stays pending',
-      () async {
-        seed(protected: true);
-        await cleanup.prepare(original, _token);
-        expect(jsonEncode(storage.values), isNot(contains(_token)));
-        final restarted = WalletCredentialCleanup(storage, backend);
-        await restarted.resume({});
-        expect(await restarted.hasPending, isTrue);
-        expect(backend.deletions, isEmpty);
-        final prompts = <String>[];
-        await restarted.retry((key) async {
-          prompts.add(key);
-          return _token;
-        });
-        expect(prompts, [original.credentialKey]);
-        expect(backend.deletions.single.authorization, _token);
-        expect(jsonEncode(storage.values), isNot(contains(_token)));
-        await expectRemoved();
-      },
-    );
+    test('tokens never persist or survive restart; protected cleanup stays pending', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, _token);
+      expect(jsonEncode(storage.values), isNot(contains(_token)));
+      final restarted = WalletCredentialCleanup(storage, backend);
+      await restarted.resume({});
+      expect(await restarted.hasPending, isTrue);
+      expect(backend.deletions, isEmpty);
+      final prompts = <String>[];
+      await restarted.retry((key) async {
+        prompts.add(key);
+        return _token;
+      });
+      expect(prompts, [original.credentialKey]);
+      expect(backend.deletions.single.authorization, _token);
+      expect(jsonEncode(storage.values), isNot(contains(_token)));
+      await expectRemoved();
+    });
 
     test(
       'revoked authorization never opens a protected cleanup path',
@@ -151,21 +148,18 @@ void main() {
       },
     );
 
-    test(
-      'a prepared token can purge an invalidated wrapper without probing it first',
-      () async {
-        seed(protected: true);
-        backend.invalidated.add(original.credentialKey);
-        await cleanup.prepare(original, _token);
-        await cleanup.complete(
-          original.walletName,
-          original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        expect(backend.deletions.single.authorization, _token);
-        await expectRemoved();
-      },
-    );
+    test('a prepared token can purge an invalidated wrapper without probing it first', () async {
+      seed(protected: true);
+      backend.invalidated.add(original.credentialKey);
+      await cleanup.prepare(original, _token);
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      expect(backend.deletions.single.authorization, _token);
+      await expectRemoved();
+    });
 
     test(
       'failed native purge remains visible and needs a new authorization',
@@ -190,47 +184,44 @@ void main() {
       },
     );
 
-    test(
-      'same-name same-seed replacement keeps its credential and last-wallet identity',
-      () async {
-        final replacement = _record('replacement-entry');
-        await storage.write(WalletCredentialCleanup.recordsKey, {
-          original.entryId: original.toJson(),
-          replacement.entryId: replacement.toJson(),
-        });
-        await storage.write(_pendingKey, replacement.entryId);
-        await storage.write(_lastKey, {'entryId': replacement.entryId});
-        backend.add(replacement);
-        await cleanup.prepare(original, null);
-        await cleanup.prepare(replacement, null);
+    test('same-name same-seed replacement keeps its credential and last-wallet identity', () async {
+      final replacement = _record('replacement-entry');
+      await storage.write(WalletCredentialCleanup.recordsKey, {
+        original.entryId: original.toJson(),
+        replacement.entryId: replacement.toJson(),
+      });
+      await storage.write(_pendingKey, replacement.entryId);
+      await storage.write(_lastKey, {'entryId': replacement.entryId});
+      backend.add(replacement);
+      await cleanup.prepare(original, null);
+      await cleanup.prepare(replacement, null);
 
-        await cleanup.complete(
-          original.walletName,
-          original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        // A late duplicate completion cannot discover and delete the replacement.
-        await cleanup.complete(
-          original.walletName,
-          original.pubkeyHash,
-          expectedEntryId: original.entryId,
-        );
-        await WalletCredentialCleanup(
-          storage,
-          backend,
-        ).resume({replacement.entryId});
-        expect(backend.deletions.map((call) => call.key), [
-          original.credentialKey,
-        ]);
-        expect(await backend.metadata(replacement.credentialKey), isNotNull);
-        expect(await storage.read(_pendingKey), replacement.entryId);
-        expect(await storage.read(_lastKey), {'entryId': replacement.entryId});
-        expect(await cleanup.hasPending, isFalse);
-        // Startup found the replacement alive, so the intent prepared for a
-        // deletion that never committed does not outlive it.
-        expect(await cleanup.hasIntents, isFalse);
-      },
-    );
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      // A late duplicate completion cannot discover and delete the replacement.
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        expectedEntryId: original.entryId,
+      );
+      await WalletCredentialCleanup(
+        storage,
+        backend,
+      ).resume({replacement.entryId});
+      expect(backend.deletions.map((call) => call.key), [
+        original.credentialKey,
+      ]);
+      expect(await backend.metadata(replacement.credentialKey), isNotNull);
+      expect(await storage.read(_pendingKey), replacement.entryId);
+      expect(await storage.read(_lastKey), {'entryId': replacement.entryId});
+      expect(await cleanup.hasPending, isFalse);
+      // Startup found the replacement alive, so the intent prepared for a
+      // deletion that never committed does not outlive it.
+      expect(await cleanup.hasIntents, isFalse);
+    });
 
     test('an uncommitted intent can be withdrawn with its token', () async {
       seed(protected: true);

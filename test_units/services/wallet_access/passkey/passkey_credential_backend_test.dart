@@ -336,6 +336,20 @@ void main() {
       expect(rig.authenticator.cancels, 1);
     });
 
+    testWidgets('unused readback expires while the vault is idle', (
+      tester,
+    ) async {
+      await rig.bound();
+      await rig.backend.write(_key, 'Changed-1', requireAuthentication: true);
+
+      // Leave the injected monotonic clock unchanged to exercise the cleanup
+      // timer independently of the fallback expiry check on the next read.
+      await tester.pump(const Duration(seconds: 30));
+
+      expect(await rig.unlock(purpose: 'verifyWrite'), 'Changed-1');
+      expect(rig.authenticator.assertions, 2);
+    });
+
     test('one ceremony at a time', () async {
       await rig.bound();
       final reached = Completer<void>();

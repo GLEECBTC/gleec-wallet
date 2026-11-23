@@ -184,6 +184,12 @@ device; do not perform this round on a personal device containing real wallets.
 5. Reinstall/restore the test app and exercise provider loss. Distinguish missing
    wallet data from a missing credential. Never treat an OS/cloud app restore
    as proof that device-only Keychain or Keystore secrets were restored.
+   Sign-in must say the wallet is here but this device cannot unlock it. A
+   generated-password wallet leads with its recovery phrase, offering a saved
+   password when the password manager accepted it or did not say; a chosen
+   password keeps its password form. Check one restore with a new catalog
+   entry (iCloud) and one that kept it (encrypted Finder backup, Migration
+   Assistant).
 
 ### 4a. Native backup destination dialog
 

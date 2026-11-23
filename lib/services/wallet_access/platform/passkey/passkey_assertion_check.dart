@@ -69,8 +69,8 @@ void checkPasskeyAssertion(
 }
 
 /// Apple platforms and the Windows bridge report the relying party's web
-/// origin. Android reports the signing certificate of the app that asked,
-/// which Credential Manager has already matched to the site's asset links.
+/// origin. Android reports the app signing certificate, which the native
+/// bridge checks against the APK after Credential Manager resolves the link.
 bool passkeyOriginAllowed(Object? origin, String rpId) =>
     origin is String &&
     (origin == 'https://$rpId' ||

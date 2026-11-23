@@ -394,7 +394,13 @@ void main() {
   });
 
   testWidgets('a priced swap opens the review', (tester) async {
-    await pump(tester, swapPricedForm());
+    await pump(
+      tester,
+      swapPricedForm().copyWith(
+        payAddress: 'own-pay',
+        receiveAddress: 'own-receive',
+      ),
+    );
 
     expect(swapPrimaryLabel(tester), 'Review swap');
     await press(tester);

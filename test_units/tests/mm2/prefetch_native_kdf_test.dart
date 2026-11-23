@@ -338,13 +338,10 @@ class _ArtifactFixture {
     final directory = await Directory.systemTemp.createTemp('native-kdf-test-');
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final fixture = _ArtifactFixture(directory, server);
-    final config =
-        jsonDecode(
-              File(
-                'sdk/packages/komodo_defi_framework/app_build/build_config.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File('sdk/packages/komodo_defi_framework/app_build/build_config.json')
+          .readAsStringSync(),
+    ) as Map<String, dynamic>;
     config['api'] = {
       'api_commit_hash': commit,
       'branch': 'main',

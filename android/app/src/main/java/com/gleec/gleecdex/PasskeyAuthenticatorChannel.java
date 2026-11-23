@@ -2,6 +2,9 @@ package com.gleec.gleecdex;
 
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
 import android.os.CancellationSignal;
 import android.util.Base64;
 import androidx.annotation.NonNull;
@@ -23,6 +26,8 @@ import androidx.fragment.app.FragmentActivity;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +37,8 @@ import org.json.JSONObject;
 /** One user-verified passkey assertion that evaluates the WebAuthn PRF
  * extension, through Credential Manager. It stores nothing and never sees the
  * wallet credential: the Dart passkey tier checks the reply and wipes the
- * PRF output. Credential Manager matches the site's Digital Asset Links to
- * this app's signing certificate before any provider answers. */
+ * PRF output. Credential Manager enforces Digital Asset Links, and the
+ * bridge checks that the returned origin identifies this signed APK. */
 final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandler {
     private static final int ENCODING = Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING;
     private final FragmentActivity activity;
@@ -80,39 +85,42 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
 
     private void begin(MethodCall call, MethodChannel.Result result) {
         if (pending != null) { result.error("busy", "Another passkey request is in progress", null); return; }
-        final String request;
+        final GetCredentialRequest credentialRequest;
         try {
-            request = requestJson(call);
+            credentialRequest = new GetCredentialRequest.Builder()
+                .addCredentialOption(new GetPublicKeyCredentialOption(requestJson(call)))
+                .build();
         } catch (Exception error) {
             result.error("invalidResponse", "Passkey request could not be completed", null);
             return;
         }
         pending = result;
         cancellation = new CancellationSignal();
-        GetCredentialRequest credentialRequest = new GetCredentialRequest.Builder()
-            .addCredentialOption(new GetPublicKeyCredentialOption(request))
-            .build();
-        final MethodChannel.Result owner = result;
-        credentials.getCredentialAsync(activity, credentialRequest, cancellation,
-            ContextCompat.getMainExecutor(activity),
-            new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                @Override public void onResult(GetCredentialResponse response) {
-                    if (pending != owner) return;
-                    try {
-                        finish(assertion(response.getCredential()), null);
-                    } catch (Failure failure) {
-                        finish(null, failure.code);
-                    } catch (Exception error) {
-                        // Never forward provider exceptions; they can carry data.
-                        finish(null, "invalidResponse");
+        try {
+            credentials.getCredentialAsync(activity, credentialRequest, cancellation,
+                ContextCompat.getMainExecutor(activity),
+                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override public void onResult(GetCredentialResponse response) {
+                        if (pending != result) return;
+                        try {
+                            finish(assertion(response.getCredential()), null);
+                        } catch (Failure failure) {
+                            finish(null, failure.code);
+                        } catch (Exception error) {
+                            // Never forward provider exceptions; they can carry data.
+                            finish(null, "invalidResponse");
+                        }
                     }
-                }
 
-                @Override public void onError(@NonNull GetCredentialException error) {
-                    if (pending != owner) return;
-                    finish(null, failureCode(error));
-                }
-            });
+                    @Override public void onError(@NonNull GetCredentialException error) {
+                        if (pending != result) return;
+                        finish(null, failureCode(error));
+                    }
+                });
+        } catch (RuntimeException error) {
+            // A provider can fail to start before it registers its callback.
+            if (pending == result) finish(null, "unavailable");
+        }
     }
 
     private static String requestJson(MethodCall call) throws Exception {
@@ -141,10 +149,12 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
             .toString();
     }
 
-    private static Map<String, Object> assertion(Credential credential) throws Exception {
+    private Map<String, Object> assertion(Credential credential) throws Exception {
         if (!(credential instanceof PublicKeyCredential)) throw new Failure("invalidResponse");
         JSONObject json = new JSONObject(((PublicKeyCredential) credential).getAuthenticationResponseJson());
         JSONObject response = json.getJSONObject("response");
+        byte[] clientData = decode(response.getString("clientDataJSON"));
+        verifyOrigin(clientData);
         JSONObject prf = json.optJSONObject("clientExtensionResults") == null ? null
             : json.getJSONObject("clientExtensionResults").optJSONObject("prf");
         JSONObject results = prf == null ? null : prf.optJSONObject("results");
@@ -158,10 +168,26 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
         boolean noHandle = response.isNull("userHandle") || response.getString("userHandle").isEmpty();
         value.put("userHandle", noHandle ? null : decode(response.getString("userHandle")));
         value.put("authenticatorData", decode(response.getString("authenticatorData")));
-        value.put("clientDataJSON", decode(response.getString("clientDataJSON")));
+        value.put("clientDataJSON", clientData);
         value.put("signature", decode(response.getString("signature")));
         value.put("prf", decode(first));
         return value;
+    }
+
+    @SuppressWarnings("deprecation") // The int flags overload supports Android 9–12.
+    private void verifyOrigin(byte[] clientData) throws Exception {
+        String origin = new JSONObject(new String(clientData, StandardCharsets.UTF_8))
+            .getString("origin");
+        SigningInfo signingInfo = activity.getPackageManager()
+            .getPackageInfo(activity.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES)
+            .signingInfo;
+        if (signingInfo == null) throw new Failure("unavailable");
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        for (Signature signer : signingInfo.getApkContentsSigners()) {
+            String expected = "android:apk-key-hash:" + encode(sha256.digest(signer.toByteArray()));
+            if (expected.equals(origin)) return;
+        }
+        throw new Failure("invalidResponse");
     }
 
     private static String failureCode(GetCredentialException error) {

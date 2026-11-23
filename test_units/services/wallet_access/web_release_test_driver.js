@@ -12,7 +12,7 @@ const { createHash } = require('node:crypto');
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 class LocalBrowser {
-  constructor(root, { port = 18768, debugPort = 9223 } = {}) {
+  constructor(root, { port = 18768, debugPort = 0 } = {}) {
     this.root = root;
     this.port = port;
     this.debugPort = debugPort;
@@ -100,17 +100,62 @@ class LocalBrowser {
     const binary = process.env.GLEEC_TEST_CHROME ?? (process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome');
     assert.ok(fs.existsSync(binary), 'Set GLEEC_TEST_CHROME to an installed Chrome executable');
-    this.process = spawn(binary, ['--headless=new', '--no-first-run', '--no-default-browser-check',
+    // Chrome chooses a free port and reports it in this disposable profile.
+    const activePortFile = path.join(this.profile, 'DevToolsActivePort');
+    if (this.debugPort === 0) fs.rmSync(activePortFile, {force:true});
+    const flags = ['--headless=new', '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-component-update', '--disable-sync',
-      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`, 'about:blank'],
-    { stdio:'ignore' });
-    let version;
-    for (let count=0;count<100;count++) {
-      if (this.process.exitCode != null) throw new Error('Isolated Chrome exited during startup');
-      try { version=await (await fetch(`http://127.0.0.1:${this.debugPort}/json/version`)).json(); break; }
-      catch (_) { await delay(100); }
+      `--remote-debugging-port=${this.debugPort}`, `--user-data-dir=${this.profile}`];
+    // Match Flutter's web driver for the local fixture on the hosted Linux runner.
+    if (process.platform === 'linux' && process.env.GLEEC_TEST_CHROME_NO_SANDBOX === 'true' &&
+        !process.env.GLEEC_TEST_HOSTED_URL) {
+      flags.push('--no-sandbox');
     }
-    assert.ok(version, 'Isolated Chrome must expose its local debugging endpoint');
+    this.process = spawn(binary, [...flags, 'about:blank'], {stdio:['ignore', 'ignore', 'pipe']});
+    let launchError;
+    this.process.once('error', error => { launchError = error; });
+    let version;
+    let startupStderr = '';
+    this.process.stderr.on('data', chunk => {
+      if (!version) startupStderr = (startupStderr + chunk).slice(-4096);
+    });
+    this.process.stderr.unref?.();
+    const startupFailure = message => {
+      const causes = [
+        [/No usable sandbox|Failed to move to new namespace|SUID sandbox helper/i, 'sandbox initialization'],
+        [/error while loading shared libraries|cannot open shared object file/i, 'missing shared library'],
+        [/Address already in use|bind\(\) failed/i, 'debug port binding'],
+        [/crashpad_handler.*(?:Permission denied|requires --database)/i, 'crash reporter initialization'],
+      ];
+      const cause = causes.find(([pattern]) => pattern.test(startupStderr))?.[1];
+      return new Error(cause ? `${message}. Chrome reported ${cause}.` : message);
+    };
+    const deadline = performance.now() + 30000;
+    for (let port = this.debugPort; performance.now() < deadline; await delay(100)) {
+      if (launchError) throw startupFailure(`Could not start isolated Chrome (${launchError.code ?? launchError.name})`);
+      const exit = this.process.exitCode ?? this.process.signalCode;
+      if (exit != null) throw startupFailure(`Isolated Chrome exited during startup (${exit})`);
+
+      try {
+        if (port === 0) {
+          const value = Number(fs.readFileSync(activePortFile, 'utf8').split('\n')[0]);
+          if (!Number.isInteger(value) || value < 1 || value > 65535) continue;
+          port = value;
+        }
+        const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (!response.ok) continue;
+        const candidate = await response.json();
+        if (typeof candidate?.webSocketDebuggerUrl === 'string') {
+          version = candidate;
+          break;
+        }
+      } catch (_) {
+        // Chrome may still be writing the marker or opening its endpoint.
+      }
+    }
+    if (!version) throw startupFailure('Isolated Chrome did not expose a local debugging endpoint within 30 seconds');
     this.version = version.Browser;
     this.socket = new WebSocket(version.webSocketDebuggerUrl);
     this.socket.addEventListener('message', ({data}) => {
@@ -217,7 +262,12 @@ class LocalBrowser {
   }
 
   async click(page, label, {pointer=false}={}) {
-    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).find(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
+    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).find(el=>{
+      const bounds=el.getBoundingClientRect();
+      return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}
+        &&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')
+        &&bounds.width>0&&bounds.height>0;
+    })`;
     // A semantics node can precede the route's painted, interactive frame.
     // Navigate and activate like a real user: settle the painted target and
     // scroll it into view, then click exactly once. Never retry the action or
@@ -258,7 +308,17 @@ class LocalBrowser {
     }
     // Report only public control shape. Field values, page text and wallet
     // credentials must never enter browser acceptance logs.
-    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}).map(el=>{const r=el.getBoundingClientRect();return {disabled:el.getAttribute('aria-disabled')==='true',hidden:!!el.closest('[aria-hidden=true]'),hasArea:r.width>0&&r.height>0,inViewport:r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};})`);
+    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]'))
+      .filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})
+      .map(el=>{
+        const bounds=el.getBoundingClientRect();
+        return {
+          disabled:el.getAttribute('aria-disabled')==='true',
+          hidden:!!el.closest('[aria-hidden=true]'),
+          hasArea:bounds.width>0&&bounds.height>0,
+          inViewport:bounds.bottom>0&&bounds.top<innerHeight&&bounds.right>0&&bounds.left<innerWidth,
+        };
+      })`);
     console.error('Fixture control shape',JSON.stringify(shape));
     throw new Error(`Timed out waiting for painted button ${label}`);
   }
@@ -267,8 +327,13 @@ class LocalBrowser {
     // Flutter 3.50 can retain a zero-sized editing node with the same label.
     // Choose the rendered input before focusing or editing; a stale node's
     // value is not evidence that the user-visible form accepted the text.
-    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>{const r=el.getBoundingClientRect();return (
-      (el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n').some(part=>part.trim()===${JSON.stringify(label)})&&!el.readOnly&&!el.disabled&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0);})`;
+    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>{
+      const bounds=el.getBoundingClientRect();
+      const labels=(el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n');
+      return labels.some(part=>part.trim()===${JSON.stringify(label)})
+        &&!el.readOnly&&!el.disabled&&!el.closest('[aria-hidden=true]')
+        &&bounds.width>0&&bounds.height>0;
+    })`;
     try {
       await this.wait(page,`(()=>{const field=${selector};if(!field)return false;field.focus();return true;})()`,{label:`editable fixture field: ${label}`});
     } catch (error) {

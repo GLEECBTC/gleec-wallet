@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,10 +11,10 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
+import 'package:web_dex/services/wallet_file/wallet_file_codec.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/shared/ui/ui_gradient_icon.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
@@ -36,8 +34,10 @@ class WalletImportByFile extends StatefulWidget {
     required this.fileData,
     required this.onImport,
     required this.onCancel,
+    this.codec = const WalletFileCodec(),
   });
   final WalletFileData fileData;
+  final WalletFileCodec codec;
 
   final void Function({
     required String name,
@@ -64,10 +64,19 @@ class _WalletImportByFileState extends State<WalletImportByFile>
   bool _importing = false;
   bool _allowCustomSeed = false;
   bool _showCustomSeedToggle = false;
+  bool _opening = false;
 
   String? _filePasswordError;
   String? _commonError;
   String _lastFilePassword = '';
+
+  late final WalletFileInspection _file = WalletFileInspection.of(
+    widget.fileData.content,
+  );
+
+  bool get _unreadable =>
+      _file.kind == WalletFileKind.newer ||
+      _file.kind == WalletFileKind.damaged;
 
   bool get _isValidData {
     return _filePasswordError == null;
@@ -79,11 +88,16 @@ class _WalletImportByFileState extends State<WalletImportByFile>
   // This used to be gated on the EULA checkbox alone, so the button was live
   // with an empty password and the flow failed later at decryption. With
   // consent now implicit, the password being present is the real precondition.
-  bool get _isButtonEnabled => _filePasswordController.text.trim().isNotEmpty;
+  bool get _isButtonEnabled =>
+      !_unreadable && _filePasswordController.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
+    final recordedType = _file.recordedType;
+    if (recordedType != null) {
+      _isHdMode = recordedType == WalletType.hdwallet;
+    }
     WidgetsBinding.instance.addObserver(this);
     // The field has no onChanged, so the button needs a listener to re-enable.
     _filePasswordController.addListener(_onFilePasswordChanged);
@@ -153,88 +167,17 @@ class _WalletImportByFileState extends State<WalletImportByFile>
                       ],
                     ),
                     const SizedBox(height: 16),
-                    UiTextFormField(
-                      key: const Key('file-password-field'),
-                      controller: _filePasswordController,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      enableIMEPersonalizedLearning: false,
-                      enableInteractiveSelection: true,
-                      obscureText: _isObscured,
-                      maxLength: passwordMaxLength,
-                      counterText: '',
-                      autofillHints: const [AutofillHints.password],
-                      errorText: _filePasswordError,
-                      errorMaxLines: 6,
-                      hintText: LocaleKeys.walletCreationPasswordHint.tr(),
-                      onFieldSubmitted: (_) => _onImport(),
-                      suffixIcon: PasswordVisibilityControl(
-                        isObscured: _isObscured,
-                        onVisibilityChange: (bool isPasswordObscured) {
-                          setState(() {
-                            _isObscured = isPasswordObscured;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    WalletImportTypeDropdown(
-                      selectedType: _isHdMode
-                          ? WalletType.hdwallet
-                          : WalletType.iguana,
-                      isHdOptionEnabled: _isHdOptionEnabled,
-                      onChanged: (walletType) {
-                        setState(() {
-                          _isHdMode = walletType == WalletType.hdwallet;
-                          _commonError = null;
-                          _allowCustomSeed = false;
-                          _showCustomSeedToggle = false;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'authImportDerivationHint'.tr(),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    if (_shouldShowCustomSeedToggle) ...[
-                      const SizedBox(height: 12),
-                      CustomSeedCheckbox(
-                        value: _allowCustomSeed,
-                        onChanged: (value) {
-                          setState(() {
-                            _allowCustomSeed = value;
-                          });
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    if (_commonError case final error?) ...[
+                    if (_unreadable) ...[
                       WalletAccessNotice(
-                        key: const Key('wallet-import-error'),
-                        text: error,
+                        key: const Key('wallet-file-unreadable'),
+                        text: _file.kind == WalletFileKind.newer
+                            ? 'authImportFileNewer'.tr()
+                            : 'authImportFileDamaged'.tr(),
                         tone: WalletAccessTone.error,
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                    TermsConsentText(actionLabel: LocaleKeys.import.tr()),
-                    const SizedBox(height: 12),
-                    LegalConsentAction(
-                      builder: (allowed) => UiPrimaryButton(
-                        key: const Key('confirm-password-button'),
-                        expandForText: true,
-                        height: 50,
-                        text: LocaleKeys.import.tr(),
-                        onPressed: allowed && _isButtonEnabled
-                            ? _onImport
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
+                    ] else
+                      ..._buildImportForm(context),
                     UiUnderlineTextButton(
                       onPressed: widget.onCancel,
                       text: LocaleKeys.back.tr(),
@@ -248,6 +191,113 @@ class _WalletImportByFileState extends State<WalletImportByFile>
       ),
     );
   }
+
+  List<Widget> _buildImportForm(BuildContext context) => [
+    UiTextFormField(
+      key: const Key('file-password-field'),
+      controller: _filePasswordController,
+      autofocus: true,
+      textInputAction: TextInputAction.done,
+      autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
+      enableInteractiveSelection: true,
+      readOnly: _opening,
+      obscureText: _isObscured,
+      maxLength: passwordMaxLength,
+      counterText: '',
+      autofillHints: const [AutofillHints.password],
+      errorText: _filePasswordError,
+      errorMaxLines: 6,
+      hintText: LocaleKeys.walletCreationPasswordHint.tr(),
+      onFieldSubmitted: (_) => _onImport(),
+      suffixIcon: PasswordVisibilityControl(
+        isObscured: _isObscured,
+        onVisibilityChange: (bool isPasswordObscured) {
+          setState(() {
+            _isObscured = isPasswordObscured;
+          });
+        },
+      ),
+    ),
+    if (_file.recordedType == null) ...[
+      const SizedBox(height: 24),
+      WalletImportTypeDropdown(
+        selectedType: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
+        isHdOptionEnabled: _isHdOptionEnabled,
+        onChanged: (walletType) {
+          setState(() {
+            _isHdMode = walletType == WalletType.hdwallet;
+            _commonError = null;
+            _allowCustomSeed = false;
+            _showCustomSeedToggle = false;
+          });
+        },
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'authImportFileLegacyTypeHint'.tr(),
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+      ),
+      if (_file.kind == WalletFileKind.legacy) ...[
+        const SizedBox(height: 12),
+        WalletAccessNotice(
+          key: const Key('wallet-file-legacy-notice'),
+          text: 'authImportFileLegacyNotice'.tr(),
+          announce: false,
+        ),
+      ],
+    ],
+    if (_shouldShowCustomSeedToggle) ...[
+      const SizedBox(height: 12),
+      CustomSeedCheckbox(
+        value: _allowCustomSeed,
+        onChanged: (value) {
+          setState(() {
+            _allowCustomSeed = value;
+          });
+        },
+      ),
+    ],
+    const SizedBox(height: 24),
+    if (_commonError case final error?) ...[
+      WalletAccessNotice(
+        key: const Key('wallet-import-error'),
+        text: error,
+        tone: WalletAccessTone.error,
+      ),
+      const SizedBox(height: 12),
+    ],
+    TermsConsentText(actionLabel: LocaleKeys.import.tr()),
+    const SizedBox(height: 12),
+    LegalConsentAction(
+      builder: (allowed) => UiPrimaryButton(
+        key: const Key('confirm-password-button'),
+        expandForText: true,
+        height: 50,
+        text: LocaleKeys.import.tr(),
+        // Busy, it stays enabled so it keeps focus; `_onImport` ignores the
+        // repeat.
+        onPressed: allowed && _isButtonEnabled ? _onImport : null,
+        child: _opening
+            ? Builder(
+                // The theme's progress colour is this button's own fill;
+                // draw it in the label's colour.
+                builder: (context) => ProgressIndicatorTheme(
+                  data: ProgressIndicatorThemeData(
+                    color: DefaultTextStyle.of(context).style.color,
+                  ),
+                  child: WalletAccessProgress(
+                    label: 'authImportFileOpening'.tr(),
+                  ),
+                ),
+              )
+            : null,
+      ),
+    ),
+    const SizedBox(height: 20),
+  ];
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -293,25 +343,41 @@ class _WalletImportByFileState extends State<WalletImportByFile>
         _commonError = null;
       });
     }
-    final EncryptionTool encryptionTool = EncryptionTool();
-    final String? fileData = await encryptionTool.decryptData(
-      _filePasswordController.text,
-      widget.fileData.content,
-    );
+    // The wallet is created with the password that opened its file, even if
+    // the field changes while the file opens.
+    final password = _filePasswordController.text;
+    final OpenedWalletFile opened;
+    setState(() => _opening = true);
+    try {
+      opened = await widget.codec.open(
+        password: password,
+        content: widget.fileData.content,
+      );
+    } on WalletFileException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        switch (error.failure) {
+          // The same outcome for a wrong password, a changed file and a file
+          // that was never an encrypted wallet, so the message covers all.
+          case WalletFileFailure.cannotOpen:
+            _filePasswordError = 'authImportFileNotOpened'.tr();
+          case WalletFileFailure.damaged:
+            _commonError = 'authImportFileDamaged'.tr();
+          case WalletFileFailure.newer:
+            _commonError = 'authImportFileNewer'.tr();
+        }
+      });
+      return;
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
     if (!mounted) return;
-    // The same outcome for a wrong password and for a file that was never an
-    // encrypted wallet, so the message has to cover both.
-    setState(
-      () => _filePasswordError = fileData == null
-          ? 'authImportFileNotOpened'.tr()
-          : null,
-    );
-    if (fileData == null) return;
+    setState(() => _filePasswordError = null);
 
-    final WalletConfig walletConfig = WalletConfig.fromJson(
-      json.decode(fileData),
-    );
-    walletConfig.type = _isHdMode ? WalletType.hdwallet : WalletType.iguana;
+    final WalletConfig walletConfig = opened.config;
+    final recordedType = opened.recordedType;
+    walletConfig.type =
+        recordedType ?? (_isHdMode ? WalletType.hdwallet : WalletType.iguana);
     // Holding an encrypted file is not the same as holding the recovery
     // phrase, and `has_backup` in that file is whatever a previous session
     // self-reported. Importing one is evidence of a file, so the backup
@@ -319,19 +385,18 @@ class _WalletImportByFileState extends State<WalletImportByFile>
     // import path keeps `true` - there the user demonstrably has the words.
     walletConfig.hasBackup = false;
 
-    final String? decryptedSeed = await encryptionTool.decryptData(
-      _filePasswordController.text,
-      walletConfig.seedPhrase,
-    );
-    if (!mounted) return;
-    if (decryptedSeed == null) {
-      setState(() => _commonError = 'authImportFailed'.tr());
-      return;
-    }
+    final String decryptedSeed = walletConfig.seedPhrase;
     if (!_isValidData) return;
 
     final bool isBip39 = _sdk.mnemonicValidator.validateBip39(decryptedSeed);
     if (!isBip39) {
+      // The engine derives HD addresses only from a BIP39 phrase, so this is
+      // no HD wallet's export; restoring it as iguana would change its
+      // addresses.
+      if (recordedType == WalletType.hdwallet) {
+        setState(() => _commonError = 'authImportFileDamaged'.tr());
+        return;
+      }
       if (_isHdMode) {
         setState(() {
           _isHdMode = false;
@@ -389,11 +454,7 @@ class _WalletImportByFileState extends State<WalletImportByFile>
     context.read<LegalAgreementBloc>().add(
       LegalAgreementSubmitted('wallet-import-file', snapshot: consentSnapshot),
     );
-    widget.onImport(
-      name: name,
-      password: _filePasswordController.text,
-      walletConfig: walletConfig,
-    );
+    widget.onImport(name: name, password: password, walletConfig: walletConfig);
   }
 
   bool get _shouldShowCustomSeedToggle {

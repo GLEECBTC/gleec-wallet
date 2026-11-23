@@ -21,6 +21,6 @@ extension _ManagedSignInLogging on AuthBloc {
       AuthException(:final type) => type.name,
       _ => error.runtimeType.toString(),
     };
-    _log.shout('Managed $trigger sign-in failed ($cause)', error, stackTrace);
+    _log.shout('Managed $trigger sign-in failed ($cause)', null, stackTrace);
   }
 }

@@ -36,6 +36,94 @@ void _managedSignInCases() {
       expect(state.authError?.message, 'authManagedUnlockCanceled');
     });
 
+    for (final automatic in [false, true]) {
+      test(
+        'a stored unlock this device lost points a generated password to '
+        'the recovery phrase${automatic ? ', automatically too' : ''}',
+        () async {
+          final user = await s.installManaged();
+          s.vault.values.clear();
+          final state = await s.outcomeOf(
+            AuthManagedSignInRequested(
+              wallet: user.wallet,
+              automatic: automatic,
+              generatedPassword: true,
+            ),
+          );
+          expect(state.authError?.message, 'authManagedUnlockGoneGenerated');
+          expect(managedUnlockGone(state.authError), isTrue);
+          expect(state.currentUser, isNull);
+          expect(s.engine.signInModes, isEmpty);
+        },
+      );
+    }
+
+    test(
+      'a stored unlock this device lost asks for a chosen password',
+      () async {
+        final user = await s.installManaged();
+        s.vault.values.clear();
+        final state = await s.outcomeOf(
+          AuthManagedSignInRequested(wallet: user.wallet),
+        );
+        expect(state.authError?.message, 'authManagedUnlockGone');
+        expect(managedUnlockGone(state.authError), isTrue);
+      },
+    );
+
+    test('a stored unlock the system invalidated is gone', () async {
+      final user = await s.installManaged();
+      s.vault.readFailure = WalletAccessFailure.invalidated;
+      final state = await s.outcomeOf(
+        AuthManagedSignInRequested(
+          wallet: user.wallet,
+          generatedPassword: true,
+        ),
+      );
+      expect(state.authError?.message, 'authManagedUnlockGoneGenerated');
+      expect(managedUnlockGone(state.authError), isTrue);
+    });
+
+    test(
+      'a cancelled unlock of a generated password points to the phrase',
+      () async {
+        final user = await s.installManaged();
+        s.vault.cancelReads = true;
+        final state = await s.outcomeOf(
+          AuthManagedSignInRequested(
+            wallet: user.wallet,
+            generatedPassword: true,
+          ),
+        );
+        expect(state.authError?.message, 'authManagedUnlockCanceledGenerated');
+        expect(managedUnlockGone(state.authError), isFalse);
+      },
+    );
+
+    test(
+      'a failed unlock suggests the password only when the owner chose it',
+      () async {
+        final user = await s.installManaged();
+        s.engine.password = 'Different-password-0!';
+        final generated = await s.outcomeOf(
+          AuthManagedSignInRequested(
+            wallet: user.wallet,
+            generatedPassword: true,
+          ),
+        );
+        expect(
+          generated.authError?.message,
+          'authManagedUnlockFailedGenerated',
+        );
+        expect(managedUnlockGone(generated.authError), isFalse);
+
+        final chosen = await s.outcomeOf(
+          AuthManagedSignInRequested(wallet: user.wallet),
+        );
+        expect(chosen.authError?.message, 'authManagedUnlockFailed');
+      },
+    );
+
     test('asking again for the open wallet changes nothing', () async {
       final user = await s.installManaged();
       final opened = await s.outcomeOf(

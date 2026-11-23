@@ -39,7 +39,7 @@ password. A synced passkey cannot restore a wallet that is missing.
 
 Unlocking repeats the assertion with the stored credential ID and salt. A
 password change reseals under the same key: one assertion authorizes it, and
-the readback reuses that key for 30 seconds instead of asking again. Deletion
+the readback reuses that key for up to 30 seconds before it is wiped. Deletion
 takes a single-use, revision-bound permit from an unlock with purpose
 `delete`, or from engine password verification when the provider is lost.
 
@@ -56,6 +56,8 @@ produced the PRF output for that salt can open the envelope. The app still
 rejects a response with the wrong relying-party hash, without user presence and
 verification, with another challenge, from an unexpected origin, for another
 credential or user, or without a 32-byte PRF output.
+On Android the bridge checks that the origin identifies the installed APK's
+signing certificate.
 
 In Settings an existing passkey is always an alternative, never the primary
 way to lock a wallet: most people hold no passkey for the web wallet, so the

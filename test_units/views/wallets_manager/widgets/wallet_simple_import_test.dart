@@ -286,7 +286,9 @@ void main() {
     );
     final field = find.byKey(const Key('file-password-field'));
     expect(find.byType(Switch), findsNothing);
-    expect(find.text('authImportDerivationHint'.tr()), findsOneWidget);
+    // Nothing records this file's type, and nothing shows it is an old one.
+    expect(find.text('authImportFileLegacyTypeHint'.tr()), findsOneWidget);
+    expect(find.byKey(const Key('wallet-file-legacy-notice')), findsNothing);
     // Enter on the only field submits it.
     await tester.enterText(field, 'synthetic-wrong');
     await tester.testTextInput.receiveAction(TextInputAction.done);

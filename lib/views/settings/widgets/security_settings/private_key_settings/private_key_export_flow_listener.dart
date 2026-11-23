@@ -1,4 +1,5 @@
 import 'package:web_dex/generated/codegen_loader.g.dart';
+
 import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
@@ -147,9 +148,8 @@ class _PrivateKeyExportFlowListenerState
   }
 
   void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _openPassword(BuildContext context, int operation) {
