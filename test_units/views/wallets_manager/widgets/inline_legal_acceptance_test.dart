@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:easy_localization/easy_localization.dart';
 // No public API resets the global translations between aggregated suites.
 // ignore: implementation_imports
@@ -9,13 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/hw_dialog_wallet_select.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_creation.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
+import '../../../support/legacy_wallet_file_writer.dart';
 import '../../../support/legal_onboarding_harness.dart';
 
 Future<void> _fillPasswords(WidgetTester tester) async {
@@ -122,22 +120,18 @@ void main() {
         'file import accepts after successful decryption (updated: $updated)',
         (tester) async {
           final harness = LegalFormHarness(updated: updated);
-          final encrypted = await tester.runAsync(() async {
-            final tool = EncryptionTool();
-            final config = WalletConfig(
-              seedPhrase: await tool.encryptData(
-                legalTestPassword,
-                legalTestSeed,
-              ),
-              activatedCoins: [],
-              hasBackup: true,
-              type: WalletType.hdwallet,
-            );
-            return tool.encryptData(
+          final encrypted = await tester.runAsync(
+            () => legacyWalletFile(
               legalTestPassword,
-              jsonEncode(config.toJson()),
-            );
-          });
+              WalletConfig(
+                seedPhrase: '',
+                activatedCoins: [],
+                hasBackup: true,
+                type: WalletType.hdwallet,
+              ),
+              legalTestSeed,
+            ),
+          );
           var imported = 0;
           await harness.pump(
             tester,

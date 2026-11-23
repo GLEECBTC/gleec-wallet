@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -28,6 +27,9 @@ import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
     show GuardedDestinationSelector;
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart'
+    show WalletOperationDenied;
+import 'package:web_dex/services/wallet_file/wallet_file_codec.dart';
 import 'package:web_dex/shared/utils/validators.dart';
 import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -102,12 +104,14 @@ class WalletsRepository {
     this._legacyWalletStorage, {
     KomodoLegacyWalletMigration? legacyNativeWalletMigration,
     EncryptionTool? encryptionTool,
+    WalletFileCodec? walletFileCodec,
     FileLoader? fileLoader,
     ZcashParamsDownloader Function()? zcashParamsDownloaderFactory,
     WalletAccessService? walletAccess,
   }) : _legacyNativeWalletMigration =
            legacyNativeWalletMigration ?? KomodoLegacyWalletMigration(),
        _encryptionTool = encryptionTool ?? EncryptionTool(),
+       _walletFileCodec = walletFileCodec ?? const WalletFileCodec(),
        _fileLoader = fileLoader ?? FileLoader.fromPlatform(),
        _walletAccess = walletAccess,
        _zcashParamsDownloaderFactory =
@@ -119,6 +123,7 @@ class WalletsRepository {
   final BaseStorage _legacyWalletStorage;
   final KomodoLegacyWalletMigration _legacyNativeWalletMigration;
   final EncryptionTool _encryptionTool;
+  final WalletFileCodec _walletFileCodec;
   final FileLoader _fileLoader;
   final ZcashParamsDownloader Function() _zcashParamsDownloaderFactory;
   final StreamController<List<Wallet>> _walletsController =
@@ -744,7 +749,12 @@ class WalletsRepository {
     }
   }
 
-  @Deprecated('Use the KomodoDefiSdk.auth.getMnemonicEncrypted method instead.')
+  /// Saves the signed-in [wallet] as a version 2 wallet file protected by
+  /// [password], the wallet password: reading the phrase checks it.
+  ///
+  /// The engine's own encrypted mnemonic is not reused: its MAC leaves its
+  /// parameters unauthenticated, it has no room for the wallet type, and it
+  /// holds only the phrase. See [WalletFileCodec].
   Future<void> downloadEncryptedWallet(
     Wallet wallet,
     String password, {
@@ -770,28 +780,24 @@ class WalletsRepository {
 
     try {
       await ensureOriginalWallet();
-      Wallet workingWallet = wallet.copy();
-      if (wallet.config.seedPhrase.isEmpty) {
-        final mnemonic = await RpcDispatchGuard.run(
-          () => ensureAuthorized?.call(),
-          () => _kdfSdk.auth.getMnemonicPlainText(password),
-          methods: const {'get_mnemonic'},
-        );
-        await ensureOriginalWallet();
-        final String encryptedSeed = await _encryptionTool.encryptData(
-          password,
-          mnemonic.plaintextMnemonic ?? '',
-        );
-        workingWallet = workingWallet.copyWith(
-          config: workingWallet.config.copyWith(seedPhrase: encryptedSeed),
-        );
+      if (wallet.isHW) {
+        throw StateError('A hardware wallet has no phrase to export');
       }
-      final String data = jsonEncode(workingWallet.config);
-      final String encryptedData = await _encryptionTool.encryptData(
-        password,
-        data,
+      final mnemonic = await RpcDispatchGuard.run(
+        () => ensureAuthorized?.call(),
+        () => _kdfSdk.auth.getMnemonicPlainText(password),
+        methods: const {'get_mnemonic'},
       );
-      final String sanitizedFileName = _sanitizeFileName(workingWallet.name);
+      await ensureOriginalWallet();
+      final String encryptedData = await _walletFileCodec.seal(
+        password: password,
+        mnemonic: mnemonic.plaintextMnemonic ?? '',
+        config: wallet.config,
+        // The engine's derivation decides the addresses; the app's own label
+        // for the wallet could disagree with it.
+        derivation: expectedWalletId.authOptions.derivationMethod,
+      );
+      final String sanitizedFileName = _sanitizeFileName(wallet.name);
       await ensureOriginalWallet();
       await _fileLoader.save(
         fileName: sanitizedFileName,
@@ -810,6 +816,12 @@ class WalletsRepository {
     } on RpcDispatchRejected {
       // Not a failed export: the authorization ended before anything was
       // read, and the caller ends the attempt quietly.
+      rethrow;
+    } on WalletOperationDenied {
+      // Nor these: a lock or switch ended it, often while the file was being
+      // protected, and nothing was written.
+      rethrow;
+    } on WalletAccessException {
       rethrow;
     } catch (e) {
       throw Exception('Failed to download encrypted wallet: $e');

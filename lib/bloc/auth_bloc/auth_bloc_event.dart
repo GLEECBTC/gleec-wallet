@@ -138,11 +138,15 @@ class AuthWalletDownloadRequested extends AuthBlocEvent {
     required this.expectedWalletId,
     this.ensureAuthorized,
     this.selectDestination,
+    this.onFinished,
   });
   final String password;
   final WalletId expectedWalletId;
   final void Function()? ensureAuthorized;
   final GuardedDestinationSelector? selectDestination;
+
+  /// Called once the request ends, however it ends.
+  final void Function()? onFinished;
 }
 
 /// Dispatched to restore authentication state after the SDK has been

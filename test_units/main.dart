@@ -201,6 +201,11 @@ import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
 import 'tests/dex/history_list_test.dart' as history_list_test;
 import 'tests/encryption/encrypt_data_tests.dart';
+import 'tests/wallet_file/wallet_file_codec_test.dart';
+import 'tests/wallet_file/wallet_file_format_test.dart';
+import 'tests/wallet_file/wallet_file_vectors_test.dart';
+import 'views/wallets_manager/widgets/wallet_import_by_file_test.dart'
+    as wallet_import_by_file_test;
 import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
     as fiat_checkout_url_allowlist_test;
 import 'tests/formatter/compare_dex_to_cex_tests.dart';
@@ -745,6 +750,9 @@ void main() {
 
   group('Crypto:', () {
     testEncryptDataTool();
+    testWalletFileFormat();
+    testWalletFileCodec();
+    testWalletFileVectors();
   });
 
   group('MyRecentSwaps:', () {
@@ -801,6 +809,7 @@ void main() {
   legal_refresh_test.main();
   legal_hosting_test.main();
   legal_document_gate_test.main();
+  wallet_import_by_file_test.main();
   trading_status_service_test.main();
   trading_status_disabled_policy_test.main();
   wallet_deleting_test.main();

@@ -115,6 +115,10 @@ dependencies:
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   encrypt: 5.0.3
 
+  # Needs secure code review. Argon2id for encrypted wallet files only:
+  # pointycastle's web Argon2 needs ~800 MB for the 64 MiB KDF parameters.
+  cryptography: 2.9.0 # dint.dev
+
   flutter_svg: 2.0.17
 
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
