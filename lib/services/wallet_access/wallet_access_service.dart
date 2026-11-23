@@ -24,6 +24,7 @@ export 'wallet_access_types.dart';
 part 'wallet_access_deletion.dart';
 part 'wallet_access_import.dart';
 part 'wallet_access_records.dart';
+part 'wallet_access_sign_in_status.dart';
 part 'wallet_engine_session.dart';
 part 'wallet_password_recovery.dart';
 part 'wallet_password_rotation.dart';
@@ -199,8 +200,10 @@ class WalletAccessService {
     throw const WalletAccessException(WalletAccessFailure.walletUnavailable);
   }
 
+  /// Unlike [status], reports a missing or unusable stored unlock in
+  /// [WalletAccessStatus.lostProtection] instead of throwing.
   Future<WalletAccessStatus> statusForWallet(Wallet wallet) async =>
-      _status(await _resolveWallet(wallet));
+      _signInStatus(await _resolveWallet(wallet));
   Future<WalletAccessStatus> status({WalletId? walletId}) async {
     final user = walletId == null
         ? await _sdk.auth.currentUser
@@ -272,7 +275,7 @@ class WalletAccessService {
       hasManagedCredential: record.managed,
       requiresAuthentication:
           record.requiresAuthentication || (actual?.enrolled ?? false),
-      generatedPassword: record.generated,
+      generatedPassword: record.passwordUnseen,
       passwordManager: record.manager,
     );
   }

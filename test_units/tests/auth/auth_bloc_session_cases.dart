@@ -192,6 +192,7 @@ class _Vault extends CredentialBackend {
 
   /// Reads end as a browser does when no unlock prompt could be completed.
   bool cancelReads = false;
+  WalletAccessFailure? readFailure;
   @override
   Future<CredentialCapabilities> capabilities() async =>
       const CredentialCapabilities(
@@ -224,6 +225,7 @@ class _Vault extends CredentialBackend {
     if (cancelReads) {
       throw const WalletAccessException(WalletAccessFailure.canceled);
     }
+    if (readFailure != null) throw WalletAccessException(readFailure!);
     return values[key];
   }
 
@@ -514,7 +516,7 @@ void _engineSessionCases() {
       final state = await s.outcomeOf(
         AuthManagedSignInRequested(wallet: user.wallet),
       );
-      expect(state.authError?.message, 'authManagedUnlockFailed');
+      expect(state.authError?.message, 'authManagedUnlockGone');
       expect(s.engine.active, isNull);
     });
 
@@ -529,10 +531,10 @@ void _engineSessionCases() {
       await s.outcomeOf(AuthManagedSignInRequested(wallet: user.wallet));
       final record = await logged.timeout(const Duration(seconds: 2));
       expect(record.level, Level.SHOUT);
-      expect(record.error, isA<WalletAccessException>());
+      expect(record.error, isNull);
       expect(
         record.message,
-        contains((record.error! as WalletAccessException).failure.name),
+        contains(WalletAccessFailure.missingCredential.name),
       );
       expect(record.stackTrace, isNotNull);
     });
@@ -551,7 +553,7 @@ void _engineSessionCases() {
       expect(state.authError?.message, 'authManagedUnlockFailed');
       final record = await logged.timeout(const Duration(seconds: 2));
       expect(record.message, contains('incorrectPassword'));
-      expect(record.error, isA<AuthException>());
+      expect(record.error, isNull);
       expect(record.stackTrace, isNotNull);
     });
   });

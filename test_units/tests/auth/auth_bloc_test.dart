@@ -530,6 +530,57 @@ void testAuthBloc() {
       );
     }
 
+    // The settings plate shows progress until this fires, whatever happens.
+    for (final outcome in [
+      'saved',
+      'cancelled',
+      'failed',
+      'revoked',
+      'stale',
+    ]) {
+      test('a $outcome export request reports that it finished', () async {
+        final original = _user();
+        final auth = _FakeAuth()
+          ..userToReturn = outcome == 'stale' ? _user(name: 'Other') : original;
+        final repository = _FakeWalletsRepository()
+          ..onDownload = (_, __) async {
+            if (outcome == 'cancelled') {
+              throw const FileSaveCancelledException();
+            }
+            if (outcome == 'failed') throw StateError('synthetic failure');
+          };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          repository,
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        final gate = WalletOperationGate()
+          ..attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        if (outcome == 'revoked') gate.block();
+        final finished = Completer<void>();
+        bloc.add(
+          AuthWalletDownloadRequested(
+            password: 'pw',
+            expectedWalletId: original.walletId,
+            ensureAuthorized: permit.ensureCurrent,
+            onFinished: finished.complete,
+          ),
+        );
+        await finished.future.timeout(const Duration(seconds: 2));
+        expect(
+          repository.downloadWalletIds,
+          ['saved', 'cancelled', 'failed'].contains(outcome)
+              ? [original.walletId]
+              : isEmpty,
+        );
+        // A lock or switch is the user's doing, not a failed export.
+        expect(bloc.state.isError, outcome == 'failed');
+      });
+    }
+
     test(
       'a stale export request never downloads replacement wallet data',
       () async {
@@ -569,9 +620,7 @@ void testAuthBloc() {
 
     for (final switchWallet in [false, true]) {
       test(
-        switchWallet
-            ? 'export cannot confirm the replacement wallet backup'
-            : 'export records a file without claiming recovery phrase confirmation',
+        switchWallet ? 'export cannot confirm the replacement wallet backup' : 'export records a file without claiming recovery phrase confirmation',
         () async {
           final original = _user();
           final replacement = _user(name: 'Wallet 2');
@@ -697,47 +746,44 @@ void testAuthBloc() {
       expect(bloc.state.currentUser!.wallet.config.hasRecoveryPhrase, isTrue);
     });
 
-    test(
-      'reauthentication while exporting cannot record evidence for the new session',
-      () async {
-        final original = _user();
-        final auth = _FakeAuth()..userToReturn = original;
-        final started = Completer<void>();
-        final finish = Completer<void>();
-        final repository = _FakeWalletsRepository()
-          ..onDownload = (_, _) async {
-            started.complete();
-            await finish.future;
-          };
-        final bloc = AuthBloc(
-          _FakeSdk(auth),
-          repository,
-          _FakeSettingsRepository(),
-          _FakeTradingStatusService(),
-        );
-        addTearDown(bloc.close);
-        final selected = bloc.stream.firstWhere(
-          (state) => state.currentUser != null,
-        );
-        bloc.add(
-          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
-        );
-        await selected;
-        bloc.add(
-          AuthWalletDownloadRequested(
-            password: 'pw',
-            expectedWalletId: original.walletId,
-          ),
-        );
-        await started.future;
-        auth.sessions.invalidate();
-        auth.sessions.observe(original);
-        finish.complete();
-        await Future<void>.delayed(Duration.zero);
-        expect(auth.metadataWriteWalletIds, isEmpty);
-        expect(auth.userToReturn!.metadata['encrypted_file_exported'], isNull);
-      },
-    );
+    test('reauthentication while exporting cannot record evidence for the new session', () async {
+      final original = _user();
+      final auth = _FakeAuth()..userToReturn = original;
+      final started = Completer<void>();
+      final finish = Completer<void>();
+      final repository = _FakeWalletsRepository()
+        ..onDownload = (_, _) async {
+          started.complete();
+          await finish.future;
+        };
+      final bloc = AuthBloc(
+        _FakeSdk(auth),
+        repository,
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+      final selected = bloc.stream.firstWhere(
+        (state) => state.currentUser != null,
+      );
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+      );
+      await selected;
+      bloc.add(
+        AuthWalletDownloadRequested(
+          password: 'pw',
+          expectedWalletId: original.walletId,
+        ),
+      );
+      await started.future;
+      auth.sessions.invalidate();
+      auth.sessions.observe(original);
+      finish.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(auth.metadataWriteWalletIds, isEmpty);
+      expect(auth.userToReturn!.metadata['encrypted_file_exported'], isNull);
+    });
   });
 
   group('AuthBloc wallet creation', () {
@@ -755,59 +801,56 @@ void testAuthBloc() {
           seed: 'a b c',
         ),
       };
-      test(
-        '$flow waits for initial metadata persistence before login',
-        () async {
-          final auth = _FakeAuth();
-          final started = Completer<void>();
-          final saved = Completer<void>();
-          auth.onRegister = () async {
-            started.complete();
-            await saved.future;
-          };
-          final bloc = AuthBloc(
-            _FakeSdk(auth),
-            _FakeWalletsRepository(),
-            _FakeSettingsRepository(),
-            _FakeTradingStatusService(),
-          );
-          addTearDown(bloc.close);
-          bloc.add(event());
-          await started.future;
-          expect(bloc.state.isLoading, isTrue);
-          expect(bloc.state.currentUser, isNull);
-          // An app resume while creation is saving cannot publish partial state.
-          bloc.add(AuthStateRestoreRequested());
-          await Future<void>.delayed(Duration.zero);
-          expect(bloc.state.currentUser, isNull);
-          final loggedIn = bloc.stream.firstWhere(
-            (state) => state.currentUser != null,
-          );
-          saved.complete();
-          final state = await loggedIn.timeout(const Duration(seconds: 2));
-          expect(state.currentUser!.metadata, containsPair('type', 'hdwallet'));
-          expect(
-            state.currentUser!.metadata,
-            containsPair(
-              'wallet_provenance',
-              flow == 'register' ? 'generated' : 'imported',
-            ),
-          );
-          expect(
-            state.currentUser!.metadata,
-            containsPair('has_backup', flow != 'register'),
-          );
-          expect(
-            state.currentUser!.metadata['recovery_evidence'],
-            flow == 'register' ? 'none' : 'phraseSupplied',
-          );
-          expect(
-            state.currentUser!.metadata['activated_coins'],
-            isA<List<String>>(),
-          );
-          expect(auth.metadataWriteWalletIds, isEmpty);
-        },
-      );
+      test('$flow waits for initial metadata persistence before login', () async {
+        final auth = _FakeAuth();
+        final started = Completer<void>();
+        final saved = Completer<void>();
+        auth.onRegister = () async {
+          started.complete();
+          await saved.future;
+        };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          _FakeWalletsRepository(),
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        bloc.add(event());
+        await started.future;
+        expect(bloc.state.isLoading, isTrue);
+        expect(bloc.state.currentUser, isNull);
+        // An app resume while creation is saving cannot publish partial state.
+        bloc.add(AuthStateRestoreRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.currentUser, isNull);
+        final loggedIn = bloc.stream.firstWhere(
+          (state) => state.currentUser != null,
+        );
+        saved.complete();
+        final state = await loggedIn.timeout(const Duration(seconds: 2));
+        expect(state.currentUser!.metadata, containsPair('type', 'hdwallet'));
+        expect(
+          state.currentUser!.metadata,
+          containsPair(
+            'wallet_provenance',
+            flow == 'register' ? 'generated' : 'imported',
+          ),
+        );
+        expect(
+          state.currentUser!.metadata,
+          containsPair('has_backup', flow != 'register'),
+        );
+        expect(
+          state.currentUser!.metadata['recovery_evidence'],
+          flow == 'register' ? 'none' : 'phraseSupplied',
+        );
+        expect(
+          state.currentUser!.metadata['activated_coins'],
+          isA<List<String>>(),
+        );
+        expect(auth.metadataWriteWalletIds, isEmpty);
+      });
       test(
         '$flow preserves the SDK collision error without signing in',
         () async {

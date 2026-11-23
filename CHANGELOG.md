@@ -1,5 +1,15 @@
 # Unreleased
 
+## 🔒 Security
+
+- **Wallet Secrets Stay Out of iOS Backups** ([@CharlVS], [SDK#456](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/456)) — iCloud and computer backups of an iPhone no longer include the wallet's encrypted recovery phrase, as on Android. A new or restored iPhone starts without the wallet; restore it with the recovery phrase.
+  - Copies that earlier exports left inside the app are removed at start-up: "Download all keys" files from 0.9.5 and 0.9.6, which held the keys unencrypted, and "Download as file" wallet files. The copy you shared or saved at the time is not affected.
+  - macOS is unchanged: Time Machine backups stay on disks you hold.
+- **Desktop Wallet Data Leaves Documents** ([@CharlVS], [SDK#458](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/458)) — On Windows and Linux the wallet's encrypted recovery phrase and swap data moved from `Documents\.kdf` to `%LOCALAPPDATA%\Gleec\kdf` on Windows and `~/.local/share/com.gleec.GleecDEX/kdf` on Linux. Windows often backs Documents up to OneDrive, which copied that data to the cloud and synced its databases while they were being written.
+  - The first start after the update puts the old folder aside as `.kdf.moved`, copies the data, checks every file, and leaves a `README.txt` in `Documents\.kdf` saying where it went. If the copy can't finish, for example because OneDrive is offline, the old folder goes back, the wallet keeps working from Documents, and the next start tries again.
+  - After a successful wallet open from the new folder and a seven-day grace period, cleanup removes unchanged files from `.kdf.moved`. A running wallet engine defers cleanup.
+  - If you back up `Documents\.kdf` yourself, back up the new folder or your recovery phrase instead. To use one wallet on several computers that share OneDrive, update each of them within that week.
+
 ## 🐛 Bug Fixes
 
 - **Price History Retries** ([@CharlVS], [SDK#443](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/443)) — Coins priced only by CoinPaprika, such as BTCZ, LCC and DINGO, no longer request a year of price history again every minute.
@@ -9,6 +19,10 @@
   - Profit/loss stays unavailable when acquisition or sale prices are missing, instead of inventing a historical cost basis.
   - A coin whose profit/loss still fails is retried after 1, 1, 2, 2, 4… minutes, up to hourly, instead of every minute.
   - The wallet overview no longer starts a refresh while the previous one is still running.
+- **Restored Wallets at Sign-in** ([@CharlVS]) — A wallet whose files came back from a backup or a move to a new device, without this device's unlock, now says so instead of showing a bare password field.
+  - A wallet whose password was created for it leads with its recovery phrase, and offers the password when a password manager may have saved it.
+  - A password you chose is still asked for.
+  - A failed unlock no longer suggests a password the owner never saw.
 
 # Gleec Wallet v0.10.0 Release Notes
 

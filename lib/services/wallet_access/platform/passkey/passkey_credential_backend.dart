@@ -282,14 +282,16 @@ class PasskeyCredentialBackend extends CredentialBackend {
     await _base.cancel();
   }
 
-  Future<void> dispose() => _lockSubscription.cancel();
+  Future<void> dispose() {
+    _revoke();
+    return _lockSubscription.cancel();
+  }
 
   void _revoke() {
     _generation++;
     _readPermit = null;
     _permits.clear();
-    _readback?.wipe();
-    _readback = null;
+    _clearReadback();
   }
 
   /// Whether the device vault's record governs [key]. One it cannot describe
@@ -336,8 +338,7 @@ class PasskeyCredentialBackend extends CredentialBackend {
     if (_busy) throw const WalletAccessException(WalletAccessFailure.busy);
     final grant = _readback;
     if (grant != null && _now() >= grant.permit.expires) {
-      grant.wipe();
-      _readback = null;
+      _clearReadback();
     }
     _busy = true;
     try {
@@ -456,7 +457,13 @@ class PasskeyCredentialBackend extends CredentialBackend {
     _readback = _Readback(
       _Permit(key, stored.fingerprint, token, _now() + _readbackLifetime),
       Uint8List.fromList(aesKey),
+      onExpiry: _clearReadback,
     );
+  }
+
+  void _clearReadback() {
+    _readback?.wipe();
+    _readback = null;
   }
 
   _Permit _permit(String key, _Slot slot, int token) =>

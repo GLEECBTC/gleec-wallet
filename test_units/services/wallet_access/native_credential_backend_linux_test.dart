@@ -129,24 +129,18 @@ void main() {
       });
       tearDown(() async => root.delete(recursive: true));
 
-      test(
-        'available Secret Service reports OS-account storage without biometrics',
-        () async {
-          final capability = await backend.capabilities();
-          expect(
-            capability.protection,
-            CredentialProtection.osAccountProtected,
-          );
-          expect(capability.available, isTrue);
-          expect(capability.deviceAuthentication, isFalse);
-          await backend.write(_key, _canary, requireAuthentication: false);
-          final info = (await backend.metadata(_key))!;
-          expect(info.protection, CredentialProtection.osAccountProtected);
-          expect(info.enrolled, isFalse);
-          expect(await local().exists(), isFalse);
-          expect(await marker().readAsString(), '1');
-        },
-      );
+      test('available Secret Service reports OS-account storage without biometrics', () async {
+        final capability = await backend.capabilities();
+        expect(capability.protection, CredentialProtection.osAccountProtected);
+        expect(capability.available, isTrue);
+        expect(capability.deviceAuthentication, isFalse);
+        await backend.write(_key, _canary, requireAuthentication: false);
+        final info = (await backend.metadata(_key))!;
+        expect(info.protection, CredentialProtection.osAccountProtected);
+        expect(info.enrolled, isFalse);
+        expect(await local().exists(), isFalse);
+        expect(await marker().readAsString(), '1');
+      });
 
       test(
         'missing provider stores app-local with real 0700/0600 permissions',
@@ -390,17 +384,14 @@ void main() {
         },
       );
 
-      test(
-        'fresh backend can delete app-local and pending files without a provider',
-        () async {
-          provider.unavailable = true;
-          await backend.write(_key, _canary, requireAuthentication: false);
-          await pending().writeAsString(_canary);
-          await fresh().delete(_key);
-          expect(await local().exists(), isFalse);
-          expect(await pending().exists(), isFalse);
-        },
-      );
+      test('fresh backend can delete app-local and pending files without a provider', () async {
+        provider.unavailable = true;
+        await backend.write(_key, _canary, requireAuthentication: false);
+        await pending().writeAsString(_canary);
+        await fresh().delete(_key);
+        expect(await local().exists(), isFalse);
+        expect(await pending().exists(), isFalse);
+      });
 
       test(
         'real Linux deletion failure is typed and preserves the credential',

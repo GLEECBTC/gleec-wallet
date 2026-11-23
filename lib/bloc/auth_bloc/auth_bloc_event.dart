@@ -86,9 +86,14 @@ class AuthManagedSignInRequested extends AuthBlocEvent {
   const AuthManagedSignInRequested({
     required this.wallet,
     this.automatic = false,
+    this.generatedPassword = false,
   });
   final Wallet wallet;
   final bool automatic;
+
+  /// The wallet's password was created for it and never shown, so a failure
+  /// must not advise typing it.
+  final bool generatedPassword;
 }
 
 class AuthRestoreRequested extends AuthBlocEvent {
@@ -157,11 +162,15 @@ class AuthWalletDownloadRequested extends AuthBlocEvent {
     required this.expectedWalletId,
     this.ensureAuthorized,
     this.selectDestination,
+    this.onFinished,
   });
   final String password;
   final WalletId expectedWalletId;
   final void Function()? ensureAuthorized;
   final GuardedDestinationSelector? selectDestination;
+
+  /// Called once the request ends, however it ends.
+  final void Function()? onFinished;
 }
 
 /// Dispatched to restore authentication state after the SDK has been

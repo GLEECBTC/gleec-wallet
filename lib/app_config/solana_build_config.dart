@@ -34,11 +34,12 @@ class SolanaBuildConfig {
   static const catalogAsset =
       'packages/komodo_defi_framework/assets/config/coins_config.json';
 
-  /// KDF PR #35's head, and the local build that merges it with KDF dev and
-  /// main. Both carry the same SPL Max and Token-2022 withdrawal defects.
+  /// These revisions share the withdrawal code with unresolved SPL Max
+  /// and Token-2022 defects.
   static const enginesWithOpenWithdrawalDefects = {
     'b1ff8f05c880d6f118124cac9ef615aa9d91bb39',
     '46769c4df3b043669eee59508bf1af017157dcdd',
+    'fd8249c904ae1c75d66fce1c1e361686f13d723c',
   };
 
   final bool enabled;

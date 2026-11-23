@@ -163,21 +163,17 @@ void main() {
           SwapFundsMovement.none,
           SwapFundsMovement.feesOnly,
         ]) {
-          expect(
-            failedWith(reason, movement: movement),
-            [SwapOutcomeAction.tryAgain],
-            reason: '${reason.name} ${movement.name}',
-          );
+          expect(failedWith(reason, movement: movement), [
+            SwapOutcomeAction.tryAgain,
+          ], reason: '${reason.name} ${movement.name}');
         }
         for (final movement in [
           SwapFundsMovement.uncertain,
           SwapFundsMovement.sent,
         ]) {
-          expect(
-            failedWith(reason, movement: movement),
-            [SwapOutcomeAction.contactSupport],
-            reason: '${reason.name} ${movement.name}',
-          );
+          expect(failedWith(reason, movement: movement), [
+            SwapOutcomeAction.contactSupport,
+          ], reason: '${reason.name} ${movement.name}');
         }
       }
     });
@@ -234,9 +230,8 @@ void main() {
     });
 
     test('times are written in UTC', () {
-      final payload = copyOf(
-        snap(createdAt: DateTime(2026, 9, 25, 12)),
-      ).supportPayload();
+      final payload = copyOf(snap(createdAt: DateTime(2026, 9, 25, 12)))
+          .supportPayload();
       final started = DateTime(2026, 9, 25, 12).toUtc().toIso8601String();
       expect(payload, contains('Started: $started'));
       expect(started, endsWith('Z'));

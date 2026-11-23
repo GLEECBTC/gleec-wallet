@@ -34,10 +34,16 @@ final class _Permit {
 }
 
 final class _Readback {
-  _Readback(this.permit, this.aesKey);
+  _Readback(this.permit, this.aesKey, {required void Function() onExpiry}) {
+    _expiry = Timer(PasskeyCredentialBackend._readbackLifetime, onExpiry);
+  }
 
   final _Permit permit;
   final Uint8List aesKey;
+  late final Timer _expiry;
 
-  void wipe() => aesKey.fillRange(0, aesKey.length, 0);
+  void wipe() {
+    _expiry.cancel();
+    aesKey.fillRange(0, aesKey.length, 0);
+  }
 }

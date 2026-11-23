@@ -1,6 +1,6 @@
 # Swap experience delivery
 
-This is the original delivery record. The [combined integration record](UPCOMING_INTEGRATION_PREVIEW.md)
+This is the original delivery record. The [combined integration record](https://github.com/GLEECBTC/gleec-wallet/pull/3617)
 documents which older submission/session paths were superseded by newer auth
 contracts and carries the current testing/release boundaries. Historical counts
 and engine-pin observations below are not final integration results.

@@ -156,6 +156,7 @@ abstract class LocaleKeys {
   static const swapAllTime = 'swapAllTime';
   static const seed = 'seed';
   static const wallet = 'wallet';
+  static const logIn = 'logIn';
   static const logOut = 'logOut';
   static const logOutGo = 'logOutGo';
   static const delete = 'delete';
@@ -188,6 +189,7 @@ abstract class LocaleKeys {
   static const walletImportCreatePasswordTitle =
       'walletImportCreatePasswordTitle';
   static const walletImportByFileDescription = 'walletImportByFileDescription';
+  static const walletLogInTitle = 'walletLogInTitle';
   static const walletCreationNameHint = 'walletCreationNameHint';
   static const walletCreationPasswordHint = 'walletCreationPasswordHint';
   static const walletCreationConfirmPasswordHint =
@@ -246,6 +248,7 @@ abstract class LocaleKeys {
   static const seedPhraseShowingCopySeed = 'seedPhraseShowingCopySeed';
   static const seedPhraseShowingSavedPhraseButton =
       'seedPhraseShowingSavedPhraseButton';
+  static const seedAccessSpan1 = 'seedAccessSpan1';
   static const backupSeedNotificationTitle = 'backupSeedNotificationTitle';
   static const backupSeedNotificationDescription =
       'backupSeedNotificationDescription';
@@ -472,6 +475,8 @@ abstract class LocaleKeys {
   static const fiatExchange = 'fiatExchange';
   static const bridgeExchange = 'bridgeExchange';
   static const noTxSupportHidden = 'noTxSupportHidden';
+  static const deleteWalletTitle = 'deleteWalletTitle';
+  static const deleteWalletInfo = 'deleteWalletInfo';
   static const trezorEnterPinTitle = 'trezorEnterPinTitle';
   static const trezorEnterPinHint = 'trezorEnterPinHint';
   static const trezorInProgressTitle = 'trezorInProgressTitle';
@@ -1331,6 +1336,8 @@ abstract class LocaleKeys {
       'privateKeyExportCoverageNotice';
   static const privateKeyExportLegacyCoverage =
       'privateKeyExportLegacyCoverage';
+  static const privateKeyExportActiveWalletCoverage =
+      'privateKeyExportActiveWalletCoverage';
   static const privateKeyExportAccountCoverage =
       'privateKeyExportAccountCoverage';
   static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
@@ -1393,6 +1400,8 @@ abstract class LocaleKeys {
   static const swapYouPay = 'swapYouPay';
   static const swapYouReceive = 'swapYouReceive';
   static const swapBalanceValue = 'swapBalanceValue';
+  static const swapFromAddress = 'swapFromAddress';
+  static const swapToAddress = 'swapToAddress';
   static const swapYourAddress = 'swapYourAddress';
   static const swapSelectAsset = 'swapSelectAsset';
   static const swapNetworkSegwit = 'swapNetworkSegwit';
@@ -1403,6 +1412,8 @@ abstract class LocaleKeys {
   static const swapEnterInUsd = 'swapEnterInUsd';
   static const swapEnterInToken = 'swapEnterInToken';
   static const swapApproxToken = 'swapApproxToken';
+  static const swapCopyAddress = 'swapCopyAddress';
+  static const swapAddressCopied = 'swapAddressCopied';
   static const swapCtaEnterAmount = 'swapCtaEnterAmount';
   static const swapCtaSelectAsset = 'swapCtaSelectAsset';
   static const swapCtaChecking = 'swapCtaChecking';
@@ -1410,6 +1421,7 @@ abstract class LocaleKeys {
   static const swapCtaReview = 'swapCtaReview';
   static const swapCtaRefresh = 'swapCtaRefresh';
   static const swapCtaChooseAnother = 'swapCtaChooseAnother';
+  static const swapCtaActivateAsset = 'swapCtaActivateAsset';
   static const swapCtaConnectWallet = 'swapCtaConnectWallet';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
   static const swapCtaBackToSwap = 'swapCtaBackToSwap';
@@ -1447,6 +1459,7 @@ abstract class LocaleKeys {
   static const swapErrorNoOrderBookFit = 'swapErrorNoOrderBookFit';
   static const swapErrorNoRouteSignedOut = 'swapErrorNoRouteSignedOut';
   static const swapErrorSignedOutRoutes = 'swapErrorSignedOutRoutes';
+  static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
   static const swapErrorRateLimited = 'swapErrorRateLimited';
   static const swapErrorRateLimitedBookUnchecked =
@@ -1468,6 +1481,7 @@ abstract class LocaleKeys {
   static const swapHelperSignedOutPriced = 'swapHelperSignedOutPriced';
   static const swapHelperBalance = 'swapHelperBalance';
   static const swapHelperHeldElsewhere = 'swapHelperHeldElsewhere';
+  static const swapHelperFeeHeld = 'swapHelperFeeHeld';
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxNetworkAndProviderFees =
       'swapHelperMaxNetworkAndProviderFees';
@@ -1563,7 +1577,9 @@ abstract class LocaleKeys {
   static const swapReviewTitle = 'swapReviewTitle';
   static const swapReviewReady = 'swapReviewReady';
   static const swapReviewChecking = 'swapReviewChecking';
+  static const swapReviewCouldNotRefresh = 'swapReviewCouldNotRefresh';
   static const swapReviewExpiredBadge = 'swapReviewExpiredBadge';
+  static const swapReviewUpdatedBadge = 'swapReviewUpdatedBadge';
   static const swapReviewStartingBadge = 'swapReviewStartingBadge';
   static const swapReviewAtLeast = 'swapReviewAtLeast';
   static const swapReviewEstimatedCompletion = 'swapReviewEstimatedCompletion';
@@ -1596,6 +1612,8 @@ abstract class LocaleKeys {
   static const swapMultiStepTitle = 'swapMultiStepTitle';
   static const swapMultiStepBody = 'swapMultiStepBody';
   static const swapReviewUpdatedTitle = 'swapReviewUpdatedTitle';
+  static const swapReviewUpdatedMinimum = 'swapReviewUpdatedMinimum';
+  static const swapReviewUpdatedCost = 'swapReviewUpdatedCost';
   static const swapReviewUpdatedCostKnown = 'swapReviewUpdatedCostKnown';
   static const swapReviewExpiredTitle = 'swapReviewExpiredTitle';
   static const swapReviewExpiredBody = 'swapReviewExpiredBody';
@@ -1621,6 +1639,7 @@ abstract class LocaleKeys {
   static const swapReviewPriceUnavailableBody =
       'swapReviewPriceUnavailableBody';
   static const swapReviewPanelNote = 'swapReviewPanelNote';
+  static const swapStartSwap = 'swapStartSwap';
   static const swapStartApprove = 'swapStartApprove';
   static const swapStartReset = 'swapStartReset';
   static const swapAcceptUpdated = 'swapAcceptUpdated';
@@ -1840,6 +1859,9 @@ abstract class LocaleKeys {
   static const swapPickerTabAll = 'swapPickerTabAll';
   static const swapPickerSameTicker = 'swapPickerSameTicker';
   static const swapPickerSelected = 'swapPickerSelected';
+  static const swapPickerInactive = 'swapPickerInactive';
+  static const swapPickerActivate = 'swapPickerActivate';
+  static const swapPickerActivating = 'swapPickerActivating';
   static const swapPickerUnavailable = 'swapPickerUnavailable';
   static const swapPickerNoResultsTitle = 'swapPickerNoResultsTitle';
   static const swapPickerNoAssetsTitle = 'swapPickerNoAssetsTitle';
@@ -1848,6 +1870,7 @@ abstract class LocaleKeys {
   static const swapPickerLoading = 'swapPickerLoading';
   static const swapPickerErrorTitle = 'swapPickerErrorTitle';
   static const swapPickerErrorBody = 'swapPickerErrorBody';
+  static const swapPickerActivationFailed = 'swapPickerActivationFailed';
   static const swapPickerIdentity = 'swapPickerIdentity';
   static const swapA11yQuoteSummary = 'swapA11yQuoteSummary';
   static const swapAnnounceChecking = 'swapAnnounceChecking';
@@ -1931,8 +1954,6 @@ abstract class LocaleKeys {
   static const withdrawSolanaAccountDeposit = 'withdrawSolanaAccountDeposit';
   static const withdrawSolanaAccountDepositDescription =
       'withdrawSolanaAccountDepositDescription';
-  static const privateKeyExportActiveWalletCoverage =
-      'privateKeyExportActiveWalletCoverage';
   static const swapReviewRequiredFunding = 'swapReviewRequiredFunding';
   static const swapReviewRequiredFundingExplanation =
       'swapReviewRequiredFundingExplanation';
@@ -1963,15 +1984,18 @@ abstract class LocaleKeys {
   static const authSwitchWallet = 'authSwitchWallet';
   static const authRecoverWallet = 'authRecoverWallet';
   static const authWalletSetupTitle = 'authWalletSetupTitle';
+  static const authRecoveryReminder = 'authRecoveryReminder';
   static const authDeviceProtectionReminder = 'authDeviceProtectionReminder';
   static const authBackUpRecoveryPhrase = 'authBackUpRecoveryPhrase';
   static const authProtectDevice = 'authProtectDevice';
   static const authDeviceProtectionTitle = 'authDeviceProtectionTitle';
   static const authEnableDeviceUnlock = 'authEnableDeviceUnlock';
+  static const authEnablePasskeyUnlock = 'authEnablePasskeyUnlock';
   static const authLockAfterTitle = 'authLockAfterTitle';
   static const authLockImmediately = 'authLockImmediately';
   static const authLockThirtySeconds = 'authLockThirtySeconds';
   static const authLockGraceDescription = 'authLockGraceDescription';
+  static const authPasswordManagerNotBackup = 'authPasswordManagerNotBackup';
   static const authBrowserUnprotected = 'authBrowserUnprotected';
   static const authDeviceUnprotected = 'authDeviceUnprotected';
   static const authPasskeyProtected = 'authPasskeyProtected';
@@ -1987,13 +2011,30 @@ abstract class LocaleKeys {
   static const authPasswordManagerUnknown = 'authPasswordManagerUnknown';
   static const authProtectionFailed = 'authProtectionFailed';
   static const authPersonalPasswordOptional = 'authPersonalPasswordOptional';
+  static const authDeletionAuthorization = 'authDeletionAuthorization';
   static const authShowPassword = 'authShowPassword';
   static const authHidePassword = 'authHidePassword';
   static const authWalletName = 'authWalletName';
+  static const authPassword = 'authPassword';
   static const authPrivacyCover = 'authPrivacyCover';
   static const authAuthorizationTitle = 'authAuthorizationTitle';
   static const authPasswordChangeDisclosure = 'authPasswordChangeDisclosure';
   static const authCreationProtectionNotice = 'authCreationProtectionNotice';
+  static const authManagedUnlockCanceled = 'authManagedUnlockCanceled';
+  static const authManagedUnlockFailed = 'authManagedUnlockFailed';
+  static const authManagedUnlockFailedGenerated =
+      'authManagedUnlockFailedGenerated';
+  static const authManagedUnlockCanceledGenerated =
+      'authManagedUnlockCanceledGenerated';
+  static const authManagedUnlockGone = 'authManagedUnlockGone';
+  static const authManagedUnlockGoneGenerated =
+      'authManagedUnlockGoneGenerated';
+  static const authDeviceUnlockLost = 'authDeviceUnlockLost';
+  static const authBrowserUnlockLost = 'authBrowserUnlockLost';
+  static const authUnlockLostGeneratedHint = 'authUnlockLostGeneratedHint';
+  static const authUnlockLostPasswordHint = 'authUnlockLostPasswordHint';
+  static const authUseRecoveryPhrase = 'authUseRecoveryPhrase';
+  static const authUseSavedPassword = 'authUseSavedPassword';
   static const authSignOutFailed = 'authSignOutFailed';
   static const authCredentialCleanupPending = 'authCredentialCleanupPending';
   static const authRetryCredentialCleanup = 'authRetryCredentialCleanup';
@@ -2029,6 +2070,7 @@ abstract class LocaleKeys {
   static const authPasswordReadyTitle = 'authPasswordReadyTitle';
   static const authUnprotectedTitle = 'authUnprotectedTitle';
   static const authDeviceSetupTitle = 'authDeviceSetupTitle';
+  static const authDeviceSetupDescription = 'authDeviceSetupDescription';
   static const authProtectionCanceled = 'authProtectionCanceled';
   static const authPasskeyUnsupported = 'authPasskeyUnsupported';
   static const authProtectionChecking = 'authProtectionChecking';
@@ -2037,14 +2079,20 @@ abstract class LocaleKeys {
   static const authLockPreferenceSaved = 'authLockPreferenceSaved';
   static const authRecoveryReady = 'authRecoveryReady';
   static const authRecoveryNotReady = 'authRecoveryNotReady';
+  static const authRecoveryIndependent = 'authRecoveryIndependent';
+  static const authReviewProtection = 'authReviewProtection';
   static const authImportDerivationHint = 'authImportDerivationHint';
   static const authImportPasswordPurpose = 'authImportPasswordPurpose';
   static const authShowRecoveryPhrase = 'authShowRecoveryPhrase';
   static const authHideRecoveryPhrase = 'authHideRecoveryPhrase';
   static const authPasskeySetupConfirmations = 'authPasskeySetupConfirmations';
+  static const authPasskeySetupCompactDescription =
+      'authPasskeySetupCompactDescription';
   static const authPasskeyLocalScopeCompact = 'authPasskeyLocalScopeCompact';
   static const authPasskeySetupPending = 'authPasskeySetupPending';
   static const authProtectionPending = 'authProtectionPending';
+  static const authPasskeyReadyCompactDescription =
+      'authPasskeyReadyCompactDescription';
   static const authRecoveryPhraseTitle = 'authRecoveryPhraseTitle';
   static const authRecoveryPhraseDescription = 'authRecoveryPhraseDescription';
   static const authRecoveryImported = 'authRecoveryImported';
@@ -2054,59 +2102,16 @@ abstract class LocaleKeys {
   static const authPasswordManagerPending = 'authPasswordManagerPending';
   static const authProtectionBusy = 'authProtectionBusy';
   static const authProtectionStale = 'authProtectionStale';
-  static const swapAvailabilityChecking = 'swapAvailabilityChecking';
-  static const swapAvailabilityUnavailable = 'swapAvailabilityUnavailable';
-  static const swapPreparingAssets = 'swapPreparingAssets';
-  static const swapCheckingFunds = 'swapCheckingFunds';
-  static const swapQuoteSlow = 'swapQuoteSlow';
-  static const swapEstimateUpdating = 'swapEstimateUpdating';
-  static const swapEstimatePlaceholder = 'swapEstimatePlaceholder';
-  static const swapMoreQuotesChecking = 'swapMoreQuotesChecking';
-  static const swapNetworkFilter = 'swapNetworkFilter';
-  static const swapAllNetworks = 'swapAllNetworks';
-  static const swapReviewPeerToPeer = 'swapReviewPeerToPeer';
-  static const swapConfirmSwap = 'swapConfirmSwap';
-  static const swapAssetPreparationUnavailable =
-      'swapAssetPreparationUnavailable';
-  static const swapBackToWallet = 'swapBackToWallet';
-  static const swapViewAsset = 'swapViewAsset';
-  static const swapReceiptDetails = 'swapReceiptDetails';
-  static const swapProgressDetails = 'swapProgressDetails';
-  static const swapUpdatingBalance = 'swapUpdatingBalance';
-  static const swapCheckingTransferTitle = 'swapCheckingTransferTitle';
-  static const swapCheckingTransferBody = 'swapCheckingTransferBody';
-  static const swapBetterOptionAvailable = 'swapBetterOptionAvailable';
-  static const swapPreviousEstimate = 'swapPreviousEstimate';
-  static const authDeviceUnlockFailed = 'authDeviceUnlockFailed';
-  static const authDeviceUnlockLockedOut = 'authDeviceUnlockLockedOut';
-  static const authDeviceUnlockReset = 'authDeviceUnlockReset';
-  static const authConfirmationCanceled = 'authConfirmationCanceled';
-  static const authAccessCheckFailed = 'authAccessCheckFailed';
   static const portfolioStatUnavailable = 'portfolioStatUnavailable';
   static const portfolioProfitLossUnavailable =
       'portfolioProfitLossUnavailable';
   static const portfolioExcludesUnpricedAssets =
       'portfolioExcludesUnpricedAssets';
-  static const swapLegalConsentCompact = 'swapLegalConsentCompact';
-  static const swapReviewToWallet = 'swapReviewToWallet';
-  static const swapReviewSameWallet = 'swapReviewSameWallet';
-  static const swapReviewCostsUnknownNote = 'swapReviewCostsUnknownNote';
-  static const swapReviewUpdatedIntro = 'swapReviewUpdatedIntro';
-  static const swapReviewUpdatedFallback = 'swapReviewUpdatedFallback';
-  static const swapReviewUpdatedSpoken = 'swapReviewUpdatedSpoken';
-  static const swapProgressDeliveryDetail = 'swapProgressDeliveryDetail';
-  static const swapProgressFewMinutes = 'swapProgressFewMinutes';
-  static const swapProgressActionNoPageBody = 'swapProgressActionNoPageBody';
-  static const swapProgressEndedTitle = 'swapProgressEndedTitle';
-  static const swapProgressStillChecking = 'swapProgressStillChecking';
-  static const swapProgressLoading = 'swapProgressLoading';
-  static const swapProgressNotFoundTitle = 'swapProgressNotFoundTitle';
-  static const swapProgressNotFoundBody = 'swapProgressNotFoundBody';
-  static const swapOpenActivity = 'swapOpenActivity';
-  static const swapBackToActivity = 'swapBackToActivity';
-  static const swapBalanceUpdated = 'swapBalanceUpdated';
-  static const swapBalanceNotRefreshed = 'swapBalanceNotRefreshed';
-  static const swapActivityLoading = 'swapActivityLoading';
+  static const authDeviceUnlockFailed = 'authDeviceUnlockFailed';
+  static const authDeviceUnlockLockedOut = 'authDeviceUnlockLockedOut';
+  static const authDeviceUnlockReset = 'authDeviceUnlockReset';
+  static const authConfirmationCanceled = 'authConfirmationCanceled';
+  static const authAccessCheckFailed = 'authAccessCheckFailed';
   static const authUnlockWalletTitle = 'authUnlockWalletTitle';
   static const authOpenWalletTitle = 'authOpenWalletTitle';
   static const authUnlockWithDevice = 'authUnlockWithDevice';
@@ -2124,8 +2129,6 @@ abstract class LocaleKeys {
   static const authSignOutAndSwitch = 'authSignOutAndSwitch';
   static const authSignOutAndRecover = 'authSignOutAndRecover';
   static const authSigningOut = 'authSigningOut';
-  static const authManagedUnlockCanceled = 'authManagedUnlockCanceled';
-  static const authManagedUnlockFailed = 'authManagedUnlockFailed';
   static const authRemoveWalletDialogTitle = 'authRemoveWalletDialogTitle';
   static const authRemoveWalletDialogBody = 'authRemoveWalletDialogBody';
   static const authRemoveWalletNotBackedUp = 'authRemoveWalletNotBackedUp';
@@ -2152,17 +2155,15 @@ abstract class LocaleKeys {
       'authCredentialCleanupInProgress';
   static const authImportFailed = 'authImportFailed';
   static const authImportFileNotOpened = 'authImportFileNotOpened';
+  static const authImportFileOpening = 'authImportFileOpening';
+  static const authImportFileLegacyTypeHint = 'authImportFileLegacyTypeHint';
+  static const authImportFileLegacyNotice = 'authImportFileLegacyNotice';
+  static const authImportFileNewer = 'authImportFileNewer';
+  static const authImportFileDamaged = 'authImportFileDamaged';
+  static const authEncryptedWalletFilePreparing =
+      'authEncryptedWalletFilePreparing';
   static const authImportFileRejected = 'authImportFileRejected';
   static const authPasswordRequirementsHint = 'authPasswordRequirementsHint';
-  static const swapAmountToPayIn = 'swapAmountToPayIn';
-  static const swapAmountToPayInUsd = 'swapAmountToPayInUsd';
-  static const swapA11yNoEstimate = 'swapA11yNoEstimate';
-  static const swapA11yReceiveEstimate = 'swapA11yReceiveEstimate';
-  static const swapA11yReceiveEstimateUsd = 'swapA11yReceiveEstimateUsd';
-  static const swapWalletSwaps = 'swapWalletSwaps';
-  static const swapWalletSummaryInProgress = 'swapWalletSummaryInProgress';
-  static const swapWalletSummaryAttention = 'swapWalletSummaryAttention';
-  static const swapWalletSummaryReceived = 'swapWalletSummaryReceived';
   static const authRecoveryBackedUp = 'authRecoveryBackedUp';
   static const authRecoveryTaskReason = 'authRecoveryTaskReason';
   static const authPasskeyStepDescription = 'authPasskeyStepDescription';
@@ -2250,6 +2251,58 @@ abstract class LocaleKeys {
   static const authOpenWithoutPasskey = 'authOpenWithoutPasskey';
   static const authOpenWithoutPasskeyPending = 'authOpenWithoutPasskeyPending';
   static const authOpenedWithoutPasskey = 'authOpenedWithoutPasskey';
+  static const swapAssetPreparationUnavailable =
+      'swapAssetPreparationUnavailable';
+  static const swapAvailabilityChecking = 'swapAvailabilityChecking';
+  static const swapAvailabilityUnavailable = 'swapAvailabilityUnavailable';
+  static const swapPreparingAssets = 'swapPreparingAssets';
+  static const swapCheckingFunds = 'swapCheckingFunds';
+  static const swapQuoteSlow = 'swapQuoteSlow';
+  static const swapEstimateUpdating = 'swapEstimateUpdating';
+  static const swapEstimatePlaceholder = 'swapEstimatePlaceholder';
+  static const swapMoreQuotesChecking = 'swapMoreQuotesChecking';
+  static const swapNetworkFilter = 'swapNetworkFilter';
+  static const swapAllNetworks = 'swapAllNetworks';
+  static const swapReviewPeerToPeer = 'swapReviewPeerToPeer';
+  static const swapConfirmSwap = 'swapConfirmSwap';
+  static const swapBackToWallet = 'swapBackToWallet';
+  static const swapViewAsset = 'swapViewAsset';
+  static const swapReceiptDetails = 'swapReceiptDetails';
+  static const swapProgressDetails = 'swapProgressDetails';
+  static const swapUpdatingBalance = 'swapUpdatingBalance';
+  static const swapCheckingTransferTitle = 'swapCheckingTransferTitle';
+  static const swapCheckingTransferBody = 'swapCheckingTransferBody';
+  static const swapBetterOptionAvailable = 'swapBetterOptionAvailable';
+  static const swapPreviousEstimate = 'swapPreviousEstimate';
+  static const swapLegalConsentCompact = 'swapLegalConsentCompact';
+  static const swapReviewToWallet = 'swapReviewToWallet';
+  static const swapReviewSameWallet = 'swapReviewSameWallet';
+  static const swapReviewCostsUnknownNote = 'swapReviewCostsUnknownNote';
+  static const swapReviewUpdatedIntro = 'swapReviewUpdatedIntro';
+  static const swapReviewUpdatedFallback = 'swapReviewUpdatedFallback';
+  static const swapReviewUpdatedSpoken = 'swapReviewUpdatedSpoken';
+  static const swapProgressDeliveryDetail = 'swapProgressDeliveryDetail';
+  static const swapProgressFewMinutes = 'swapProgressFewMinutes';
+  static const swapProgressActionNoPageBody = 'swapProgressActionNoPageBody';
+  static const swapProgressEndedTitle = 'swapProgressEndedTitle';
+  static const swapProgressStillChecking = 'swapProgressStillChecking';
+  static const swapProgressLoading = 'swapProgressLoading';
+  static const swapProgressNotFoundTitle = 'swapProgressNotFoundTitle';
+  static const swapProgressNotFoundBody = 'swapProgressNotFoundBody';
+  static const swapOpenActivity = 'swapOpenActivity';
+  static const swapBackToActivity = 'swapBackToActivity';
+  static const swapBalanceUpdated = 'swapBalanceUpdated';
+  static const swapBalanceNotRefreshed = 'swapBalanceNotRefreshed';
+  static const swapActivityLoading = 'swapActivityLoading';
+  static const swapAmountToPayIn = 'swapAmountToPayIn';
+  static const swapAmountToPayInUsd = 'swapAmountToPayInUsd';
+  static const swapA11yNoEstimate = 'swapA11yNoEstimate';
+  static const swapA11yReceiveEstimate = 'swapA11yReceiveEstimate';
+  static const swapA11yReceiveEstimateUsd = 'swapA11yReceiveEstimateUsd';
+  static const swapWalletSwaps = 'swapWalletSwaps';
+  static const swapWalletSummaryInProgress = 'swapWalletSummaryInProgress';
+  static const swapWalletSummaryAttention = 'swapWalletSummaryAttention';
+  static const swapWalletSummaryReceived = 'swapWalletSummaryReceived';
   static const walletMoveImportOption = 'walletMoveImportOption';
   static const walletMoveImportOptionHint = 'walletMoveImportOptionHint';
   static const walletMoveReceiveTitle = 'walletMoveReceiveTitle';

@@ -28,6 +28,7 @@ part 'wallet_access_passkey_reuse_cases.dart';
 part 'wallet_access_review_cases.dart';
 part 'wallet_access_rotation_cases.dart';
 part 'wallet_access_session_cases.dart';
+part 'wallet_access_sign_in_status_cases.dart';
 part 'wallet_access_test_harness.dart';
 part 'wallet_access_unattended_return_cases.dart';
 
@@ -126,8 +127,10 @@ class _Backend extends CredentialBackend {
     protection: CredentialProtection.appLocal,
     deviceAuthentication: deviceAuthentication,
   );
+  int metadataReads = 0;
   @override
   Future<CredentialRecordInfo?> metadata(String key) async {
+    metadataReads++;
     if (metadataFailure != null &&
         (metadataFailureFor == null || metadataFailureFor == key)) {
       throw WalletAccessException(metadataFailure!);
@@ -579,6 +582,7 @@ void main() {
   _rotationCases();
   _sessionCases();
   _reviewCases();
+  _signInStatusCases();
   group('WalletAccessService authority and recovery', () {
     late _Storage storage;
     late _Backend backend;
