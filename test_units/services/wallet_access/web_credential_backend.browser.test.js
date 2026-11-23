@@ -1,6 +1,6 @@
 // Integration test against a local Chromium DevTools endpoint. Creates and
 // disposes its own isolated context and virtual authenticator; no real wallet.
-// Serve this directory on localhost, start an isolated headless Chrome, then:
+// Serve the compiled Dart fixture on localhost and start an isolated Chrome.
 // node test_units/services/wallet_access/web_credential_backend.browser.test.js
 'use strict';
 
@@ -8,8 +8,7 @@ const assert = require('node:assert/strict');
 
 async function main() {
   const endpoint = process.env.GLEEC_TEST_CDP ?? 'http://127.0.0.1:9222';
-  const base = process.env.GLEEC_TEST_FIXTURE_URL ?? 'http://localhost:18766/';
-  const compiledFixture = process.env.GLEEC_TEST_COMPILED === 'true';
+  const base = process.env.GLEEC_TEST_FIXTURE_URL ?? 'http://localhost:18767/';
   const trace = (step) => { if (process.env.GLEEC_TEST_TRACE === 'true') console.log(step); };
   for (const address of [endpoint, base]) {
     assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname),
@@ -87,50 +86,44 @@ async function main() {
       hasResidentKey: true, hasUserVerification: true, isUserVerified: true,
       hasPrf: true, hasHmacSecret: true, automaticPresenceSimulation: true,
     } });
-    const loadBridge = () => compiledFixture ? evaluate(`(async()=>{
+    const loadBridge = () => evaluate(`(async()=>{
       for(let attempt=0;attempt<200;attempt++){
         if(typeof window.gleecCredentialSmoke==='function') return true;
         await new Promise(resolve=>setTimeout(resolve,100));
       }
       throw new Error('Compiled fixture startup timeout');
-    })()`) : evaluate(`new Promise((resolve,reject) => {
-      const script=document.createElement('script'); script.src='wallet_credentials.js';
-      script.onload=()=>resolve(true); script.onerror=()=>reject(new Error('Bridge load failed'));
-      document.head.appendChild(script);
-    })`);
+    })()`);
     await loadBridge();
     trace('Credential bridge ready');
-    if (compiledFixture) {
-      const adapter = await evaluate(`(async()=>({
-        written:await gleecCredentialSmoke('write'),
-        read:await gleecCredentialSmoke('read'),
-        rejected:await gleecCredentialSmoke('authenticationRequired'),
-        enrolled:await gleecCredentialSmoke('enroll'),
-        protectedRead:await gleecCredentialSmoke('read'),
-        deleted:await gleecCredentialSmoke('delete')
-      }))()`);
-      trace('Compiled adapter operations returned');
-      assert.deepEqual(adapter, {written:'written',read:true,rejected:'unavailable',
-        enrolled:'enrolled',protectedRead:true,deleted:'deleted'});
-      const policy = await evaluate(`(async()=>{
-        const blocked=[];
-        const observe=event=>blocked.push(event.blockedURI);
-        document.addEventListener('securitypolicyviolation',observe);
-        const inline=document.createElement('script');
-        inline.textContent='window.gleecCspCanary=true'; document.head.appendChild(inline);
-        const external=document.createElement('script');
-        external.src='https://invalid.example/gleec-csp-canary.js'; document.head.appendChild(external);
-        for(let attempt=0;attempt<20 && blocked.length<2;attempt++)
-          await new Promise(resolve=>setTimeout(resolve,50));
-        document.removeEventListener('securitypolicyviolation',observe);
-        inline.remove(); external.remove();
-        return {inlineBlocked:!window.gleecCspCanary,blocked};
-      })()`);
-      assert.equal(policy.inlineBlocked,true);
-      assert.ok(policy.blocked.includes('inline'));
-      assert.ok(policy.blocked.some(uri=>uri.startsWith('https://invalid.example')));
-      trace('CSP blocks unapproved scripts');
-    }
+    const adapter = await evaluate(`(async()=>({
+      written:await gleecCredentialSmoke('write'),
+      read:await gleecCredentialSmoke('read'),
+      rejected:await gleecCredentialSmoke('authenticationRequired'),
+      enrolled:await gleecCredentialSmoke('enroll'),
+      protectedRead:await gleecCredentialSmoke('read'),
+      deleted:await gleecCredentialSmoke('delete')
+    }))()`);
+    trace('Compiled adapter operations returned');
+    assert.deepEqual(adapter, {written:'written',read:true,rejected:'unavailable',
+      enrolled:'enrolled',protectedRead:true,deleted:'deleted'});
+    const policy = await evaluate(`(async()=>{
+      const blocked=[];
+      const observe=event=>blocked.push(event.blockedURI);
+      document.addEventListener('securitypolicyviolation',observe);
+      const inline=document.createElement('script');
+      inline.textContent='window.gleecCspCanary=true'; document.head.appendChild(inline);
+      const external=document.createElement('script');
+      external.src='https://invalid.example/gleec-csp-canary.js'; document.head.appendChild(external);
+      for(let attempt=0;attempt<20 && blocked.length<2;attempt++)
+        await new Promise(resolve=>setTimeout(resolve,50));
+      document.removeEventListener('securitypolicyviolation',observe);
+      inline.remove(); external.remove();
+      return {inlineBlocked:!window.gleecCspCanary,blocked};
+    })()`);
+    assert.equal(policy.inlineBlocked,true);
+    assert.ok(policy.blocked.includes('inline'));
+    assert.ok(policy.blocked.some(uri=>uri.startsWith('https://invalid.example')));
+    trace('CSP blocks unapproved scripts');
     for (const mutation of ['write', 'delete']) {
       const cancellation = await evaluate(`(async () => {
         const api = gleecWalletCredentials;

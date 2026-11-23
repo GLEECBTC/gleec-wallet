@@ -5,14 +5,20 @@ const path=require('node:path');
 const {LocalBrowser,delay}=require('./web_release_test_driver.js');
 const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady,passkeyUnlock}=require('./web_credential_release.browser.test.js');
 
+async function fillReplacementPassword(browser,page,password){
+  // Activate the painted Flutter control through Chrome's pointer input.
+  await browser.click(page,'Replace passkey using password',{pointer:true});
+  await browser.fill(page,'Wallet password',password);
+}
+
 async function main(){
   const browser=new LocalBrowser(path.resolve(__dirname,'../../..'));
   let credential;
   try{
     await browser.serve();await browser.launch();
     const page=await browser.page({initialize:probe});await browser.navigate(page);await browser.semantics(page);
-    assert.equal(await page.evaluate("typeof gleecWalletCredentials.replacePasskeyAfterPasswordVerification"),'function',
-      'Rebuild the app with explicit recovery APIs before this check');
+    await browser.wait(page,"typeof window.gleecWalletCredentials?.replacePasskeyAfterPasswordVerification==='function'",
+      {label:'browser credential vault ready for explicit recovery'});
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded replacement fixture'});
     credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
@@ -24,9 +30,9 @@ async function main(){
     await page.send('WebAuthn.removeVirtualAuthenticator',{authenticatorId:oldProvider.authenticatorId});
     const replacement=await virtualAuthenticator(browser,page);
 
-    await browser.click(page,'Replace passkey using password');
+    await fillReplacementPassword(browser,page,'Wrong-unfunded-fixture-password!');
     console.log('CHECK: explicit password recovery dialog opened');
-    await browser.fill(page,'Wallet password','Wrong-unfunded-fixture-password!');await browser.click(page,'Continue');
+    await browser.click(page,'Continue');
     await browser.wait(page,"document.body.textContent.includes('Password not accepted')",{label:'wrong-password rejection'});
     assert.equal(replacement.counts.created,0);assert.equal(replacement.counts.asserted,0);
     assert.deepEqual(await page.evaluate(credentialsSummary),before);
@@ -34,8 +40,8 @@ async function main(){
     console.log('PASS: wrong password cannot initiate replacement or release protected credentials');
 
     await page.send('WebAuthn.setAutomaticPresenceSimulation',{authenticatorId:replacement.authenticatorId,enabled:false});
-    await browser.click(page,'Replace passkey using password');
-    await browser.fill(page,'Wallet password',credential);await browser.click(page,'Continue');
+    await fillReplacementPassword(browser,page,credential);
+    await browser.click(page,'Continue');
     const registrations=await browser.wait(page,'__gleecReleaseProbe.metrics().registrations>=2',{label:'explicit replacement ceremony'});
     assert.ok(registrations);await page.evaluate('gleecWalletCredentials.cancel();true');
     await browser.wait(page,"Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true')",{label:'usable replacement action after cancellation'});
@@ -44,8 +50,8 @@ async function main(){
     assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().registrations'),2,'Cancellation must not initiate another ceremony');
     await page.send('WebAuthn.setAutomaticPresenceSimulation',{authenticatorId:replacement.authenticatorId,enabled:true});
 
-    await browser.click(page,'Replace passkey using password');
-    await browser.fill(page,'Wallet password',credential);await browser.click(page,'Continue');
+    await fillReplacementPassword(browser,page,credential);
+    await browser.click(page,'Continue');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.fingerprint!==${JSON.stringify(before.fingerprint)})`,{label:'verified replacement persisted'});
     const after=await page.evaluate(credentialsSummary);
     assert.equal(after.active,1);assert.equal(after.unattended,0);assert.equal(after.staged,0);

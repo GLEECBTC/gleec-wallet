@@ -1,8 +1,10 @@
 # Browser wallet credentials and release checks
 
-The browser vault is `web/services/wallet_credentials.js`, called through
-`WebCredentialBackend`. It stores wallet-bound, versioned AES-GCM envelopes in
-IndexedDB. Initial `browserLocal` records contain an unattended, non-exportable
+The browser vault lives in
+`lib/services/wallet_access/platform/browser_credential_vault.dart` and uses
+browser APIs through `dart:js_interop` and `package:web`. It keeps the v1
+IndexedDB schema and reads existing browser-local and passkey envelopes.
+Initial `browserLocal` records contain an unattended, non-exportable
 CryptoKey and are **not a wallet authentication boundary**. Same-origin code can
 use that key. Neither browser persistence nor a saved password is a seed backup.
 
@@ -54,7 +56,7 @@ operation permit must still be current when sensitive export work is dispatched.
 
 ## Automated checks
 
-Use the repository's pinned Flutter version (currently 3.41.4). Do not run a
+Use the repository's pinned Flutter version. Do not run a
 separate Flutter version's dependency resolution against this checkout.
 
 ```sh
@@ -62,37 +64,26 @@ node --test test_units/services/wallet_access/web_credential_backend.test.js
 fvm flutter test --no-pub test_units/services/wallet_access/web_credential_bridge_test.dart
 ```
 
-The Flutter bridge test runs the Node security suite, and is registered in the
-main app CI aggregator. Node 22 or newer is recommended; no npm packages are
-required. Coverage includes real ES256/RS256 verification with a fake provider,
+The Flutter bridge test compiles the Dart vault and runs the Node security
+suite in the main app CI aggregator. Use Node 22 or later. Coverage includes
+v1 record compatibility, real ES256/RS256 verification with a fake provider,
 PRF absence/mismatch, malformed assertion fields, corrupted storage, persistence
 failures, cancellation, downgrade prevention, rotation, deletion replay/expiry,
 and script-policy consistency. This does not simulate an actual provider's
 hardware or synchronization guarantees.
 
-An optional isolated Chrome integration test exercises real IndexedDB and a
-Chrome virtual authenticator's PRF. It must run against localhost only and creates
-and disposes its own fresh browser context. Start an isolated Chrome with a local
-DevTools endpoint and serve `web/services/` on localhost:18766, then run:
-
-```sh
-node test_units/services/wallet_access/web_credential_backend.browser.test.js
-```
-
-`GLEEC_TEST_CDP` selects the local DevTools endpoint (default
-`http://127.0.0.1:9222`). `GLEEC_TEST_FIXTURE_URL` selects the local fixture server
-(default `http://localhost:18766/`). Use the hostname `localhost` for WebAuthn, not
-an IP literal. The fixture must never use a real wallet or user browser profile.
-
-The compiled fixture checks the actual Dart/JavaScript bridge and blocks arbitrary
-inline and external-origin scripts under the shipping CSP:
+The compiled fixture exercises IndexedDB, a Chrome virtual authenticator,
+and CSP under localhost. Start an isolated Chrome with a local DevTools
+endpoint and use a disposable profile. `GLEEC_TEST_CDP` defaults to
+`http://127.0.0.1:9222` and `GLEEC_TEST_FIXTURE_URL` defaults to
+`http://localhost:18767/`.
 
 ```sh
 fvm flutter build web --no-pub --release --csp --no-web-resources-cdn \
   --target=test_units/services/wallet_access/web_credential_smoke.dart \
   --output=/tmp/gleec-auth-web-smoke
 # Serve that directory on localhost:18767 in a separate terminal.
-GLEEC_TEST_COMPILED=true GLEEC_TEST_FIXTURE_URL=http://localhost:18767/ \
+GLEEC_TEST_FIXTURE_URL=http://localhost:18767/ \
   node test_units/services/wallet_access/web_credential_backend.browser.test.js
 ```
 
