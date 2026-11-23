@@ -147,6 +147,27 @@ void main() {
       expect(find.text('authPasskeyProtectedDevice'.tr()), findsOneWidget);
     });
 
+    for (final (failure, message) in [
+      (WalletAccessFailure.unavailable, 'authExistingPasskeyProviderError'),
+      (WalletAccessFailure.prfUnavailable, 'authExistingPasskeyUnsupported'),
+    ]) {
+      testWidgets('keeps current protection and explains $failure', (
+        tester,
+      ) async {
+        final access = _NativeAccess(
+          _deviceAndPasskeys,
+          lock: CredentialProtection.authenticationBound,
+        )..failure = failure;
+        await _pumpSection(tester, access);
+
+        await _tap(tester, 'use-existing-passkey');
+
+        expect(find.text(message.tr()), findsOneWidget);
+        expect(access.lock, CredentialProtection.authenticationBound);
+        expect(find.byKey(const Key('use-existing-passkey')), findsOneWidget);
+      });
+    }
+
     testWidgets('where device unlock is missing, the password still leads', (
       tester,
     ) async {

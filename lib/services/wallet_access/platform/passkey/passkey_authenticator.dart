@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 import '../../wallet_access_types.dart';
@@ -54,6 +56,7 @@ class MethodChannelPasskeyAuthenticator implements PasskeyAuthenticator {
   MethodChannelPasskeyAuthenticator({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel('gleec.wallet/passkey');
 
+  static const _assertionTimeout = Duration(minutes: 2);
   final MethodChannel _channel;
 
   @override
@@ -69,17 +72,31 @@ class MethodChannelPasskeyAuthenticator implements PasskeyAuthenticator {
   @override
   Future<PasskeyAssertion> getAssertion(PasskeyAssertionRequest request) async {
     final Map<Object?, Object?>? result;
+    var expired = false;
     try {
-      result = await _channel.invokeMapMethod<Object?, Object?>(
-        'getAssertion',
-        {
-          'rpId': request.rpId,
-          'challenge': request.challenge,
-          'salt': request.salt,
-          'allowCredentials': request.allowCredentials,
-          'timeoutMs': 120000,
-        },
-      );
+      result = await _channel
+          .invokeMapMethod<Object?, Object?>('getAssertion', {
+            'rpId': request.rpId,
+            'challenge': request.challenge,
+            'salt': request.salt,
+            'allowCredentials': request.allowCredentials,
+            'timeoutMs': _assertionTimeout.inMilliseconds,
+          })
+          .then((response) {
+            if (!expired) return response;
+            if (response?['prf'] case final Uint8List prf) {
+              prf.fillRange(0, prf.length, 0);
+            }
+            return null;
+          })
+          .timeout(
+            _assertionTimeout,
+            onTimeout: () {
+              expired = true;
+              unawaited(cancel());
+              throw const WalletAccessException(WalletAccessFailure.canceled);
+            },
+          );
     } on MissingPluginException {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     } on PlatformException catch (error) {

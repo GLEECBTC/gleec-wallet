@@ -13,6 +13,7 @@ class WalletUnlockState {
     required this.isObscured,
     required this.unlockInProgress,
     required this.generation,
+    this.passkeySetupInterrupted = false,
   });
 
   final String? walletEntryId;
@@ -22,6 +23,7 @@ class WalletUnlockState {
   final bool isObscured;
   final bool unlockInProgress;
   final int generation;
+  final bool passkeySetupInterrupted;
 
   bool get hasWallet => walletEntryId != null;
   bool get coversContent => hasWallet && (isObscured || isLocked);
@@ -70,6 +72,7 @@ class WalletUnlockCoordinator {
   bool _foreground = true;
   bool _obscured = false;
   bool _automaticAttemptConsumed = false;
+  bool _passkeySetupInterrupted = false;
   bool _disposed = false;
   int _generation = 0;
   int _authorizationGeneration = 0;
@@ -101,6 +104,7 @@ class WalletUnlockCoordinator {
     isObscured: _obscured,
     unlockInProgress: hasSystemPrompt,
     generation: _generation,
+    passkeySetupInterrupted: _locked && _passkeySetupInterrupted,
   );
 
   /// Attaches a known wallet; only a completed authentication supplies true.
@@ -126,6 +130,7 @@ class WalletUnlockCoordinator {
     _completedUnlockAwaitingResumeAt = null;
     _systemPromptReturn = null;
     _automaticAttemptConsumed = false;
+    _passkeySetupInterrupted = false;
     _walletEntryId = walletEntryId;
     _sessionIdentity = sessionIdentity;
     _requiresAuthentication = walletEntryId != null && requiresAuthentication;
@@ -223,6 +228,7 @@ class WalletUnlockCoordinator {
     _inactiveAt = null;
     _foreground = true;
     _obscured = false;
+    if (!_locked) _passkeySetupInterrupted = false;
     _syncOperationGate();
     _publish();
   }
@@ -294,6 +300,7 @@ class WalletUnlockCoordinator {
   bool completeUnlock(UnlockAttempt attempt) {
     if (!_owns(attempt)) return false;
     _attempt = null;
+    _passkeySetupInterrupted = false;
     _locked = !_foreground;
     // A native confirmation may finish before Flutter's resumed notification.
     // Keep the UI locked until that same ceremony reaches the foreground.
@@ -321,6 +328,23 @@ class WalletUnlockCoordinator {
     waitForForeground: waitForForeground,
     authenticatedReturn: true,
   );
+
+  /// Keeps an interrupted setup visible if its system picker led to a lock.
+  Future<void> runPasskeySetupPrompt(Future<void> Function() action) async {
+    final generation = _generation;
+    try {
+      await runSystemPrompt(action, waitForForeground: true);
+    } on WalletAccessException {
+      if (!_disposed &&
+          generation == _generation &&
+          _requiresAuthentication &&
+          (_locked || !_foreground)) {
+        _passkeySetupInterrupted = true;
+        _publish();
+      }
+      rethrow;
+    }
+  }
 
   /// Destination selection proves no authentication. Preserve normal app lock
   /// timing, await only its foreground return, and leave any lock in place.
@@ -449,6 +473,7 @@ class WalletUnlockCoordinator {
 
   void _invalidateAttempt() {
     _generation++;
+    _passkeySetupInterrupted = false;
     _attempt = null;
     _completedUnlockAwaitingResumeAt = null;
     _systemPromptReturn = null;
