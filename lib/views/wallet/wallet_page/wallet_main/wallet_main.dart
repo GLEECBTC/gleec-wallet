@@ -50,6 +50,7 @@ import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuratio
     show ZhtlcConfigurationHandler;
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/active_coins_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_manage_section.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_view.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_overview.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
@@ -183,6 +184,29 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
             kShowHdWalletWarningBanner &&
             isLoggedIn &&
             walletType == WalletType.hdwallet;
+
+        if (isMobile && isLoggedIn) {
+          final wallet = authState.currentUser!.wallet;
+          return ZhtlcConfigurationHandler(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerSignal: _onPointerSignal,
+              child: WalletHomeView(
+                scrollController: _scrollController,
+                arrrActivationService:
+                    RepositoryProvider.of<ArrrActivationService>(context),
+                notices: [
+                  if (!wallet.isHW) _WalletSetupReminder(wallet: wallet),
+                  if (showMultiAddressNotice)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: _MultiAddressWalletNotice(),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }
 
         return ZhtlcConfigurationHandler(
           child: PageLayout(

@@ -2046,5 +2046,21 @@
   "swapWalletSwaps": "{} swaps",
   "swapWalletSummaryInProgress": "In progress: {}",
   "swapWalletSummaryAttention": "Needs attention: {}",
-  "swapWalletSummaryReceived": "Received: {}"
+  "swapWalletSummaryReceived": "Received: {}",
+  "walletHomeTotalBalance": "Total balance",
+  "walletHomeShowBalances": "Show balances",
+  "walletHomeEmptyHint": "Add crypto to get started",
+  "walletHomeChooseAsset": "Choose an asset",
+  "walletHomeNothingToSend": "Nothing to send yet",
+  "walletHomeNothingToSendHint": "Receive crypto from another wallet, or buy some, and it will show up here.",
+  "walletHomeNoAssets": "No assets to show yet",
+  "walletHomeAssetDetails": "View details",
+  "walletHomeHiddenAssets": {
+    "zero": "No assets hidden",
+    "one": "{} asset hidden",
+    "two": "{} assets hidden",
+    "few": "{} assets hidden",
+    "many": "{} assets hidden",
+    "other": "{} assets hidden"
+  }
 }
