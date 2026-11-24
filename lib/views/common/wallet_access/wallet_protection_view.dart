@@ -209,9 +209,10 @@ class _ProtectionView {
       WalletAccessFailure.staleOperation => 'authProtectionStale',
       WalletAccessFailure.canceled => 'authProtectionCanceled',
       WalletAccessFailure.passkeyNotFound => 'authExistingPasskeyNotFound',
-      WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
-          when chosen =>
+      WalletAccessFailure.prfUnavailable when chosen =>
         'authExistingPasskeyUnsupported',
+      WalletAccessFailure.unavailable when chosen =>
+        'authExistingPasskeyProviderError',
       WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
           when aboutPasskey =>
         'authPasskeyUnsupported',

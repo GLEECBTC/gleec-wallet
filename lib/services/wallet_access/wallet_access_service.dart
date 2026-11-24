@@ -1602,7 +1602,7 @@ class WalletAccessService {
       // Binding replaces a record nobody can open.
     }
     _ensureSensitiveForeground();
-    await unlockCoordinator.runSystemPrompt(
+    await unlockCoordinator.runPasskeySetupPrompt(
       () => stale?.protection == CredentialProtection.passkey
           ? _backend.replacePasskeyAfterPasswordVerification(
               key,
@@ -1611,7 +1611,6 @@ class WalletAccessService {
               label: user.wallet.displayName,
             )
           : _backend.bindExistingPasskey(key, password),
-      waitForForeground: true,
     );
   }
 

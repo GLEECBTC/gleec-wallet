@@ -36,6 +36,82 @@ void main() {
       expect(gate.capture, throwsA(isA<WalletOperationDenied>()));
     });
 
+    group('interrupted passkey setup', () {
+      for (final resumeFirst in [false, true]) {
+        test(
+          'explains the lock after a slow failed prompt, resumeFirst=$resumeFirst',
+          () async {
+            attach();
+            final response = Completer<void>();
+            final failed = expectLater(
+              coordinator.runPasskeySetupPrompt(() => response.future),
+              throwsA(isA<WalletAccessException>()),
+            );
+            coordinator.inactive();
+            coordinator.background();
+            now += const Duration(seconds: 45);
+            if (resumeFirst) coordinator.resume();
+            response.completeError(
+              const WalletAccessException(WalletAccessFailure.unavailable),
+            );
+            await failed;
+            if (!resumeFirst) coordinator.resume();
+
+            expect(coordinator.state.isLocked, isTrue);
+            expect(coordinator.state.passkeySetupInterrupted, isTrue);
+            expect(gate.allowsOperations, isFalse);
+            expect(coordinator.hasSystemPrompt, isFalse);
+
+            final attempt = coordinator.beginUnlock()!;
+            expect(coordinator.completeUnlock(attempt), isTrue);
+            expect(coordinator.state.passkeySetupInterrupted, isFalse);
+            expect(gate.allowsOperations, isTrue);
+          },
+        );
+      }
+
+      test(
+        'drops feedback after a wallet switch during a failed setup',
+        () async {
+          attach();
+          final response = Completer<void>();
+          final failed = expectLater(
+            coordinator.runPasskeySetupPrompt(() => response.future),
+            throwsA(isA<WalletAccessException>()),
+          );
+          coordinator.background();
+          coordinator.attachWallet('entry-b', requiresAuthentication: true);
+          response.completeError(
+            const WalletAccessException(WalletAccessFailure.canceled),
+          );
+          await failed;
+          coordinator.resume();
+          expect(coordinator.state.isLocked, isTrue);
+          expect(coordinator.state.passkeySetupInterrupted, isFalse);
+          expect(gate.allowsOperations, isFalse);
+        },
+      );
+
+      test('a quick failure does not surface on a later lock', () async {
+        attach();
+        final response = Completer<void>();
+        final failed = expectLater(
+          coordinator.runPasskeySetupPrompt(() => response.future),
+          throwsA(isA<WalletAccessException>()),
+        );
+        coordinator.inactive();
+        coordinator.background();
+        response.completeError(
+          const WalletAccessException(WalletAccessFailure.canceled),
+        );
+        await failed;
+        coordinator.resume();
+        expect(coordinator.state.isLocked, isFalse);
+        coordinator.lock();
+        expect(coordinator.state.passkeySetupInterrupted, isFalse);
+      });
+    });
+
     group('verified system prompt foreground handoff', () {
       test(
         'immediate lock accepts resumed before successful native reply',
