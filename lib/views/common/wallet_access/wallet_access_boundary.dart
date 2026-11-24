@@ -283,7 +283,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
   }
 
   void _exit({required bool recover}) {
-    context.read<WalletAccessService?>()?.unlockCoordinator.lock();
+    context.read<WalletAccessService?>()?.lockWalletSession();
     setState(() {
       _password.clear();
       _recover = recover;

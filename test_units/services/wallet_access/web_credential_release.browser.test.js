@@ -10,7 +10,7 @@ const { LocalBrowser, delay } = require('./web_release_test_driver.js');
 
 const probe = `(() => {
   const secrets=new Set();
-  const measures={challenges:0,fulfilledAssertions:0,registrations:0,systemMilliseconds:0,cspViolations:0};
+  const measures={challenges:0,fulfilledAssertions:0,registrations:0,passwordRequests:0,systemMilliseconds:0,cspViolations:0};
   let api;
   Object.defineProperty(window,'gleecWalletCredentials',{configurable:true,get:()=>api,set(value){
     api=Object.freeze({...value,write:async args=>{secrets.add(args.value);return value.write(args);}});
@@ -18,6 +18,7 @@ const probe = `(() => {
   for(const method of ['get','create']){
     const original=navigator.credentials[method].bind(navigator.credentials);
     navigator.credentials[method]=async options=>{
+      if(method==='get'&&options?.password)measures.passwordRequests++;
       if(options.publicKey)measures[method==='get'?'challenges':'registrations']++;
       const start=performance.now();try{
         const credential=await original(options);
@@ -202,7 +203,15 @@ async function main() {
       {timeout:60000,label:'KDF engine asset download'});
     assert.ok(assets);
     evidence.engineAssets=await page.evaluate("performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/kdf/')&&entry.name.endsWith('.wasm')).map(entry=>({durationMs:Math.round(entry.duration),responseEndMs:Math.round(entry.responseEnd)}))");
-    await page.evaluate(`__gleecReleaseProbe.begin();Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Create a new wallet').click();true`);
+    await page.evaluate(`(() => {
+      document.addEventListener('click', event => {
+        const control=event.target.closest?.('[role=button]');
+        if((control?.getAttribute('aria-label')||control?.textContent||'').trim()==='Create a new wallet')
+          __gleecReleaseProbe.begin();
+      },{capture:true,once:true});
+      return true;
+    })()`);
+    await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'new wallet opened'});
     await page.evaluate('__gleecReleaseProbe.complete();true');
     const metrics=await page.evaluate('__gleecReleaseProbe.metrics()');

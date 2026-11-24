@@ -18,6 +18,8 @@ const _storeName = 'credentials';
 const _eventName = 'gleecWalletProtectionChanged';
 const _browserLocal = 'browserLocal';
 const _passkeyPrf = 'passkeyPrf';
+const _passkeyPromptTimeout = Duration(minutes: 1);
+const _providerReturnTimeout = Duration(seconds: 5);
 
 final class _VaultFailure implements Exception {
   const _VaultFailure(this.code);
@@ -106,6 +108,7 @@ final class _Operation {
   final int generation;
   final controller = web.AbortController();
   web.AbortSignal get signal => controller.signal;
+  bool awaitingPasskey = false;
 }
 
 typedef _DeletionPermit = ({
@@ -152,7 +155,14 @@ final class BrowserCredentialVault {
     _environment.document?.addEventListener(
       'visibilitychange',
       (() {
-        if (_environment.document?.visibilityState == 'hidden') cancel();
+        if (_environment.document?.visibilityState != 'hidden') return;
+        // Full-screen credential providers hide the browser. Only the pending
+        // explicit WebAuthn request can survive, and it cannot finish hidden.
+        if (_operation?.awaitingPasskey == true) {
+          _clearPermits();
+        } else {
+          cancel();
+        }
       }).toJS,
     );
     if (_environment.addEventListener != null) {
@@ -213,6 +223,100 @@ final class BrowserCredentialVault {
     _generation++;
     _clearPermits();
     _operation?.controller.abort();
+  }
+
+  Future<web.Credential?> _completePasskeyPrompt(
+    _Operation operation,
+    Future<web.Credential?> Function() request, {
+    required bool allowHandoff,
+  }) async {
+    _assertCurrent(operation);
+    if (!allowHandoff) return request();
+    final document = _environment.document ?? _fail('notCompleted');
+    bool foreground() =>
+        document.visibilityState == 'visible' && document.hasFocus();
+    if (!foreground()) _fail('notCompleted');
+
+    final result = Completer<web.Credential?>();
+    final window = _environment as web.EventTarget;
+    final started = DateTime.now();
+    final elapsed = Stopwatch()..start();
+    web.Credential? response;
+    Timer? returnTimer;
+    final providerElapsed = Stopwatch();
+    DateTime? answeredAt;
+    var delivered = false;
+
+    void fail(String code) {
+      if (result.isCompleted) return;
+      operation.awaitingPasskey = false;
+      result.completeError(_VaultFailure(code));
+    }
+
+    void expire() {
+      fail('notCompleted');
+      operation.controller.abort();
+    }
+
+    void finishIfReady() {
+      if (result.isCompleted || answeredAt == null) return;
+      final timeSinceAnswer = DateTime.now().difference(answeredAt!);
+      if (timeSinceAnswer.isNegative ||
+          timeSinceAnswer > _providerReturnTimeout ||
+          providerElapsed.elapsed > _providerReturnTimeout) {
+        expire();
+      } else if (response?.type != 'public-key' || foreground()) {
+        operation.awaitingPasskey = false;
+        delivered = true;
+        result.complete(response);
+      }
+    }
+
+    final onReturn = ((web.Event _) => finishIfReady()).toJS;
+    final onAbort = ((web.Event _) => fail('staleOperation')).toJS;
+    operation.awaitingPasskey = true;
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    operation.signal.addEventListener('abort', onAbort);
+    final promptTimer = Timer(_passkeyPromptTimeout, () {
+      if (answeredAt == null) expire();
+    });
+    try {
+      unawaited(
+        Future<web.Credential?>.sync(request).then<void>(
+          (answer) {
+            if (result.isCompleted) {
+              _discardPasskeyOutput(answer);
+              return;
+            }
+            response = answer;
+            answeredAt = DateTime.now();
+            final wallTime = answeredAt!.difference(started);
+            if (wallTime.isNegative ||
+                wallTime > _passkeyPromptTimeout ||
+                elapsed.elapsed > _passkeyPromptTimeout) {
+              expire();
+              return;
+            }
+            providerElapsed.start();
+            returnTimer = Timer(_providerReturnTimeout, expire);
+            finishIfReady();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!result.isCompleted) result.completeError(error, stack);
+          },
+        ),
+      );
+      return await result.future;
+    } finally {
+      operation.awaitingPasskey = false;
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+      operation.signal.removeEventListener('abort', onAbort);
+      promptTimer.cancel();
+      returnTimer?.cancel();
+      if (!delivered) _discardPasskeyOutput(response);
+    }
   }
 
   void _emit(Map<String, Object?> detail) {
@@ -465,7 +569,12 @@ final class BrowserCredentialVault {
       if (requireAuthentication && record.protection != _passkeyPrf) {
         _fail('unavailable');
       }
-      final value = await _decrypt(record, await _unlockKey(record, operation));
+      final encryptionKey = await _unlockKey(
+        record,
+        operation,
+        allowHandoff: !automatic && purpose == 'unlock',
+      );
+      final value = await _decrypt(record, encryptionKey);
       await _confirmCurrent(record, operation);
       if (purpose == 'delete' && !automatic) {
         _pendingDeletion = _issuePermit(record, operation);

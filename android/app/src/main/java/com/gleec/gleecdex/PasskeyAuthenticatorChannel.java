@@ -7,6 +7,7 @@ import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.os.CancellationSignal;
 import android.util.Base64;
+import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.credentials.Credential;
@@ -40,6 +41,7 @@ import org.json.JSONObject;
  * PRF output. Credential Manager enforces Digital Asset Links, and the
  * bridge checks that the returned origin identifies this signed APK. */
 final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandler {
+    private static final String LOG_TAG = "GleecPasskey";
     private static final int ENCODING = Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING;
     private final FragmentActivity activity;
     private final MethodChannel channel;
@@ -47,7 +49,7 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
     private MethodChannel.Result pending;
     private CancellationSignal cancellation;
 
-    private static final class Failure extends Exception {
+    static final class Failure extends Exception {
         final String code;
         Failure(String code) { this.code = code; }
     }
@@ -86,11 +88,13 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
     private void begin(MethodCall call, MethodChannel.Result result) {
         if (pending != null) { result.error("busy", "Another passkey request is in progress", null); return; }
         final GetCredentialRequest credentialRequest;
+        final String ceremony;
         try {
-            credentialRequest = new GetCredentialRequest.Builder()
-                .addCredentialOption(new GetPublicKeyCredentialOption(requestJson(call)))
-                .build();
+            credentialRequest = publicKeyRequest(call);
+            List<byte[]> allowed = call.argument("allowCredentials");
+            ceremony = allowed.isEmpty() ? "discovery" : "allowlist";
         } catch (Exception error) {
+            trace("request", "build", "invalidResponse");
             result.error("invalidResponse", "Passkey request could not be completed", null);
             return;
         }
@@ -103,24 +107,46 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
                     @Override public void onResult(GetCredentialResponse response) {
                         if (pending != result) return;
                         try {
-                            finish(assertion(response.getCredential()), null);
+                            Map<String, Object> assertion = assertion(activity, response.getCredential());
+                            trace(ceremony, "response", "accepted");
+                            finish(assertion, null);
                         } catch (Failure failure) {
+                            trace(ceremony, "response", failure.code);
                             finish(null, failure.code);
                         } catch (Exception error) {
                             // Never forward provider exceptions; they can carry data.
+                            trace(ceremony, "response", "invalidResponse");
                             finish(null, "invalidResponse");
                         }
                     }
 
                     @Override public void onError(@NonNull GetCredentialException error) {
                         if (pending != result) return;
-                        finish(null, failureCode(error));
+                        String code = failureCode(error);
+                        trace(ceremony, "provider", code);
+                        finish(null, code);
                     }
                 });
         } catch (RuntimeException error) {
             // A provider can fail to start before it registers its callback.
-            if (pending == result) finish(null, "unavailable");
+            if (pending == result) {
+                trace(ceremony, "start", "unavailable");
+                finish(null, "unavailable");
+            }
         }
+    }
+
+    // Only fixed stage names and bridge codes are logged, even on debug devices.
+    private static void trace(String ceremony, String stage, String code) {
+        if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
+            Log.d(LOG_TAG, ceremony + " " + stage + " " + code);
+        }
+    }
+
+    static GetCredentialRequest publicKeyRequest(MethodCall call) throws Exception {
+        return new GetCredentialRequest.Builder()
+            .addCredentialOption(new GetPublicKeyCredentialOption(requestJson(call)))
+            .build();
     }
 
     private static String requestJson(MethodCall call) throws Exception {
@@ -149,12 +175,12 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
             .toString();
     }
 
-    private Map<String, Object> assertion(Credential credential) throws Exception {
+    static Map<String, Object> assertion(Context context, Credential credential) throws Exception {
         if (!(credential instanceof PublicKeyCredential)) throw new Failure("invalidResponse");
         JSONObject json = new JSONObject(((PublicKeyCredential) credential).getAuthenticationResponseJson());
         JSONObject response = json.getJSONObject("response");
         byte[] clientData = decode(response.getString("clientDataJSON"));
-        verifyOrigin(clientData);
+        verifyOrigin(context, clientData);
         JSONObject prf = json.optJSONObject("clientExtensionResults") == null ? null
             : json.getJSONObject("clientExtensionResults").optJSONObject("prf");
         JSONObject results = prf == null ? null : prf.optJSONObject("results");
@@ -175,11 +201,11 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
     }
 
     @SuppressWarnings("deprecation") // The int flags overload supports Android 9–12.
-    private void verifyOrigin(byte[] clientData) throws Exception {
+    private static void verifyOrigin(Context context, byte[] clientData) throws Exception {
         String origin = new JSONObject(new String(clientData, StandardCharsets.UTF_8))
             .getString("origin");
-        SigningInfo signingInfo = activity.getPackageManager()
-            .getPackageInfo(activity.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES)
+        SigningInfo signingInfo = context.getPackageManager()
+            .getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES)
             .signingInfo;
         if (signingInfo == null) throw new Failure("unavailable");
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
@@ -190,7 +216,7 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
         throw new Failure("invalidResponse");
     }
 
-    private static String failureCode(GetCredentialException error) {
+    static String failureCode(GetCredentialException error) {
         if (error instanceof GetCredentialCancellationException) return "canceled";
         if (error instanceof GetCredentialInterruptedException) return "interrupted";
         if (error instanceof NoCredentialException) return "noCredential";

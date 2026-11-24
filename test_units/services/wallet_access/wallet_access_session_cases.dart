@@ -373,4 +373,45 @@ void _sessionCases() {
       },
     );
   });
+
+  group('credential prompt ownership', () {
+    late _Harness h;
+    setUp(() => h = _Harness());
+    tearDown(() => h.dispose());
+
+    test('preserves the automatic trigger on an app-lock return', () async {
+      await h.install();
+      h.coordinator.background();
+      h.monotonic += const Duration(seconds: 31);
+      h.coordinator.resume();
+
+      expect(await h.service.unlockCurrent(automatic: true), isTrue);
+      expect(h.backend.lastReadAutomatic, isTrue);
+      expect(h.backend.lastReadPurpose, 'unlock');
+    });
+
+    test('explicit locking cancels a late credential response', () async {
+      await h.install();
+      h.service.lockWalletSession();
+      h.backend.readReached = Completer<void>();
+      h.backend.pendingRead = Completer<String?>();
+      h.backend.cancelReached = Completer<void>();
+
+      final unlocking = h.service.unlockCurrent();
+      final rejected = expectLater(
+        unlocking,
+        _fails(WalletAccessFailure.staleOperation),
+      );
+      await h.backend.readReached!.future;
+      expect(h.backend.lastReadAutomatic, isFalse);
+      expect(h.backend.lastReadPurpose, 'unlock');
+      h.service.lockWalletSession();
+      await h.backend.cancelReached!.future;
+      h.backend.pendingRead!.complete(_password);
+
+      await rejected;
+      expect(h.coordinator.state.isLocked, isTrue);
+      expect(h.coordinator.operationGate.allowsOperations, isFalse);
+    });
+  });
 }
