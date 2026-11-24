@@ -85,7 +85,7 @@ class MethodChannelPasskeyAuthenticator implements PasskeyAuthenticator {
           .then((response) {
             if (!expired) return response;
             if (response?['prf'] case final Uint8List prf) {
-              prf.fillRange(0, prf.length, 0);
+              _eraseChannelOutput(prf);
             }
             return null;
           })
@@ -113,15 +113,30 @@ class MethodChannelPasskeyAuthenticator implements PasskeyAuthenticator {
     if (prf is! Uint8List) {
       throw const WalletAccessException(WalletAccessFailure.prfUnavailable);
     }
-    final userHandle = bytes('userHandle', optional: true);
-    return PasskeyAssertion(
-      credentialId: bytes('credentialId'),
-      userHandle: userHandle.isEmpty ? null : userHandle,
-      authenticatorData: bytes('authenticatorData'),
-      clientDataJson: bytes('clientDataJSON'),
-      signature: bytes('signature'),
-      prf: prf,
-    );
+    try {
+      final userHandle = bytes('userHandle', optional: true);
+      return PasskeyAssertion(
+        credentialId: bytes('credentialId'),
+        userHandle: userHandle.isEmpty ? null : userHandle,
+        authenticatorData: bytes('authenticatorData'),
+        clientDataJson: bytes('clientDataJSON'),
+        signature: bytes('signature'),
+        // Flutter can wrap a platform reply in a read-only buffer. Own the
+        // PRF bytes so the assertion can erase them after key derivation.
+        prf: Uint8List.fromList(prf),
+      );
+    } finally {
+      _eraseChannelOutput(prf);
+    }
+  }
+
+  static void _eraseChannelOutput(Uint8List bytes) {
+    try {
+      bytes.fillRange(0, bytes.length, 0);
+    } on UnsupportedError {
+      // A read-only transport buffer is managed by Flutter. The wallet only
+      // retains the owned copy, which is erased after use.
+    }
   }
 
   @override
