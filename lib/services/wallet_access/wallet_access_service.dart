@@ -565,6 +565,7 @@ class WalletAccessService {
           record,
           reason: 'Unlock your wallet',
           automatic: automatic,
+          purpose: 'unlock',
           revision: revision,
         );
         _ensureRevision(revision);
@@ -680,6 +681,7 @@ class WalletAccessService {
     required String reason,
     required _AccessRevision revision,
     bool forUnlock = false,
+    bool automatic = false,
     String? purpose,
   }) async {
     _ensureRevision(revision);
@@ -703,8 +705,9 @@ class WalletAccessService {
         record,
         reason: reason,
         revision: revision,
+        automatic: automatic,
         waitForForeground: !forUnlock,
-        purpose: purpose,
+        purpose: forUnlock ? 'unlock' : purpose,
       );
       if (record.rotationEnvelope != null) pendingRotation = record;
     } else {
@@ -1124,6 +1127,11 @@ class WalletAccessService {
     unawaited(_backend.cancel().catchError((Object _) {}));
   }
 
+  void lockWalletSession() {
+    invalidatePendingOperations();
+    unlockCoordinator.lock();
+  }
+
   Future<void> signOut() async {
     invalidatePendingOperations();
     final revision = _revision;
@@ -1186,6 +1194,7 @@ class WalletAccessService {
           reason: 'Unlock your wallet',
           revision: operationRevision,
           forUnlock: true,
+          automatic: automatic,
         ),
       );
       _ensureRevision(revision);
@@ -1600,7 +1609,7 @@ class WalletAccessService {
       // Binding replaces a record nobody can open.
     }
     _ensureSensitiveForeground();
-    await unlockCoordinator.runSystemPrompt(
+    await unlockCoordinator.runPasskeySetupPrompt(
       () => stale?.protection == CredentialProtection.passkey
           ? _backend.replacePasskeyAfterPasswordVerification(
               key,
@@ -1609,7 +1618,6 @@ class WalletAccessService {
               label: user.wallet.displayName,
             )
           : _backend.bindExistingPasskey(key, password),
-      waitForForeground: true,
     );
   }
 

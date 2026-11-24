@@ -2201,6 +2201,9 @@ abstract class LocaleKeys {
   static const authExistingPasskeyNotFound = 'authExistingPasskeyNotFound';
   static const authExistingPasskeyUnsupported =
       'authExistingPasskeyUnsupported';
+  static const authExistingPasskeyProviderError =
+      'authExistingPasskeyProviderError';
+  static const authPasskeySetupInterrupted = 'authPasskeySetupInterrupted';
   static const authExistingPasskeyReady = 'authExistingPasskeyReady';
   static const authExistingPasskeyOffDescription =
       'authExistingPasskeyOffDescription';

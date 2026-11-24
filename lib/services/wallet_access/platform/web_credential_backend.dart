@@ -5,14 +5,29 @@ import 'dart:js_interop_unsafe';
 import 'package:web/web.dart' as web;
 
 import '../wallet_access_types.dart';
+import 'browser_credential_vault.dart';
 import 'credential_backend.dart';
 
 @JS('gleecWalletCredentials')
 external JSObject? get _walletCredentials;
 
-/// Browser-local storage and WebAuthn PRF access. The bridge owns WebCrypto,
+@JS('gleecWalletCredentials')
+external set _walletCredentials(JSObject value);
+
+bool _installed = false;
+
+/// Browser-local storage and WebAuthn PRF access. The Dart vault owns WebCrypto,
 /// transactional IndexedDB persistence and cross-tab ceremony coordination.
 class WebCredentialBackend extends CredentialBackend {
+  WebCredentialBackend() {
+    if (!_installed) {
+      _walletCredentials = createBrowserCredentialApi(
+        BrowserCredentialVault(web.window),
+      );
+      _installed = true;
+    }
+  }
+
   late final JSFunction _changeListener = ((web.Event event) {
     final detail = (event as web.CustomEvent).detail.dartify();
     if (detail is Map && detail['external'] == true) {
