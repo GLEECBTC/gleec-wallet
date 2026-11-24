@@ -38,24 +38,15 @@ Widget _buildDialogContent(BuildContext context) {
     children: [
       Text(LocaleKeys.myCoinsMissingReassurance.tr(), style: textStyle),
       const SizedBox(height: 8),
-      Text(
-        // "To recover:"
-        LocaleKeys.myCoinsMissingToRecover.tr(),
-        style: textStyle?.copyWith(fontWeight: FontWeight.bold),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        // "Log out → Turn OFF \"Multi Address Wallet\" → Log in → Add your coins back"
-        LocaleKeys.myCoinsMissingSteps.tr(),
-        style: textStyle,
-      ),
+      Text(LocaleKeys.authImportDerivationHint.tr(), style: textStyle),
     ],
   );
 }
 
 Future<void> _launchHelpUrl() async {
   final url = Uri.parse(
-      'https://komodoplatform.com/en/blog/komodo-wallet-v0-9-0-is-now-live/#note-for-web-wallet-users-with-existing-wallets-before-the-latest-release');
+    'https://komodoplatform.com/en/blog/komodo-wallet-v0-9-0-is-now-live/#note-for-web-wallet-users-with-existing-wallets-before-the-latest-release',
+  );
   if (await canLaunchUrl(url)) {
     await launchUrl(url);
   }

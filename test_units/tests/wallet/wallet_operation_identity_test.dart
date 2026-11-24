@@ -301,7 +301,7 @@ void testWalletOperationIdentity() {
     group('export format', () {
       const phrase =
           'legal winner thank year wave sausage worth useful legal winner thank yellow';
-      Future<_RecordingFileLoader> export() async {
+      Future<_RecordingFileLoader> export({Wallet? wallet}) async {
         auth.readMnemonic = () async => Mnemonic.plaintext(phrase);
         final files = _RecordingFileLoader();
         await WalletsRepository(
@@ -310,7 +310,7 @@ void testWalletOperationIdentity() {
           _UnusedStorage(),
           fileLoader: files,
         ).downloadEncryptedWallet(
-          auth.user.wallet,
+          wallet ?? auth.user.wallet,
           'synthetic password',
           expectedWalletId: auth.user.walletId,
         );
@@ -338,8 +338,12 @@ void testWalletOperationIdentity() {
           ),
           isBip39Seed: true,
         ).copyWith(metadata: {'type': 'iguana'});
-        expect(auth.user.wallet.config.type, WalletType.iguana);
-        final files = await export();
+        final current = auth.user.wallet;
+        expect(current.config.type, WalletType.hdwallet);
+        final stale = current.copyWith(
+          config: current.config.copyWith(type: WalletType.iguana),
+        );
+        final files = await export(wallet: stale);
         expect(
           WalletFileInspection.of(files.savedData.single).recordedType,
           WalletType.hdwallet,

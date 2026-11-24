@@ -152,10 +152,7 @@ void _reviewCases() {
       await h.service.observeEngineUser(null);
       h.auth.active = null;
       await expectLater(
-        h.service.createWallet(
-          walletType: WalletType.hdwallet,
-          initialMetadata: {},
-        ),
+        h.service.createWallet(initialMetadata: {}),
         _fails(WalletAccessFailure.invalidResponse),
       );
       expect(h.storage.values[_recordsKey], 'not a journal');
@@ -334,10 +331,7 @@ void _reviewCases() {
     });
     tearDown(() => h.dispose());
 
-    Future<KdfUser> create() => h.service.createWallet(
-      walletType: WalletType.hdwallet,
-      initialMetadata: {},
-    );
+    Future<KdfUser> create() => h.service.createWallet(initialMetadata: {});
 
     for (final failure in [
       WalletAccessFailure.unavailable,

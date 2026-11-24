@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
@@ -243,16 +244,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       WalletLoadTimeline.instance.mark(WalletLoadMark.signInStarted);
       final weakPasswordsAllowed = await _areWeakPasswordsAllowed();
       if (!_ownsAuthOperation(operation, emit)) return;
-      final options = AuthOptions(
-        derivationMethod: event.wallet.config.type == WalletType.hdwallet
-            ? DerivationMethod.hdWallet
-            : DerivationMethod.iguana,
-        allowWeakPassword: weakPasswordsAllowed,
-      );
+      final users = await _kdfSdk.auth.getUsers();
+      if (!_ownsAuthOperation(operation, emit)) return;
+      final stored = users.firstWhereOrNull(event.wallet.matchesKdfUser);
+      if (stored == null) throw AuthException.notFound();
+      final options =
+          await _walletAccess?.signInOptionsFor(
+            stored,
+            allowWeakPassword: weakPasswordsAllowed,
+          ) ??
+          stored.walletSignInOptions(allowWeakPassword: weakPasswordsAllowed);
+      if (!_ownsAuthOperation(operation, emit)) return;
       final recovered = await _recoverInterruptedPasswordChange(
         event.wallet,
         event.password,
-        options,
+        weakPasswordsAllowed,
       );
       if (!_ownsAuthOperation(operation, emit)) return;
       // `signIn` already returns the authenticated user, so the two
@@ -281,7 +287,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         AuthSignInSucceededEventData(
           method: AuthMethod.password.value,
           flow: AuthFlow.signIn.value,
-          hdType: event.wallet.config.type.name,
+          hdType: currentUser.wallet.config.type.name,
           durationMs:
               WalletLoadTimeline.instance.elapsedMsBetween(
                 WalletLoadMark.signInStarted,
@@ -442,10 +448,9 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       emit(AuthBlocState.loading());
       WalletLoadTimeline.instance.mark(WalletLoadMark.signInStarted);
       final user = await access.createWallet(
-        walletType: event.walletType,
         useDeviceProtection: event.useDeviceProtection,
         initialMetadata: _initialWalletMetadata(
-          walletType: event.walletType,
+          walletType: WalletType.hdwallet,
           provenance: WalletProvenance.generated,
           createdAt: DateTime.now(),
           hasBackup: false,
@@ -502,18 +507,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
             _filterOutUnsupportedCoins(wallet.config.activatedCoins),
           ),
       };
+      final walletType = seed == null
+          ? WalletType.hdwallet
+          : wallet.config.type;
       final user = await _kdfSdk.auth.register(
         password: password,
         walletName: wallet.name,
         mnemonic: seed == null ? null : Mnemonic.plaintext(seed),
         options: AuthOptions(
-          derivationMethod: wallet.config.type == WalletType.hdwallet
+          derivationMethod: walletType == WalletType.hdwallet
               ? DerivationMethod.hdWallet
               : DerivationMethod.iguana,
           allowWeakPassword: weakPasswordsAllowed,
         ),
         initialMetadata: _initialWalletMetadata(
-          walletType: wallet.config.type,
+          walletType: walletType,
           provenance: seed == null
               ? WalletProvenance.generated
               : WalletProvenance.imported,

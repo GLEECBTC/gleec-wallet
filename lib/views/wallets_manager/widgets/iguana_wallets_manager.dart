@@ -37,7 +37,6 @@ class IguanaWalletsManager extends StatefulWidget {
     this.initialWallet,
     this.onSwitchWallet,
     this.onRecover,
-    this.initialHdMode = false,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
     this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
@@ -51,7 +50,6 @@ class IguanaWalletsManager extends StatefulWidget {
   final Wallet? initialWallet;
   final VoidCallback? onSwitchWallet;
   final VoidCallback? onRecover;
-  final bool initialHdMode;
 
   /// Whether the login form may try the wallet's managed unlock by itself, as
   /// the remembered-wallet prompt does.
@@ -78,7 +76,6 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   Wallet? _selectedWallet;
   WalletsManagerExistWalletAction _existWalletAction =
       WalletsManagerExistWalletAction.none;
-  bool _initialHdMode = false;
   bool _didHandleSuccessfulLogin = false;
   bool _manualCredentialSubmitted = false;
   WalletImportTypes _importType = WalletImportTypes.simple;
@@ -88,9 +85,6 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   void initState() {
     super.initState();
     _selectedWallet = widget.initialWallet;
-    _initialHdMode = widget.initialWallet?.config.type == WalletType.hdwallet
-        ? true
-        : widget.initialHdMode;
     _action = widget.initialAction;
     if (_selectedWallet != null) {
       _existWalletAction = widget.initialWalletAction;
@@ -212,7 +206,6 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
             onCancel: _cancel,
             onSwitchWallet: widget.onSwitchWallet,
             onRecover: widget.onRecover,
-            initialHdMode: _initialHdMode,
             initialQuickLogin: widget.rememberMe,
           );
       }
