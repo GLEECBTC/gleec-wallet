@@ -226,7 +226,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport>
 
   void _onSeedChanged() {
     _updateSeedWordSuggestions();
-    _syncWalletTypeWithSeedCompatibility();
+    if (_isHdMode) _allowCustomSeed = false;
     setState(() {});
   }
 
@@ -321,7 +321,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport>
           isHdOptionEnabled: _isHdCompatibleWithCurrentSeed,
           onChanged: (walletType) {
             setState(() {
-              _isHdMode = walletType == WalletType.hdwallet;
+              _legacyModeSelected = walletType == WalletType.iguana;
               _allowCustomSeed = false;
               _updateSeedWordSuggestions();
             });
