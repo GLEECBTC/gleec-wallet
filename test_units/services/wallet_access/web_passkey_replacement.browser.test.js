@@ -6,8 +6,29 @@ const {LocalBrowser,delay}=require('./web_release_test_driver.js');
 const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady,passkeyUnlock}=require('./web_credential_release.browser.test.js');
 
 async function fillReplacementPassword(browser,page,password){
-  // Activate the painted Flutter control through Chrome's pointer input.
-  await browser.click(page,'Replace passkey using password',{pointer:true});
+  const action='Replace passkey using password';
+  const renderedPassword=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).some(el=>{
+    const area=el.getBoundingClientRect();
+    const labels=(el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n');
+    return labels.some(label=>label.trim()==='Wallet password')&&
+      !el.disabled&&!el.readOnly&&!el.closest('[aria-hidden=true]')&&area.width>0&&area.height>0;
+  })`;
+  await browser.wait(page,`!(${renderedPassword})`,{label:'previous password dialog closed'});
+  await browser.click(page,action,{pointer:true});
+  const opened=await browser.wait(page,renderedPassword,{timeout:3500,label:'password dialog after pointer activation'})
+    .catch(()=>false);
+  if(!opened){
+    // If Flutter replaced the pointer target, invoke the still-enabled
+    // accessibility action once. This only opens the password dialog.
+    await page.evaluate(`(() => {
+      if(${renderedPassword})return;
+      const button=Array.from(document.querySelectorAll('[role=button]')).find(el=>
+        (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(action)}&&
+        el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&
+        el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0);
+      button?.click();
+    })()`);
+  }
   await browser.fill(page,'Wallet password',password);
 }
 
