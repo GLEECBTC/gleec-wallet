@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gleec.gleecdex.onboardinginternal",
+      "sha256_cert_fingerprints": [
+        "99:C5:00:E9:42:51:BE:2A:3F:A1:8E:38:50:F9:E3:E1:E4:1E:0C:23:0F:3A:2A:D3:1C:CD:10:2F:6C:BB:0E:11"
+      ]
+    }
+  }
+]
