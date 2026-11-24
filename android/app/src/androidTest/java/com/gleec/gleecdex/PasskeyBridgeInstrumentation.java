@@ -6,11 +6,17 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Base64;
+import androidx.credentials.CreatePublicKeyCredentialResponse;
 import androidx.credentials.GetPublicKeyCredentialOption;
 import androidx.credentials.PublicKeyCredential;
+import androidx.credentials.exceptions.CreateCredentialCancellationException;
+import androidx.credentials.exceptions.CreateCredentialCustomException;
+import androidx.credentials.exceptions.CreateCredentialInterruptedException;
 import androidx.credentials.exceptions.GetCredentialCancellationException;
 import androidx.credentials.exceptions.GetCredentialCustomException;
 import androidx.credentials.exceptions.NoCredentialException;
+import androidx.credentials.exceptions.domerrors.NotAllowedError;
+import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCredentialDomException;
 import io.flutter.plugin.common.MethodCall;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Runs the shipped Android bridge against the Android SDK and AndroidX on an emulator. */
@@ -43,6 +50,9 @@ public final class PasskeyBridgeInstrumentation extends Instrumentation {
             requests();
             responses(context);
             failures();
+            creationRequests();
+            creations(context);
+            creationFailures();
             result.putString("passkey_bridge", "passed");
             finish(Activity.RESULT_OK, result);
         } catch (Exception | AssertionError | LinkageError error) {
@@ -87,12 +97,16 @@ public final class PasskeyBridgeInstrumentation extends Instrumentation {
     }
 
     @SuppressWarnings("deprecation") // getPackageInfo flags overload works on API 28.
-    private static void responses(Context context) throws Exception {
+    private static String apkOrigin(Context context) throws Exception {
         var signers = context.getPackageManager()
             .getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES)
             .signingInfo.getApkContentsSigners();
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray());
-        String origin = "android:apk-key-hash:" + encoded(digest);
+        return "android:apk-key-hash:" + encoded(digest);
+    }
+
+    private static void responses(Context context) throws Exception {
+        String origin = apkOrigin(context);
         PRF_RESULT[0] = 12;
         Map<String, Object> actual = PasskeyAuthenticatorChannel.assertion(
             context, response(origin, encoded(PRF_RESULT)));
@@ -143,6 +157,88 @@ public final class PasskeyBridgeInstrumentation extends Instrumentation {
         check("unavailable".equals(PasskeyAuthenticatorChannel.failureCode(
             new GetCredentialCustomException("fixture.provider", "provider details"))),
             "provider failure classification without details");
+    }
+
+    private static void creationRequests() throws Exception {
+        Map<String, Object> arguments = new HashMap<>();
+        arguments.put("rpId", "wallet-bridge.test");
+        arguments.put("challenge", CHALLENGE);
+        arguments.put("userId", FIXTURE_ID);
+        arguments.put("userName", "Gleec Wallet recovery");
+        arguments.put("displayName", "Gleec Wallet recovery");
+        arguments.put("prfSalt", PRF_INPUT);
+        arguments.put("timeoutMs", 120000);
+        var request = PasskeyAuthenticatorChannel.publicKeyCreation(new MethodCall("register", arguments));
+        JSONObject json = new JSONObject(request.getRequestJson());
+        check("wallet-bridge.test".equals(json.getJSONObject("rp").getString("id")), "creation relying party");
+        check(encoded(FIXTURE_ID).equals(json.getJSONObject("user").getString("id")), "user ID encoding");
+        check(encoded(CHALLENGE).equals(json.getString("challenge")), "creation challenge encoding");
+        JSONObject selection = json.getJSONObject("authenticatorSelection");
+        check("required".equals(selection.getString("residentKey")), "discoverable passkey");
+        check("required".equals(selection.getString("userVerification")), "creation user verification");
+        check("none".equals(json.getString("attestation")), "no attestation");
+        JSONObject eval = json.getJSONObject("extensions").getJSONObject("prf").getJSONObject("eval");
+        check(encoded(PRF_INPUT).equals(eval.getString("first")), "creation PRF input encoding");
+
+        arguments.put("prfSalt", new byte[31]);
+        try {
+            PasskeyAuthenticatorChannel.publicKeyCreation(new MethodCall("register", arguments));
+        } catch (PasskeyAuthenticatorChannel.Failure error) {
+            check("invalidResponse".equals(error.code), "refused creation request");
+            return;
+        }
+        throw new AssertionError("invalid creation request was accepted");
+    }
+
+    private static void creations(Context context) throws Exception {
+        String origin = apkOrigin(context);
+        Map<String, Object> actual = PasskeyAuthenticatorChannel.registration(
+            context, creation(origin, encoded(PRF_RESULT), new JSONArray().put("internal").put(7)));
+        check(Arrays.equals((byte[]) actual.get("credentialId"), FIXTURE_ID), "created credential identifier");
+        check(Arrays.equals((byte[]) actual.get("prfFirst"), PRF_RESULT), "PRF output at creation");
+        check(Collections.singletonList("internal").equals(actual.get("transports")), "transport hints");
+        check(actual.size() == 5, "normalised creation fields");
+        for (Object prf : Arrays.asList(JSONObject.NULL, "", null)) {
+            check(PasskeyAuthenticatorChannel.registration(context, creation(origin, prf, null))
+                .get("prfFirst") == null, "creation without PRF output");
+        }
+        try {
+            PasskeyAuthenticatorChannel.registration(
+                context, creation("https://wallet-bridge.test", encoded(PRF_RESULT), null));
+        } catch (PasskeyAuthenticatorChannel.Failure error) {
+            check("invalidResponse".equals(error.code), "expected bridge error invalidResponse");
+            return;
+        }
+        throw new AssertionError("passkey created for another origin was accepted");
+    }
+
+    private static CreatePublicKeyCredentialResponse creation(String origin, Object prf, JSONArray transports)
+            throws Exception {
+        var clientData = new JSONObject().put("type", "webauthn.create").put("origin", origin);
+        var response = new JSONObject()
+            .put("clientDataJSON", encoded(clientData.toString().getBytes(StandardCharsets.UTF_8)))
+            .put("attestationObject", encoded(new byte[] {1}));
+        if (transports != null) response.put("transports", transports);
+        var credential = new JSONObject().put("type", "public-key")
+            .put("id", encoded(FIXTURE_ID)).put("rawId", encoded(FIXTURE_ID)).put("response", response);
+        if (prf != null) {
+            credential.put("clientExtensionResults", new JSONObject().put("prf",
+                new JSONObject().put("results", new JSONObject().put("first", prf))));
+        }
+        return new CreatePublicKeyCredentialResponse(credential.toString());
+    }
+
+    private static void creationFailures() {
+        check("canceled".equals(PasskeyAuthenticatorChannel.createFailureCode(
+            new CreateCredentialCancellationException())), "creation cancellation");
+        check("interrupted".equals(PasskeyAuthenticatorChannel.createFailureCode(
+            new CreateCredentialInterruptedException())), "interrupted creation");
+        check("canceled".equals(PasskeyAuthenticatorChannel.createFailureCode(
+            new CreatePublicKeyCredentialDomException(new NotAllowedError()))),
+            "dismissed or timed-out creation");
+        check("unavailable".equals(PasskeyAuthenticatorChannel.createFailureCode(
+            new CreateCredentialCustomException("fixture.provider", "provider details"))),
+            "creation failure classification without details");
     }
 
     private static String encoded(byte[] bytes) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -18,6 +19,8 @@ final class MethodChannelPasskeyRegistrar implements PasskeyRegistrar {
   MethodChannelPasskeyRegistrar({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel('gleec.wallet/passkey');
 
+  /// As for assertions: a full-screen prompt can lose its reply.
+  static const _registrationTimeout = Duration(minutes: 2);
   final MethodChannel _channel;
 
   @override
@@ -36,16 +39,34 @@ final class MethodChannelPasskeyRegistrar implements PasskeyRegistrar {
   ) async {
     if (!_acceptable(request)) _invalid();
     final Object? result;
+    var expired = false;
     try {
-      result = await _channel.invokeMethod<Object?>('register', {
-        'rpId': request.rpId,
-        'challenge': request.challenge,
-        'userId': request.userId,
-        'userName': request.userName,
-        'displayName': request.displayName,
-        'prfSalt': request.prfSalt,
-        'timeoutMs': 120000,
-      });
+      result = await _channel
+          .invokeMethod<Object?>('register', {
+            'rpId': request.rpId,
+            'challenge': request.challenge,
+            'userId': request.userId,
+            'userName': request.userName,
+            'displayName': request.displayName,
+            'prfSalt': request.prfSalt,
+            'timeoutMs': _registrationTimeout.inMilliseconds,
+          })
+          .then((response) {
+            if (!expired) return response;
+            // Nobody reads a late reply, so its PRF output is wiped.
+            if (response case {'prfFirst': final Uint8List prf}) {
+              prf.fillRange(0, prf.length, 0);
+            }
+            return null;
+          })
+          .timeout(
+            _registrationTimeout,
+            onTimeout: () {
+              expired = true;
+              unawaited(cancel());
+              throw const WalletAccessException(WalletAccessFailure.canceled);
+            },
+          );
     } on MissingPluginException {
       throw const WalletAccessException(WalletAccessFailure.unavailable);
     } on PlatformException catch (error) {

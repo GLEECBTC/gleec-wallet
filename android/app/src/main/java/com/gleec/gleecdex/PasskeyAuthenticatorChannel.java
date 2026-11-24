@@ -257,13 +257,15 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
         KeyguardManager keyguard =
             (KeyguardManager) activity.getSystemService(Context.KEYGUARD_SERVICE);
         if (keyguard == null || !keyguard.isDeviceSecure()) {
+            trace("create", "keyguard", "unavailable");
             result.error("unavailable", "Passkey request could not be completed", null);
             return;
         }
         final CreatePublicKeyCredentialRequest request;
         try {
-            request = new CreatePublicKeyCredentialRequest(registrationJson(call));
+            request = publicKeyCreation(call);
         } catch (Exception error) {
+            trace("create", "build", "invalidResponse");
             result.error("invalidResponse", "Passkey request could not be completed", null);
             return;
         }
@@ -276,24 +278,37 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
                     @Override public void onResult(CreateCredentialResponse response) {
                         if (pending != result) return;
                         try {
-                            finish(registration(response), null);
+                            Map<String, Object> registration = registration(activity, response);
+                            trace("create", "response", "accepted");
+                            finish(registration, null);
                         } catch (Failure failure) {
+                            trace("create", "response", failure.code);
                             finish(null, failure.code);
                         } catch (Exception error) {
                             // Never forward provider exceptions; they can carry data.
+                            trace("create", "response", "invalidResponse");
                             finish(null, "invalidResponse");
                         }
                     }
 
                     @Override public void onError(@NonNull CreateCredentialException error) {
                         if (pending != result) return;
-                        finish(null, createFailureCode(error));
+                        String code = createFailureCode(error);
+                        trace("create", "provider", code);
+                        finish(null, code);
                     }
                 });
         } catch (RuntimeException error) {
             // A provider can fail to start before it registers its callback.
-            if (pending == result) finish(null, "unavailable");
+            if (pending == result) {
+                trace("create", "start", "unavailable");
+                finish(null, "unavailable");
+            }
         }
+    }
+
+    static CreatePublicKeyCredentialRequest publicKeyCreation(MethodCall call) throws Exception {
+        return new CreatePublicKeyCredentialRequest(registrationJson(call));
     }
 
     private static String registrationJson(MethodCall call) throws Exception {
@@ -335,13 +350,14 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
             && value.getBytes(StandardCharsets.UTF_8).length <= 1024;
     }
 
-    private Map<String, Object> registration(CreateCredentialResponse response) throws Exception {
+    static Map<String, Object> registration(Context context, CreateCredentialResponse response)
+            throws Exception {
         if (!(response instanceof CreatePublicKeyCredentialResponse)) throw new Failure("invalidResponse");
         JSONObject json = new JSONObject(
             ((CreatePublicKeyCredentialResponse) response).getRegistrationResponseJson());
         JSONObject body = json.getJSONObject("response");
         byte[] clientData = decode(body.getString("clientDataJSON"));
-        verifyOrigin(clientData);
+        verifyOrigin(context, clientData);
         Map<String, Object> value = new HashMap<>();
         value.put("credentialId", decode(json.getString("rawId")));
         value.put("clientDataJSON", clientData);
@@ -372,7 +388,7 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
         return value;
     }
 
-    private static String createFailureCode(CreateCredentialException error) {
+    static String createFailureCode(CreateCredentialException error) {
         if (error instanceof CreateCredentialCancellationException) return "canceled";
         if (error instanceof CreateCredentialInterruptedException) return "interrupted";
         if (error instanceof CreatePublicKeyCredentialDomException) {

@@ -163,6 +163,54 @@ void _channelTests() {
     );
   });
 
+  testWidgets('cancels a silent provider and permits a fresh retry', (
+    tester,
+  ) async {
+    final originalReply = Completer<Map<String, Object?>>();
+    var requests = 0;
+    var cancellations = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'cancel') {
+        cancellations++;
+        return null;
+      }
+      requests++;
+      return requests == 1 ? originalReply.future : reply();
+    });
+    final registrar = MethodChannelPasskeyRegistrar();
+    final timedOut = expectLater(
+      registrar.register(_request),
+      _fails(WalletAccessFailure.canceled),
+    );
+    await tester.pump(const Duration(minutes: 2));
+    await timedOut;
+    expect(cancellations, 1);
+
+    originalReply.complete(reply());
+    await tester.pump();
+    final retry = await registrar.register(_request);
+    expect(retry.prfOutput, bytesOf(4));
+    expect(requests, 2);
+  });
+
+  testWidgets('wipes the PRF output of a reply after the timeout', (
+    tester,
+  ) async {
+    final held = _HeldReplyChannel();
+    final timedOut = expectLater(
+      MethodChannelPasskeyRegistrar(channel: held).register(_request),
+      _fails(WalletAccessFailure.canceled),
+    );
+    await tester.pump(const Duration(minutes: 2));
+    await timedOut;
+    expect(held.cancellations, 1);
+    final lateReply = reply();
+    final prf = lateReply['prfFirst']! as Uint8List;
+    held.reply.complete(lateReply);
+    await tester.pump();
+    expect(prf, everyElement(0));
+  });
+
   test('reports a removed passkey and cancels at best effort', () async {
     final calls = <MethodCall>[];
     answer((call) {
@@ -198,6 +246,23 @@ void _channelTests() {
     answer((_) => throw PlatformException(code: 'unavailable'));
     expect(await registrar.isSupported(), isFalse);
   });
+}
+
+/// Replies with the test's own buffers, which a mocked messenger would copy.
+final class _HeldReplyChannel extends MethodChannel {
+  _HeldReplyChannel() : super('gleec.wallet/passkey');
+
+  final reply = Completer<Object?>();
+  var cancellations = 0;
+
+  @override
+  Future<T?> invokeMethod<T>(String method, [dynamic arguments]) async {
+    if (method == 'cancel') {
+      cancellations++;
+      return null;
+    }
+    return await reply.future as T?;
+  }
 }
 
 void _providerNameTests() {
