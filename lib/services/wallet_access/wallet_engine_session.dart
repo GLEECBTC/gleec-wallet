@@ -3,17 +3,15 @@ part of 'wallet_access_service.dart';
 /// Keeps the engine's session and what the app shows in step when a sign-in
 /// outlives the authorization it started under.
 extension _EngineSession on WalletAccessService {
-  /// Signs the engine in to [user], or returns the session it already holds
-  /// for that wallet. The engine refuses a second sign-in, so a repeated
-  /// unlock would otherwise fail for as long as that session stays open. The
-  /// caller still verifies [password] against the returned session.
-  Future<KdfUser> _openEngineSession(KdfUser user, String password) async {
+  /// Opens the expected wallet or reuses its existing engine session.
+  /// The caller still verifies [password] against the returned session.
+  Future<KdfUser> _openEngineSession(WalletId walletId, String password) async {
     final current = await _sdk.auth.currentUser;
-    if (current != null && current.walletId == user.walletId) return current;
+    if (current?.walletId == walletId) return current!;
     return _sdk.auth.signIn(
-      walletName: user.walletId.name,
+      walletName: walletId.name,
       password: password,
-      options: user.walletId.authOptions,
+      options: walletId.authOptions,
     );
   }
 

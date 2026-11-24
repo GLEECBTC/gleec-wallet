@@ -15,7 +15,6 @@ class WalletsManager extends StatelessWidget {
     this.selectedWallet,
     this.onSwitchWallet,
     this.onRecover,
-    this.initialHdMode = false,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
     this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
@@ -28,7 +27,6 @@ class WalletsManager extends StatelessWidget {
   final Wallet? selectedWallet;
   final VoidCallback? onSwitchWallet;
   final VoidCallback? onRecover;
-  final bool initialHdMode;
   final bool rememberMe;
 
   /// Which form the iguana branch should open on. Defaults to none so existing
@@ -51,7 +49,6 @@ class WalletsManager extends StatelessWidget {
           onSwitchWallet: onSwitchWallet,
           onRecover: onRecover,
           initialWallet: selectedWallet,
-          initialHdMode: initialHdMode,
           rememberMe: rememberMe,
           initialAction: initialAction,
           initialWalletAction: initialWalletAction,

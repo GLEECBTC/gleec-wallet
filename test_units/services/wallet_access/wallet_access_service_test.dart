@@ -2200,10 +2200,7 @@ void main() {
           metadata: {'display_name': 'Gleec Wallet 2'},
         );
         auth.users.add(existing);
-        final created = await service.createWallet(
-          walletType: WalletType.hdwallet,
-          initialMetadata: {},
-        );
+        final created = await service.createWallet(initialMetadata: {});
         expect(created.walletId.name, 'Gleec Wallet 3');
         expect(auth.registrations.map((registration) => registration.name), [
           'Gleec Wallet 3',
@@ -2218,7 +2215,6 @@ void main() {
       () async {
         auth.collideOnce = true;
         final user = await service.createWallet(
-          walletType: WalletType.hdwallet,
           initialMetadata: {'has_backup': false},
         );
         expect(auth.registrations.map((e) => e.name), [
@@ -2236,10 +2232,7 @@ void main() {
       () async {
         auth.ownedCollision = true;
         await expectLater(
-          service.createWallet(
-            walletType: WalletType.hdwallet,
-            initialMetadata: {},
-          ),
+          service.createWallet(initialMetadata: {}),
           throwsA(isA<AuthException>()),
         );
         expect(auth.registrations, hasLength(1));
@@ -2252,16 +2245,10 @@ void main() {
     test('interrupted creation retries its original ID and password', () async {
       auth.failCreationOnce = true;
       await expectLater(
-        service.createWallet(
-          walletType: WalletType.hdwallet,
-          initialMetadata: {},
-        ),
+        service.createWallet(initialMetadata: {}),
         throwsStateError,
       );
-      await service.createWallet(
-        walletType: WalletType.hdwallet,
-        initialMetadata: {},
-      );
+      await service.createWallet(initialMetadata: {});
       expect(auth.registrations.map((e) => e.id).toSet(), hasLength(1));
       expect(auth.registrations.map((e) => e.password).toSet(), hasLength(1));
       expect(backend.writes, 1);
@@ -2273,19 +2260,13 @@ void main() {
       test('creation retry retains the wallet after $key fails', () async {
         storage.failWrite = key;
         await expectLater(
-          service.createWallet(
-            walletType: WalletType.hdwallet,
-            initialMetadata: {},
-          ),
+          service.createWallet(initialMetadata: {}),
           throwsA(isA<WalletAccessException>()),
         );
         final original = auth.users.single;
         expect(coordinator.operationGate.allowsOperations, isFalse);
         storage.failWrite = null;
-        final resumed = await service.createWallet(
-          walletType: WalletType.hdwallet,
-          initialMetadata: {},
-        );
+        final resumed = await service.createWallet(initialMetadata: {});
         expect(
           WalletAccessService.entryId(resumed),
           WalletAccessService.entryId(original),
@@ -2305,10 +2286,7 @@ void main() {
       'post-commit pending cleanup cannot report a failed creation',
       () async {
         storage.throwAfterPendingDelete = true;
-        final user = await service.createWallet(
-          walletType: WalletType.hdwallet,
-          initialMetadata: {},
-        );
+        final user = await service.createWallet(initialMetadata: {});
         expect(auth.users, [user]);
         expect(coordinator.operationGate.allowsOperations, isTrue);
         expect((await service.lastWallet())?.name, user.walletId.name);
@@ -2349,10 +2327,7 @@ void main() {
                   key == 'wallet_access_signed_out_v1';
           }
           await expectLater(
-            service.createWallet(
-              walletType: WalletType.hdwallet,
-              initialMetadata: {},
-            ),
+            service.createWallet(initialMetadata: {}),
             throwsA(isA<WalletAccessException>()),
           );
           final original = auth.users.single;
@@ -2369,10 +2344,7 @@ void main() {
             unlockCoordinator: coordinator,
           );
           await service.initialize();
-          final resumed = await service.createWallet(
-            walletType: WalletType.hdwallet,
-            initialMetadata: {},
-          );
+          final resumed = await service.createWallet(initialMetadata: {});
           expect(
             WalletAccessService.entryId(resumed),
             WalletAccessService.entryId(original),
@@ -2556,10 +2528,7 @@ void main() {
       () async {
         storage.failWrite = _recordsKey;
         await expectLater(
-          service.createWallet(
-            walletType: WalletType.hdwallet,
-            initialMetadata: {},
-          ),
+          service.createWallet(initialMetadata: {}),
           throwsA(isA<WalletAccessException>()),
         );
         expect(auth.registrations, isEmpty);

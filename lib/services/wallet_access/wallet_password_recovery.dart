@@ -7,14 +7,10 @@ extension _PasswordRecovery on WalletAccessService {
   Future<KdfUser?> _recoverPasswordRotation(
     Wallet wallet,
     String password,
-    AuthOptions? options,
+    bool? allowWeakPassword,
   ) => _runAccessOperation((revision) async {
-    // By name only: the derivation mode asked for may differ from the one
-    // last stored, and choosing it is the ordinary sign-in's business.
-    KdfUser? user;
-    for (final candidate in await _sdk.auth.getUsers()) {
-      if (candidate.walletId.name == wallet.name) user = candidate;
-    }
+    final users = await _sdk.auth.getUsers();
+    final user = users.firstWhereOrNull(wallet.matchesKdfUser);
     if (user == null) return null;
     final WalletAccessRecord? record;
     try {
@@ -33,9 +29,14 @@ extension _PasswordRecovery on WalletAccessService {
     _ensureRevision(revision);
     // Ordinary sign-in will check a supplied old password.
     if (previous == null) return null;
+    final options = await signInOptionsFor(
+      user,
+      allowWeakPassword: allowWeakPassword,
+    );
+    _ensureRevision(revision);
     final (active, confirmed) = await _signInAcrossRotation(
       user.walletId.name,
-      options ?? user.walletId.authOptions,
+      options,
       password: password,
       previous: previous,
       revision: revision,

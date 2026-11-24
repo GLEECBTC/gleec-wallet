@@ -20,11 +20,18 @@ class _Engine implements KomodoDefiLocalAuth {
   Completer<void>? reached;
   Completer<void>? release;
 
-  KdfUser add({String name = 'Wallet 1'}) {
+  KdfUser add({
+    String name = 'Wallet 1',
+    WalletType? registeredType = WalletType.hdwallet,
+    AuthOptions storedOptions = _hdOptions,
+  }) {
     final user = KdfUser(
-      walletId: WalletId.withPubkeyHash(name, _hdOptions, 'pubkey-$name'),
+      walletId: WalletId.withPubkeyHash(name, storedOptions, 'pubkey-$name'),
       isBip39Seed: true,
-      metadata: {'_wallet_entry_id': 'entry-$name', 'type': 'hdwallet'},
+      metadata: {
+        '_wallet_entry_id': 'entry-$name',
+        if (registeredType != null) 'type': registeredType.name,
+      },
     );
     users.add(user);
     return user;
@@ -270,8 +277,10 @@ class _Session {
   }
 
   /// A device-protected wallet whose password only the vault holds.
-  Future<KdfUser> installManaged() async {
-    final user = engine.add();
+  Future<KdfUser> installManaged({
+    AuthOptions storedOptions = _hdOptions,
+  }) async {
+    final user = engine.add(storedOptions: storedOptions);
     final entry = WalletAccessService.entryId(user);
     final record = WalletAccessRecord(
       entryId: entry,
@@ -326,37 +335,122 @@ void _engineSessionCases() {
     });
     tearDown(() => s.dispose());
 
-    test('password sign-in can switch the derivation mode', () async {
+    const legacyOptions = AuthOptions(
+      derivationMethod: DerivationMethod.iguana,
+    );
+
+    test('password sign-in keeps HD despite a stale login form', () async {
       s.engine.add();
-      final iguana = _wallet().copyWith(
+      final stale = _wallet().copyWith(
         config: _wallet().config.copyWith(type: WalletType.iguana),
       );
       final state = await s.outcomeOf(
-        AuthSignInRequested(wallet: iguana, password: _enginePassword),
+        AuthSignInRequested(wallet: stale, password: _enginePassword),
+      );
+      expect(state.authError, isNull);
+      expect(state.currentUser?.walletId.isHd, isTrue);
+      expect(s.engine.signInModes, [DerivationMethod.hdWallet]);
+      expect(s.coordinator.operationGate.allowsOperations, isTrue);
+    });
+
+    test('password sign-in keeps an existing legacy derivation', () async {
+      s.engine.add(storedOptions: legacyOptions);
+      final state = await s.outcomeOf(
+        AuthSignInRequested(wallet: _wallet(), password: _enginePassword),
       );
       expect(state.authError, isNull);
       expect(state.currentUser?.walletId.isHd, isFalse);
       expect(s.engine.signInModes, [DerivationMethod.iguana]);
-      expect(s.coordinator.operationGate.allowsOperations, isTrue);
     });
 
     test(
-      'a wallet with a record switches mode and keeps device unlock',
+      'a wallet without app metadata uses its stored SDK derivation',
       () async {
-        await s.installManaged();
-        final iguana = _wallet().copyWith(
-          config: _wallet().config.copyWith(type: WalletType.iguana),
-        );
+        s.engine.add(registeredType: null, storedOptions: legacyOptions);
         final state = await s.outcomeOf(
-          AuthSignInRequested(wallet: iguana, password: _enginePassword),
+          AuthSignInRequested(wallet: _wallet(), password: _enginePassword),
         );
         expect(state.authError, isNull);
-        expect(state.currentUser?.walletId.isHd, isFalse);
-        final status = await s.access.status();
-        expect(status.hasManagedCredential, isTrue);
-        expect(s.coordinator.operationGate.allowsOperations, isTrue);
+        expect(s.engine.signInModes, [DerivationMethod.iguana]);
       },
     );
+
+    test(
+      'password sign-in refuses a same-name wallet with a different identity',
+      () async {
+        s.engine.add();
+        final replaced = _wallet().copyWith(
+          config: _wallet().config.copyWith(
+            pubKey: 'different-wallet-identity',
+          ),
+        );
+        final state = await s.outcomeOf(
+          AuthSignInRequested(wallet: replaced, password: _enginePassword),
+        );
+        expect(state.currentUser, isNull);
+        expect(state.authError, isNotNull);
+        expect(s.engine.signInModes, isEmpty);
+      },
+    );
+
+    for (final managed in [false, true]) {
+      test(
+        'repairs stale SDK options for the same verified wallet (managed: $managed)',
+        () async {
+          final user = managed
+              ? await s.installManaged(storedOptions: legacyOptions)
+              : s.engine.add(storedOptions: legacyOptions);
+          s.storage.values['wallet_access_last_v1'] = {
+            'entryId': WalletAccessService.entryId(user),
+            'walletId': user.walletId
+                .copyWith(authOptions: _hdOptions)
+                .toJson(),
+          };
+          final event = managed
+              ? AuthManagedSignInRequested(wallet: user.wallet)
+              : AuthSignInRequested(
+                  wallet: user.wallet,
+                  password: _enginePassword,
+                );
+          final state = await s.outcomeOf(event);
+          expect(state.authError, isNull);
+          expect(state.currentUser?.walletId.isHd, isTrue);
+          expect(s.engine.signInModes, [DerivationMethod.hdWallet]);
+          expect(s.coordinator.operationGate.allowsOperations, isTrue);
+          if (managed) {
+            expect((await s.access.status()).hasManagedCredential, isTrue);
+          }
+        },
+      );
+    }
+
+    test('fresh registration is HD even for an old Iguana request', () async {
+      final oldRequest = _wallet().copyWith(
+        config: _wallet().config.copyWith(type: WalletType.iguana),
+      );
+      final state = await s.outcomeOf(
+        AuthRegisterRequested(wallet: oldRequest, password: _enginePassword),
+      );
+      expect(state.authError, isNull);
+      expect(state.currentUser?.walletId.isHd, isTrue);
+      expect(state.currentUser?.metadata['type'], 'hdwallet');
+    });
+
+    test('recovery of an Iguana wallet preserves its derivation', () async {
+      final legacy = _wallet().copyWith(
+        config: _wallet().config.copyWith(type: WalletType.iguana),
+      );
+      final state = await s.outcomeOf(
+        AuthImportRequested(
+          wallet: legacy,
+          password: _enginePassword,
+          seed: 'disposable recovery fixture',
+        ),
+      );
+      expect(state.authError, isNull);
+      expect(state.currentUser?.walletId.isHd, isFalse);
+      expect(state.currentUser?.metadata['type'], 'iguana');
+    });
 
     test('a recovered password change does not sign in twice', () async {
       final user = await s.installManaged();
