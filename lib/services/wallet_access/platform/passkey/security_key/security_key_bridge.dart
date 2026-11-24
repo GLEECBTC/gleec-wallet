@@ -157,15 +157,32 @@ class MethodChannelSecurityKeyBridge implements SecurityKeyBridge {
     if (list is! List || list.isEmpty) {
       throw const SecurityKeyException('invalidResponse');
     }
+    final candidates = <SecurityKeyCandidate>[];
     try {
-      return [for (final entry in list) _candidate(entry)];
-    } on Object {
-      // Candidates share these buffers, so this wipes every one decoded.
       for (final entry in list) {
-        final prf = entry is Map ? entry['prf'] : null;
-        if (prf is Uint8List) prf.fillRange(0, prf.length, 0);
+        candidates.add(_candidate(entry));
+      }
+      return candidates;
+    } on Object {
+      for (final candidate in candidates) {
+        candidate.wipe();
       }
       rethrow;
+    } finally {
+      for (final entry in list) {
+        if (entry is Map && entry['prf'] is Uint8List) {
+          _eraseChannelOutput(entry['prf'] as Uint8List);
+        }
+      }
+    }
+  }
+
+  static void _eraseChannelOutput(Uint8List bytes) {
+    try {
+      bytes.fillRange(0, bytes.length, 0);
+    } on UnsupportedError {
+      // Flutter manages a read-only reply buffer. Each candidate keeps only
+      // its own copy, which is wiped after use.
     }
   }
 
@@ -245,6 +262,8 @@ SecurityKeyCandidate _candidate(Object? entry) {
     userDisplayName: map['userDisplayName'] is String
         ? map['userDisplayName'] as String
         : null,
-    prf: prf is Uint8List ? prf : null,
+    // Flutter can deliver a reply in a read-only buffer. Copy the PRF last,
+    // after every check that can throw, so the wipe reaches it.
+    prf: prf is Uint8List ? Uint8List.fromList(prf) : null,
   );
 }

@@ -21,6 +21,42 @@ Map<String, Object?> _assertion({Object? prf, Object? credentialId}) => {
   'prf': prf,
 };
 
+/// An encoded reply, so the bridge decodes views into this very buffer.
+ByteData _reply(List<Map<String, Object?>> assertions) =>
+    const StandardMethodCodec().encodeSuccessEnvelope({
+      'assertions': assertions,
+    });
+
+void _replyWith(ByteData reply) => TestDefaultBinaryMessengerBinding
+    .instance
+    .defaultBinaryMessenger
+    .setMockMessageHandler(_channel.name, (_) async => reply);
+
+Future<List<SecurityKeyCandidate>> _request(SecurityKeyBridge bridge) =>
+    bridge.getAssertion(
+      path: '/dev/hidraw3',
+      rpId: passkeyRp,
+      clientDataHash: bytesOf(5),
+      salt: bytesOf(6),
+      allowCredentials: const [],
+      timeout: const Duration(minutes: 2),
+    );
+
+bool _holds(ByteData reply, Uint8List secret) {
+  final bytes = reply.buffer.asUint8List(
+    reply.offsetInBytes,
+    reply.lengthInBytes,
+  );
+  for (var i = 0; i + secret.length <= bytes.length; i++) {
+    var j = 0;
+    while (j < secret.length && bytes[i + j] == secret[j]) {
+      j++;
+    }
+    if (j == secret.length) return true;
+  }
+  return false;
+}
+
 Matcher _code(String code, {int? retries}) => throwsA(
   isA<SecurityKeyException>()
       .having((e) => e.code, 'code', code)
@@ -30,10 +66,11 @@ Matcher _code(String code, {int? retries}) => throwsA(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final bridge = MethodChannelSecurityKeyBridge();
-  tearDown(
-    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, null),
-  );
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      ..setMockMethodCallHandler(_channel, null)
+      ..setMockMessageHandler(_channel.name, null);
+  });
 
   group('security-key channel', () {
     test('is unavailable without the Linux bridge', () async {
@@ -135,6 +172,33 @@ void main() {
         ),
         _code('invalidResponse'),
       );
+    });
+
+    test('owns wipeable PRF bytes from a read-only reply', () async {
+      _replyWith(_reply([_assertion(prf: bytesOf(9))]).asUnmodifiableView());
+      final [candidate] = await _request(bridge);
+      expect(candidate.prf, bytesOf(9));
+      candidate.wipe();
+      expect(candidate.prf, everyElement(0));
+    });
+
+    test('erases the reply buffer and keeps an owned copy', () async {
+      final reply = _reply([_assertion(prf: bytesOf(9))]);
+      expect(_holds(reply, bytesOf(9)), isTrue);
+      _replyWith(reply);
+      final [candidate] = await _request(bridge);
+      expect(_holds(reply, bytesOf(9)), isFalse);
+      expect(candidate.prf, bytesOf(9));
+    });
+
+    test('a malformed read-only reply is refused', () async {
+      _replyWith(
+        _reply([
+          _assertion(prf: bytesOf(9)),
+          _assertion(prf: bytesOf(9), credentialId: Uint8List(0)),
+        ]).asUnmodifiableView(),
+      );
+      await expectLater(_request(bridge), _code('invalidResponse'));
     });
   });
 
