@@ -53,9 +53,8 @@ final class MethodChannelPasskeyRegistrar implements PasskeyRegistrar {
           })
           .then((response) {
             if (!expired) return response;
-            // Nobody reads a late reply, so its PRF output is wiped.
             if (response case {'prfFirst': final Uint8List prf}) {
-              prf.fillRange(0, prf.length, 0);
+              _eraseChannelOutput(prf);
             }
             return null;
           })
@@ -81,19 +80,34 @@ final class MethodChannelPasskeyRegistrar implements PasskeyRegistrar {
       _ => _invalid(),
     };
     final prf = reply['prfFirst'];
-    final transports = reply['transports'] ?? const <Object?>[];
-    if ((prf != null && prf is! Uint8List) ||
-        transports is! List ||
-        transports.any((value) => value is! String)) {
-      _invalid();
+    try {
+      final transports = reply['transports'] ?? const <Object?>[];
+      if ((prf != null && prf is! Uint8List) ||
+          transports is! List ||
+          transports.any((value) => value is! String)) {
+        _invalid();
+      }
+      return PasskeyRegistration(
+        credentialId: bytes('credentialId'),
+        clientDataJson: bytes('clientDataJSON'),
+        attestationObject: bytes('attestationObject'),
+        // Flutter can wrap a platform reply in a read-only buffer. Own the
+        // PRF bytes so the backup can erase them after use.
+        prfOutput: prf is Uint8List ? Uint8List.fromList(prf) : null,
+        transports: List.unmodifiable(transports.cast<String>()),
+      );
+    } finally {
+      if (prf is Uint8List) _eraseChannelOutput(prf);
     }
-    return PasskeyRegistration(
-      credentialId: bytes('credentialId'),
-      clientDataJson: bytes('clientDataJSON'),
-      attestationObject: bytes('attestationObject'),
-      prfOutput: prf as Uint8List?,
-      transports: List.unmodifiable(transports.cast<String>()),
-    );
+  }
+
+  static void _eraseChannelOutput(Uint8List bytes) {
+    try {
+      bytes.fillRange(0, bytes.length, 0);
+    } on UnsupportedError {
+      // A read-only transport buffer is managed by Flutter. Only the owned
+      // copy is kept, and it is erased after use.
+    }
   }
 
   @override
@@ -172,7 +186,7 @@ RegisteredPasskey checkPasskeyRegistration(
     backupState: data.backupState,
     transports: passkeyTransports(registration.transports),
     aaguid: data.aaguid,
-    // The same buffer, so wiping the result wipes the platform's copy.
+    // The same buffer, so wiping the result wipes the registration's copy.
     prfOutput: prf,
   );
 }

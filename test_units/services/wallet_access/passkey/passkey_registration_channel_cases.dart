@@ -5,7 +5,10 @@ void _channelTests() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  tearDown(() {
+    messenger.setMockMethodCallHandler(channel, null);
+    messenger.setMockMessageHandler(channel.name, null);
+  });
 
   Map<String, Object?> reply() => {
     'credentialId': bytesOf(1, 16),
@@ -112,6 +115,34 @@ void _channelTests() {
     );
   });
 
+  test('owns wipeable PRF bytes from a read-only platform reply', () async {
+    const codec = StandardMethodCodec();
+    final platformReply = codec
+        .encodeSuccessEnvelope(reply())
+        .asUnmodifiableView();
+    messenger.setMockMessageHandler(channel.name, (_) async => platformReply);
+
+    final registration = await MethodChannelPasskeyRegistrar().register(
+      _request,
+    );
+    final prf = registration.prfOutput!;
+    expect(prf, bytesOf(4));
+    prf.fillRange(0, prf.length, 0);
+    expect(prf, everyElement(0));
+  });
+
+  test('erases the platform copy once it owns the PRF output', () async {
+    final held = _HeldReplyChannel();
+    final platformReply = reply();
+    final platformPrf = platformReply['prfFirst']! as Uint8List;
+    held.reply.complete(platformReply);
+
+    final registration = await MethodChannelPasskeyRegistrar(channel: held)
+        .register(_request);
+    expect(registration.prfOutput, bytesOf(4));
+    expect(platformPrf, everyElement(0));
+  });
+
   test('refuses a malformed reply', () async {
     final replies = <String, Object?>{
       'nothing': null,
@@ -166,16 +197,19 @@ void _channelTests() {
   testWidgets('cancels a silent provider and permits a fresh retry', (
     tester,
   ) async {
-    final originalReply = Completer<Map<String, Object?>>();
+    const codec = StandardMethodCodec();
+    final originalReply = Completer<ByteData>();
+    final completeReply = codec.encodeSuccessEnvelope(reply());
     var requests = 0;
     var cancellations = 0;
-    messenger.setMockMethodCallHandler(channel, (call) async {
+    messenger.setMockMessageHandler(channel.name, (message) async {
+      final call = codec.decodeMethodCall(message!);
       if (call.method == 'cancel') {
         cancellations++;
-        return null;
+        return codec.encodeSuccessEnvelope(null);
       }
       requests++;
-      return requests == 1 ? originalReply.future : reply();
+      return requests == 1 ? originalReply.future : completeReply;
     });
     final registrar = MethodChannelPasskeyRegistrar();
     final timedOut = expectLater(
@@ -186,7 +220,7 @@ void _channelTests() {
     await timedOut;
     expect(cancellations, 1);
 
-    originalReply.complete(reply());
+    originalReply.complete(completeReply.asUnmodifiableView());
     await tester.pump();
     final retry = await registrar.register(_request);
     expect(retry.prfOutput, bytesOf(4));
