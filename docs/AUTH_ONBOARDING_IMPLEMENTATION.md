@@ -25,7 +25,7 @@ This change implements instant, locally recoverable wallet provisioning and a se
 | Financial dispatch admission | `wallet_operation_gate.dart`, SDK `RpcDispatchGuard` and withdrawal pre-broadcast checks |
 | Root privacy/unlock surface | `lib/views/common/wallet_access/wallet_access_boundary.dart`, `app_lock_boundary.dart` |
 | Native storage | Platform runners; see [native implementation and checks](AUTH_NATIVE_VALIDATION.md) |
-| Browser PRF vault | `web/services/wallet_credentials.js`, `platform/web_credential_backend.dart` |
+| Browser PRF vault | `platform/browser_credential_vault.dart`, `platform/web_credential_backend.dart` |
 | Native reuse of a web passkey | `platform/passkey/`, one `gleec.wallet/passkey` bridge per platform; see [passkey reuse](AUTH_PASSKEY_REUSE.md) |
 | Moving a wallet, passkey backups | `services/wallet_move/`, `services/wallet_backup/`, `views/wallet_move/`, `views/wallet_backup/`; see [move and backup](AUTH_SEED_MOVE_AND_BACKUP.md) |
 | Recovery evidence | `WalletConfig.recoveryEvidence`; legacy `has_backup` is not independent evidence |

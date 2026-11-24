@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -247,6 +248,43 @@ void main() {
       expect(arguments['allowCredentials'], isEmpty);
       expect(assertion.userHandle, isNull);
       expect(assertion.prf, bytesOf(5));
+    });
+
+    testWidgets('cancels a silent provider and permits a fresh retry', (
+      tester,
+    ) async {
+      final originalReply = Completer<Map<String, Object?>>();
+      final completeReply = {
+        'credentialId': bytesOf(1, 16),
+        'authenticatorData': bytesOf(2, 37),
+        'clientDataJSON': bytesOf(3, 40),
+        'signature': bytesOf(4, 70),
+        'prf': bytesOf(5),
+      };
+      var requests = 0;
+      var cancellations = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'cancel') {
+          cancellations++;
+          return null;
+        }
+        requests++;
+        return requests == 1 ? originalReply.future : completeReply;
+      });
+      final authenticator = MethodChannelPasskeyAuthenticator();
+      final timedOut = expectLater(
+        authenticator.getAssertion(request()),
+        _fails(WalletAccessFailure.canceled),
+      );
+      await tester.pump(const Duration(minutes: 2));
+      await timedOut;
+      expect(cancellations, 1);
+
+      originalReply.complete(completeReply);
+      await tester.pump();
+      final retry = await authenticator.getAssertion(request());
+      expect(retry.prf, bytesOf(5));
+      expect(requests, 2);
     });
 
     test('maps native failures without their details', () async {

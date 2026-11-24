@@ -146,7 +146,9 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                   });
                 }
                 final title = walletUnlockTitle(walletName);
-                final message = walletName == null || walletName.isEmpty
+                final message = state.passkeySetupInterrupted
+                    ? LocaleKeys.authPasskeySetupInterrupted.tr()
+                    : walletName == null || walletName.isEmpty
                     ? 'authUnlockDescription'.tr()
                     : null;
                 Widget? authentication;
@@ -290,7 +292,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
   }
 
   void _exit({required bool recover}) {
-    context.read<WalletAccessService?>()?.unlockCoordinator.lock();
+    context.read<WalletAccessService?>()?.lockWalletSession();
     setState(() {
       _password.clear();
       _recover = recover;

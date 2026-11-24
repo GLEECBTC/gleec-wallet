@@ -193,9 +193,10 @@ record no secrets.
 1. On the web, create a wallet, protect it with a passkey, and back up the
    phrase. Import the same wallet in the app.
 2. In Settings, choose **Use an existing passkey** and pick the web passkey.
-   Count the prompts: one for the current lock, then the passkey twice
-   (choose, then verify). Then cold-restart and unlock. Each unlock should
-   need exactly one passkey prompt.
+   Expect authorization with the current lock, then two passkey assertions to
+   choose and verify the binding. Cold-restart the app and confirm that one
+   assertion opens the restored wallet. Return to the updated web build and
+   confirm that the original passkey still opens the wallet.
 3. Repeat with cancellation at each prompt. The previous lock must still open
    the wallet.
 4. Change the wallet password while the wallet is passkey-protected. Expect
@@ -218,7 +219,100 @@ record no secrets.
    message); and **Open without the passkey**, after which the wallet opens
    with no prompt.
 
-## Automated evidence
+## Automated regression checks
+
+The Dart unit suite covers binding, cancellation, rollback, cold unlock and
+recovery. The browser release gate uses disposable Chrome profiles and the
+app's Dart vault for storage-level checks.
+
+### Web migration
+
+Build the JavaScript web bundle from the parent of #3641 (`14d6f9b4a`) in a
+separate checkout. Build the current JavaScript and Wasm bundles as described in
+[Testing](TESTING.md). Use the same public asset preparation for each build.
+
+```bash
+for compiler in javascript wasm; do
+  GLEEC_TEST_WEB_COMPILER="$compiler" node \
+    test_units/services/wallet_access/web_passkey_migration.browser.test.js \
+    /path/to/legacy/build/web
+done
+```
+
+The test enrolls through the legacy runtime, changes the served bundle at the
+same origin and reopens the wallet twice. It checks the wallet identity,
+credential record, fresh assertions, absence of new registrations, and that
+healthy unlock never requests a saved password or shows the lost-unlock
+recovery button. The missing-vault case in the regular browser gate checks that
+the recovery button appears after vault loss when the password manager may
+hold the generated password. It also checks that the app waits for the user's
+choice before asking for a password.
+
+The browser release gate tests a full-screen provider handoff during
+registration, verification and explicit unlock. It holds each response while
+the tab is hidden and checks that no credential is read or committed until the
+tab returns. Automatic prompts, navigation and expired provider returns still
+discard the result. Run this check against either release compiler with
+`GLEEC_TEST_WEB_COMPILER=javascript` or `wasm` and
+`node test_units/services/wallet_access/web_passkey_handoff.browser.test.js`.
+
+### Android bridge on an emulator
+
+Build the signed internal release and the instrumentation APK with the pinned
+Flutter and Android SDKs and JDK 21, as used in Android CI. Start a disposable
+emulator with a compatible ABI. Disable shrinking for this instrumentation
+build so the runner can inspect AndroidX request fields.
+
+```bash
+(
+  cd android
+  ./gradlew --offline -PgleecInternalTesting=true -PgleecPasskeyTests=true -Pshrink=false \
+    -Ptarget-platform=android-arm,android-arm64 \
+    :app:assembleRelease :app:assembleReleaseAndroidTest
+)
+python3 tool/run_android_passkey_bridge.py \
+  --serial emulator-5554 \
+  --apk build/app/outputs/apk/release/app-release.apk \
+  --test-apk build/app/outputs/apk/androidTest/release/app-release-androidTest.apk
+```
+
+Use the selected emulator's serial and put the Android SDK's platform-tools and
+command-line tools on PATH. The runner validates both package names and the
+emulator before installing. It checks the production AndroidX request, PRF
+parsing with valid and missing output, the installed APK's signing origin,
+and provider error classification. This check uses synthetic responses.
+
+### Device-provider acceptance
+
+Use a signed APK with the reuse flag and the exact preview RP ID baked in.
+Verify the linked host and installed signer. For an emulator round, first
+confirm that the configured browser and provider can enroll and return a PRF
+assertion for a disposable credential. Then start the acceptance round from
+the pre-#3641 browser bundle and retain the same browser origin and data when
+switching to the current bundle.
+
+Record the OS, provider, APK identity and result at each step. During enrollment
+and unlock, record which UI appears (Gleec recovery, browser autofill, or OS
+credential picker) and when. A real provider test is needed to verify any
+password prompt that appears outside the web page.
+
+Include a full-screen Android provider in this round. On Android 16 with
+Chrome 133 and KeePassDX 4.5.8, the pre-#3641 bundle received PRF output
+after the provider hid the browser tab and canceled enrollment before
+verification. The Dart vault now gives an explicit WebAuthn prompt up to a
+minute for its result and up to five seconds to return to a visible, focused
+tab. Wallet content and transactions stay blocked during the handoff. The
+vault still verifies the challenge and credential before committing. Tab
+navigation, wallet switch, explicit lock and changes from another tab revoke
+the pending operation.
+
+For an Android binding failure, set the device's `log.tag.GleecPasskey` to
+`DEBUG` before reproducing and read `adb logcat -s GleecPasskey:D` with that
+device selected. The bridge records discovery or allow-listed assertion, the
+request stage, and the result code. The marker contains no provider response
+details, credential IDs, or PRF bytes.
+
+## Automated evidence at initial rollout
 
 - 64 new Dart tests: 15 for the envelope, checks and channel, 30 for the
   decorator's state machine, 10 end-to-end through `WalletAccessService` over

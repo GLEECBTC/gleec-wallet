@@ -267,7 +267,9 @@ with the correct MIME type. The driver fingerprints `main.dart.wasm`, requires
 that runtime to load and rejects JavaScript fallback. The recovery flow creates
 only unfunded test wallets and checks phrase/file restoration, identity,
 derivation and diagnostic canaries. Hosted acceptance remains tied to the
-deployed JavaScript digest.
+deployed JavaScript digest. See [passkey migration and Android bridge
+checks](AUTH_PASSKEY_REUSE.md#automated-regression-checks) for the pre-#3641
+migration round and signed-emulator instrumentation.
 
 The explicit geo-disable branch has a separate compile-time regression. From
 the wallet root, run:

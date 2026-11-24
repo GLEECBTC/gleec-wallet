@@ -106,6 +106,8 @@ class _Backend extends CredentialBackend {
   int prepares = 0;
   int reads = 0;
   final readReasons = <String>[];
+  bool? lastReadAutomatic;
+  String? lastReadPurpose;
   int passkeyReplacements = 0;
   int passwordDeletionGrants = 0;
   WalletAccessFailure? replacementFailure;
@@ -181,6 +183,8 @@ class _Backend extends CredentialBackend {
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
     readReasons.add(reason);
+    lastReadAutomatic = automatic;
+    lastReadPurpose = purpose;
     if (purpose == 'verifyWrite' && readbackFailure != null) {
       throw WalletAccessException(readbackFailure!);
     }

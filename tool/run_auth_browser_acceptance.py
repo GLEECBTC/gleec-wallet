@@ -16,6 +16,7 @@ SUITES = (
     "web_wallet_recovery",
     "web_missing_data",
     "web_passkey_replacement",
+    "web_passkey_handoff",
     "web_browser_support",
 )
 

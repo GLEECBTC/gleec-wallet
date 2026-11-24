@@ -27,9 +27,10 @@ class LocalBrowser {
     fs.mkdirSync(this.downloads);
   }
 
-  async serve() {
+  async serve({previousBuild} = {}) {
     const hosted = process.env.GLEEC_TEST_HOSTED_URL;
     if (hosted) {
+      assert.equal(previousBuild, undefined, 'Build switching is local only');
       assert.equal(this.webCompiler, 'javascript', 'Hosted acceptance requires the deployed JavaScript build');
       const target = new URL(hosted);
       assert.equal(target.protocol, 'https:');
@@ -49,29 +50,19 @@ class LocalBrowser {
     const isWasm = this.webCompiler === 'wasm';
     const source = path.join(this.root, isWasm ? 'build/web-wasm' : 'build/web');
     const entrypoint = isWasm ? 'main.dart.wasm' : 'main.dart.js';
-    assert.ok(fs.existsSync(path.join(source, 'main.dart.js')), 'Build the release app first');
-    assert.ok(fs.existsSync(path.join(source, entrypoint)), 'Build the selected release compiler first');
-    assert.equal(fs.existsSync(path.join(source, 'assets/assets/debug_data.json')),false,
-      'Stop: rebuild with the explicit public asset manifest before browser validation');
-    for(const name of ['AssetManifest.bin','AssetManifest.json','AssetManifest.bin.json']){
-      const filename=path.join(source,'assets',name);
-      if(!fs.existsSync(filename))continue;
-      let manifest=fs.readFileSync(filename);
-      if(name.endsWith('.bin.json'))manifest=Buffer.from(JSON.parse(manifest.toString('utf8')),'base64');
-      assert.equal(manifest.includes(Buffer.from('assets/debug_data.json')),false,
-        'Stop: the compiled asset manifest still advertises a private fixture');
-    }
-    const digest = filename => createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-    this.buildFingerprint = digest(path.join(source, entrypoint));
+    const currentBuild = this.snapshotBuild(source, entrypoint, 'compiled-fixture');
+    this.buildFingerprint = currentBuild.fingerprint;
     if(process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256){
       assert.equal(this.buildFingerprint,process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256,
         'Use only the exact release build approved for this regression round');
     }
-    const build = path.join(this.profile, 'compiled-fixture');
-    fs.cpSync(source, build, {recursive:true,dereference:true});
-    assert.equal(digest(path.join(source, entrypoint)),this.buildFingerprint,
-      'Wait for the shared Flutter build to finish before taking a fixture snapshot');
-    assert.equal(digest(path.join(build, entrypoint)),this.buildFingerprint);
+    let build = currentBuild.directory;
+    if (previousBuild) {
+      const legacy = this.snapshotBuild(previousBuild, 'main.dart.js', 'legacy-fixture');
+      assert.ok(fs.existsSync(path.join(legacy.directory, 'services/wallet_credentials.js')),
+        'Use a compiled build with the pre-Dart JavaScript vault');
+      build = legacy.directory;
+    }
     const hosting = JSON.parse(fs.readFileSync(path.join(this.root, 'firebase.json'))).hosting;
     const headers = Object.fromEntries(hosting.headers.find(item => item.source === '**').headers
       .map(item => [item.key, item.value]));
@@ -94,6 +85,31 @@ class LocalBrowser {
       fs.createReadStream(filename).pipe(response);
     });
     await new Promise((resolve, reject) => { this.server.once('error', reject); this.server.listen(this.port, '127.0.0.1', resolve); });
+    this.base = `http://localhost:${this.server.address().port}/`;
+    return () => { build = currentBuild.directory; };
+  }
+
+  snapshotBuild(source, entrypoint, label) {
+    assert.ok(fs.existsSync(path.join(source, 'main.dart.js')), 'Build the release app first');
+    assert.ok(fs.existsSync(path.join(source, entrypoint)), 'Build the selected release compiler first');
+    assert.equal(fs.existsSync(path.join(source, 'assets/assets/debug_data.json')),false,
+      'Stop: rebuild with the explicit public asset manifest before browser validation');
+    for(const name of ['AssetManifest.bin','AssetManifest.json','AssetManifest.bin.json']){
+      const filename=path.join(source,'assets',name);
+      if(!fs.existsSync(filename))continue;
+      let manifest=fs.readFileSync(filename);
+      if(name.endsWith('.bin.json'))manifest=Buffer.from(JSON.parse(manifest.toString('utf8')),'base64');
+      assert.equal(manifest.includes(Buffer.from('assets/debug_data.json')),false,
+        'Stop: the compiled asset manifest still advertises a private fixture');
+    }
+    const digest = filename => createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
+    const fingerprint = digest(path.join(source, entrypoint));
+    const directory = path.join(this.profile, label);
+    fs.cpSync(source, directory, {recursive:true,dereference:true});
+    assert.equal(digest(path.join(source, entrypoint)), fingerprint,
+      'Wait for the shared Flutter build to finish before taking a fixture snapshot');
+    assert.equal(digest(path.join(directory, entrypoint)), fingerprint);
+    return {directory, fingerprint};
   }
 
   async launch() {
@@ -235,9 +251,9 @@ class LocalBrowser {
     throw new Error(`Timed out waiting for ${label}`);
   }
 
-  async semantics(page) {
+  async semantics(page, compiler = this.webCompiler) {
     await this.wait(page,"document.querySelector('flt-semantics-placeholder')||document.querySelector('[role=button]')",{label:'Flutter semantics'});
-    if (this.webCompiler === 'wasm') {
+    if (compiler === 'wasm') {
       const loaded = await page.evaluate("performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname)");
       assert.ok(loaded.includes('/main.dart.wasm'), 'The acceptance flow must load the Dart2Wasm application');
       assert.equal(loaded.includes('/main.dart.js'), false, 'JavaScript fallback must not satisfy Wasm acceptance');

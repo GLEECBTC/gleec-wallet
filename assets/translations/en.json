@@ -1981,6 +1981,8 @@
   "authExistingPasskeyPending": "Follow your device's prompts: choose your Gleec Wallet passkey, then use it once more to check that it unlocks this wallet. Nothing changes until then.",
   "authExistingPasskeyNotFound": "No Gleec Wallet passkey was found on this device or in your passkey manager. Nothing changed.",
   "authExistingPasskeyUnsupported": "That passkey or passkey manager can't unlock wallets in this app. Nothing changed. Try another passkey manager.",
+  "authExistingPasskeyProviderError": "Your passkey manager couldn’t complete the request. Your wallet still uses its current protection. Try again.",
+  "authPasskeySetupInterrupted": "Passkey setup didn’t finish. Unlock this wallet as usual, then try again in Security settings.",
   "authExistingPasskeyReady": "This wallet now unlocks with your passkey on this device.",
   "authExistingPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Set up a wallet lock again to open it without typing the password.",
   "authPasskeyProtectedDevice": "Your passkey protects access on this device. It does not back up your wallet.",

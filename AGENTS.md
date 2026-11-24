@@ -45,6 +45,10 @@ Live swap tests with real funds are a manual round on the PR's preview: follow "
 
 Follow the existing architecture and style of the codebase: BLoC where applicable, general OOP/SOLID guidelines. Commit messages and PR titles follow Conventional Commits (`type(scope): summary`).
 
+### Platform interop
+
+Prefer implementing platform interop in Dart as far as supported APIs allow. Use `dart:ffi` or generated platform bindings for native APIs, and `dart:js_interop` with `package:web` in browsers. Keep required host-language code thin behind a Dart interface and keep orchestration and tests in Dart where practical.
+
 ### Gleec Wallet
 
 Detailed instructions for building and running the app can be found in `docs/BUILD_RUN_APP.md` and other files in the `docs/` directory. See `README.md` for an overview of available documentation, and `docs/TESTING.md` for every test surface.

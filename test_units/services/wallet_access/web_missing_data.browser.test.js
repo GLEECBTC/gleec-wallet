@@ -6,6 +6,13 @@ const {LocalBrowser,delay}=require('./web_release_test_driver.js');
 const {probe,credentialsSummary,buttonPresent,virtualAuthenticator}=require('./web_credential_release.browser.test.js');
 const {publicIdentity}=require('./web_wallet_recovery.browser.test.js');
 
+const passwordSaveJournaled=`(()=>{
+  const key=Object.keys(localStorage).find(key=>key.endsWith('wallet_access_records_v1'));
+  let records=key?localStorage.getItem(key):null;
+  for(let i=0;i<3&&typeof records==='string';i++)records=JSON.parse(records);
+  return Object.values(records??{}).some(record=>record.generated&&record.manager==='unknown');
+})()`;
+
 const removeVault=`(async()=>{
   const db=await new Promise(resolve=>{const request=indexedDB.open('gleec-wallet-credentials-v1');request.onsuccess=()=>resolve(request.result);});
   await new Promise((resolve,reject)=>{const tx=db.transaction('credentials','readwrite');tx.objectStore('credentials').clear();tx.oncomplete=resolve;tx.onabort=()=>reject(new Error('Fixture removal failed'));});db.close();return true;
@@ -36,10 +43,18 @@ async function check(kind){
   let credential;
   try{
     await browser.serve();await browser.launch();
-    let page=await browser.page({initialize:probe});await browser.navigate(page);await browser.semantics(page);
+    const initialize=kind==='credential'
+      ?probe+'\nnavigator.credentials.store=async()=>null;':probe;
+    let page=await browser.page({initialize});await browser.navigate(page);await browser.semantics(page);
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded fixture wallet'});
-    credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
+    if(kind==='credential'){
+      credential=await browser.wait(page,'__gleecReleaseProbe.testCredential()',
+        {label:'generated disposable wallet password'});
+      // Creation opens the wallet before the optional password save settles.
+      // Lose the vault only after the save offer is recorded.
+      await browser.wait(page,passwordSaveJournaled,{label:'unreported password save recorded'});
+    }
     const identity=await page.evaluate(publicIdentity);
     const vault=await page.evaluate(credentialsSummary);
     assert.equal(await page.evaluate(walletRows),1);
@@ -93,7 +108,11 @@ async function check(kind){
       assert.equal(await page.evaluate(phraseFirst),true,'A generated password must not be what the sheet asks for first');
       assert.equal(await page.evaluate(buttonPresent('Unlock')),false,'No password form before the user asks for one');
       // The provider may still hold the generated password it was offered.
-      await browser.click(page,await page.evaluate(buttonPresent('Use saved password'))?'Use saved password':'Use password');
+      await browser.wait(page,buttonPresent('Use saved password'),{label:'explicit lost-unlock fallback'});
+      const attempts=await page.evaluate('__gleecReleaseProbe.metrics()');
+      assert.equal(attempts.challenges,0);
+      assert.equal(attempts.passwordRequests,0);
+      await browser.click(page,'Use saved password');
       await browser.fill(page,'Wallet password',credential);await browser.click(page,'Unlock');
       await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'known-password missing-credential recovery'});
       assert.deepEqual(await page.evaluate(publicIdentity),identity);
