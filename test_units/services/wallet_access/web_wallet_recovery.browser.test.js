@@ -128,6 +128,12 @@ async function main(){
     generatedCredential=await page.evaluate('__gleecReleaseProbe.testCredential()');
     assert.equal(typeof generatedCredential,'string');
     const originalIdentity=await page.evaluate(publicIdentity);
+    assert.equal(await page.evaluate(`(() => {
+      const key=Object.keys(localStorage).find(item=>item.endsWith('wallet_access_last_v1'));
+      let last=key?localStorage.getItem(key):null;
+      for(let i=0;i<3&&typeof last==='string';i++)last=JSON.parse(last);
+      return last?.walletId?.auth_options?.derivation_method;
+    })()`),'HDWallet','A newly generated wallet must use HD derivation');
     const virtual=await virtualAuthenticator(browser,page);
     await browser.wait(page,"window.__providerSaveReached===true",{timeout:60000,label:'optional provider save is pending'});
     await browser.click(page,'Settings');await browser.click(page,'Security');

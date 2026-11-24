@@ -23,7 +23,6 @@ class WalletsManagerWrapper extends StatefulWidget {
     this.onSuccess,
     this.selectedWallet,
     this.initialAction = WalletsManagerAction.none,
-    this.initialHdMode = false,
     this.rememberMe = false,
     this.onCancel,
     this.entryCancelLabel,
@@ -35,7 +34,6 @@ class WalletsManagerWrapper extends StatefulWidget {
   final WalletsManagerEventType eventType;
   final Wallet? selectedWallet;
   final WalletsManagerAction initialAction;
-  final bool initialHdMode;
   final bool rememberMe;
   final VoidCallback? onCancel;
   final String? entryCancelLabel;
@@ -162,9 +160,6 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
           close: _closeWalletManager,
           onSuccess: widget.onSuccess ?? (_) {},
           selectedWallet: _pendingWallet,
-          initialHdMode: _pendingWallet?.config.type == WalletType.hdwallet
-              ? true
-              : widget.initialHdMode,
           rememberMe: widget.rememberMe,
         );
     }
