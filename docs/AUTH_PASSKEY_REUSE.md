@@ -116,7 +116,10 @@ Android needs this file, served as `application/json` without redirects:
 ```json
 [
   {
-    "relation": ["delegate_permission/common.get_login_creds"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.gleec.gleecdex",
@@ -125,6 +128,10 @@ Android needs this file, served as `application/json` without redirects:
   }
 ]
 ```
+
+Credential Manager checks `handle_all_urls` for app passkeys. Check that the
+relying-party host grants it to the signed APK before attempting enrollment.
+[Google’s Android setup guide](https://codelabs.developers.google.com/seamless-credential-sharing)
 
 With Play App Signing, use the **app signing** key's SHA-256 from Play Console
 (App integrity), not the upload key. The internal build

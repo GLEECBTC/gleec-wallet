@@ -218,7 +218,10 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    tearDown(() {
+      messenger.setMockMethodCallHandler(channel, null);
+      messenger.setMockMessageHandler(channel.name, null);
+    });
 
     PasskeyAssertionRequest request() => PasskeyAssertionRequest(
       rpId: passkeyRp,
@@ -250,23 +253,44 @@ void main() {
       expect(assertion.prf, bytesOf(5));
     });
 
-    testWidgets('cancels a silent provider and permits a fresh retry', (
-      tester,
-    ) async {
-      final originalReply = Completer<Map<String, Object?>>();
-      final completeReply = {
+    test('owns wipeable PRF bytes from a read-only platform reply', () async {
+      const codec = StandardMethodCodec();
+      final reply = codec.encodeSuccessEnvelope({
         'credentialId': bytesOf(1, 16),
         'authenticatorData': bytesOf(2, 37),
         'clientDataJSON': bytesOf(3, 40),
         'signature': bytesOf(4, 70),
         'prf': bytesOf(5),
-      };
+      }).asUnmodifiableView();
+      messenger.setMockMessageHandler(channel.name, (_) async => reply);
+
+      final assertion = await MethodChannelPasskeyAuthenticator().getAssertion(
+        request(),
+      );
+      expect(assertion.prf, bytesOf(5));
+      assertion.wipe();
+      expect(assertion.prf, everyElement(0));
+    });
+
+    testWidgets('cancels a silent provider and permits a fresh retry', (
+      tester,
+    ) async {
+      const codec = StandardMethodCodec();
+      final originalReply = Completer<ByteData>();
+      final completeReply = codec.encodeSuccessEnvelope({
+        'credentialId': bytesOf(1, 16),
+        'authenticatorData': bytesOf(2, 37),
+        'clientDataJSON': bytesOf(3, 40),
+        'signature': bytesOf(4, 70),
+        'prf': bytesOf(5),
+      });
       var requests = 0;
       var cancellations = 0;
-      messenger.setMockMethodCallHandler(channel, (call) async {
+      messenger.setMockMessageHandler(channel.name, (message) async {
+        final call = codec.decodeMethodCall(message!);
         if (call.method == 'cancel') {
           cancellations++;
-          return null;
+          return codec.encodeSuccessEnvelope(null);
         }
         requests++;
         return requests == 1 ? originalReply.future : completeReply;
@@ -280,7 +304,7 @@ void main() {
       await timedOut;
       expect(cancellations, 1);
 
-      originalReply.complete(completeReply);
+      originalReply.complete(completeReply.asUnmodifiableView());
       await tester.pump();
       final retry = await authenticator.getAssertion(request());
       expect(retry.prf, bytesOf(5));
