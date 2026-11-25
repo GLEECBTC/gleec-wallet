@@ -30,16 +30,21 @@ TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
 }
 
 final class MM2 {
-  MM2({KomodoDefiSdk? sdk}) {
-    SolanaBuildConfig.environment.validate();
+  MM2({
+    KomodoDefiSdk? sdk,
+    SolanaBuildConfig solana = SolanaBuildConfig.environment,
+  }) : _solana = solana {
+    solana.validate();
     _kdfSdk =
         sdk ??
         createSdk(
           config: KomodoDefiSdkConfig(
-            solanaCapabilities: SolanaBuildConfig.environment.capabilities,
-            assetsAutoUpdate: !SolanaBuildConfig.environment.enabled,
-            assetsStorageNamespace: SolanaBuildConfig.environment.enabled
-                ? SolanaBuildConfig.environment.storageNamespace
+            solanaCapabilities: solana.capabilities,
+            // Only a candidate's catalog snapshot is frozen and isolated;
+            // production keeps the updatable catalog and default storage.
+            assetsAutoUpdate: !solana.isCandidate,
+            assetsStorageNamespace: solana.isCandidate
+                ? solana.storageNamespace
                 : null,
             initialActivationPolicy: ActivationPolicySnapshot(
               status: ActivationPolicyStatus.loading,
@@ -94,6 +99,7 @@ final class MM2 {
     );
   }
 
+  final SolanaBuildConfig _solana;
   late final KomodoDefiSdk _kdfSdk;
   Future<KomodoDefiSdk>? _initialization;
 
@@ -116,14 +122,16 @@ final class MM2 {
 
   Future<KomodoDefiSdk> _initialize() async {
     if (kIsWeb) {
-      SolanaBuildConfig.environment.verifyPreviewOrigin(Uri.base);
+      _solana.verifyPreviewOrigin(Uri.base);
     }
-    await SolanaBuildConfig.environment.verifyCatalog();
+    await _solana.verifyCatalog();
     await _kdfSdk.initialize();
     // Hack to ensure that kdf is running in noauth mode
     await _kdfSdk.auth.getUsers();
-    if (SolanaBuildConfig.environment.enabled) {
-      SolanaBuildConfig.environment.verifyEngineVersion(await version());
+    // Production and candidate builds both refuse an engine other than the
+    // one their Solana support was reviewed on.
+    if (_solana.enabled) {
+      _solana.verifyEngineVersion(await version());
     }
 
     return _kdfSdk;

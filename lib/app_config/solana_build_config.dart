@@ -4,11 +4,26 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
-/// The experimental integration is tied to an exact engine and catalog.
-/// Protocol recognition alone must never expose assets to the production KDF.
+/// How a build exposes Solana.
+enum SolanaBuildMode {
+  /// `SOLANA_ENABLED=false`: no Solana asset or operation.
+  disabled,
+
+  /// The default. SOL and classic SPL tokens are wallet assets on the engine
+  /// this build pins; SPL Max, Token-2022 and devnet trading stay off.
+  production,
+
+  /// An isolated preview bound to an exact engine, catalog snapshot, storage
+  /// namespace and browser origin. Only a candidate may turn on SPL Max,
+  /// Token-2022 or devnet trading.
+  candidate,
+}
+
+/// Solana support is tied to an exact engine. Protocol recognition alone must
+/// never expose assets to an engine nobody reviewed them on.
 class SolanaBuildConfig {
   const SolanaBuildConfig({
-    this.enabled = false,
+    this.enabled = true,
     this.splMaxEnabled = false,
     this.token2022Enabled = false,
     this.devnetTradingEnabled = false,
@@ -20,7 +35,7 @@ class SolanaBuildConfig {
   });
 
   static const environment = SolanaBuildConfig(
-    enabled: bool.fromEnvironment('SOLANA_ENABLED'),
+    enabled: bool.fromEnvironment('SOLANA_ENABLED', defaultValue: true),
     splMaxEnabled: bool.fromEnvironment('SOLANA_SPL_MAX_ENABLED'),
     token2022Enabled: bool.fromEnvironment('SOLANA_TOKEN_2022_ENABLED'),
     devnetTradingEnabled: bool.fromEnvironment('SOLANA_DEVNET_TRADING_ENABLED'),
@@ -34,6 +49,13 @@ class SolanaBuildConfig {
   static const catalogAsset =
       'packages/komodo_defi_framework/assets/config/coins_config.json';
 
+  /// The engine production Solana support runs on. A unit test holds it equal
+  /// to the KDF commit the SDK pins, so repinning KDF means reviewing Solana on
+  /// the new engine and listing it in [enginesWithOpenWithdrawalDefects] until
+  /// SPL Max and Token-2022 withdrawals are verified there.
+  static const productionEngineCommit =
+      'fd8249c904ae1c75d66fce1c1e361686f13d723c';
+
   /// These revisions share the withdrawal code with unresolved SPL Max
   /// and Token-2022 defects.
   static const enginesWithOpenWithdrawalDefects = {
@@ -41,6 +63,8 @@ class SolanaBuildConfig {
     '46769c4df3b043669eee59508bf1af017157dcdd',
     'fd8249c904ae1c75d66fce1c1e361686f13d723c',
   };
+
+  static const _candidateNamespacePrefix = 'solana-preview-';
 
   final bool enabled;
   final bool splMaxEnabled;
@@ -52,20 +76,59 @@ class SolanaBuildConfig {
   final String storageNamespace;
   final String previewOrigin;
 
-  SolanaCapabilities get capabilities => SolanaCapabilities(
-    enabled: enabled,
-    splMaxEnabled: enabled && splMaxEnabled,
-    token2022Enabled: enabled && token2022Enabled,
-    devnetTradingEnabled: enabled && devnetTradingEnabled,
-  );
+  /// Any candidate define selects candidate mode, so an incomplete preview
+  /// profile fails validation instead of running as a production build.
+  SolanaBuildMode get mode {
+    if (!enabled) return SolanaBuildMode.disabled;
+    final candidate =
+        engineCommit.isNotEmpty ||
+        coinsCommit.isNotEmpty ||
+        catalogSha256.isNotEmpty ||
+        previewOrigin.isNotEmpty ||
+        storageNamespace.startsWith(_candidateNamespacePrefix);
+    return candidate ? SolanaBuildMode.candidate : SolanaBuildMode.production;
+  }
+
+  bool get isCandidate => mode == SolanaBuildMode.candidate;
+
+  /// The engine the running KDF has to report.
+  String get requiredEngineCommit =>
+      isCandidate ? engineCommit : productionEngineCommit;
+
+  /// Production grants only the wallet operations, even if [validate] is
+  /// skipped.
+  SolanaCapabilities get capabilities => switch (mode) {
+    SolanaBuildMode.disabled => const SolanaCapabilities(),
+    SolanaBuildMode.production => const SolanaCapabilities(enabled: true),
+    SolanaBuildMode.candidate => SolanaCapabilities(
+      enabled: true,
+      splMaxEnabled: splMaxEnabled,
+      token2022Enabled: token2022Enabled,
+      devnetTradingEnabled: devnetTradingEnabled,
+    ),
+  };
 
   void validate() {
-    if (!enabled) {
-      if (splMaxEnabled || token2022Enabled || devnetTradingEnabled) {
-        throw StateError('Solana operations require SOLANA_ENABLED.');
-      }
-      return;
+    final experimental =
+        splMaxEnabled || token2022Enabled || devnetTradingEnabled;
+    switch (mode) {
+      case SolanaBuildMode.disabled:
+        if (experimental) {
+          throw StateError('Solana operations require SOLANA_ENABLED.');
+        }
+      case SolanaBuildMode.production:
+        if (experimental) {
+          throw StateError(
+            'SPL Max, Token-2022 and devnet trading need a Solana candidate '
+            'build.',
+          );
+        }
+      case SolanaBuildMode.candidate:
+        _validateCandidate();
     }
+  }
+
+  void _validateCandidate() {
     if (!RegExp(r'^[a-f0-9]{40}$').hasMatch(engineCommit) ||
         !RegExp(r'^[a-f0-9]{40}$').hasMatch(coinsCommit) ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(catalogSha256)) {
@@ -75,7 +138,7 @@ class SolanaBuildConfig {
       );
     }
     if (storageNamespace !=
-        'solana-preview-${catalogSha256.substring(0, 12)}') {
+        '$_candidateNamespacePrefix${catalogSha256.substring(0, 12)}') {
       throw StateError(
         'The Solana candidate must use its isolated catalog storage namespace.',
       );
@@ -88,9 +151,11 @@ class SolanaBuildConfig {
     }
   }
 
+  /// Production uses the SDK's updatable catalog; only a candidate's
+  /// snapshot is bound to a digest.
   Future<void> verifyCatalog({AssetBundle? bundle}) async {
     validate();
-    if (!enabled) return;
+    if (!isCandidate) return;
     final bytes = await (bundle ?? rootBundle).load(catalogAsset);
     final actual = sha256
         .convert(
@@ -107,7 +172,7 @@ class SolanaBuildConfig {
   /// Browser wallet credentials and engine storage are origin-scoped. A
   /// candidate built for a dedicated preview origin must refuse another host.
   void verifyPreviewOrigin(Uri current) {
-    if (!enabled) return;
+    if (!isCandidate) return;
     final expected = Uri.tryParse(previewOrigin);
     if (expected == null ||
         !const {'http', 'https'}.contains(expected.scheme) ||
@@ -127,24 +192,31 @@ class SolanaBuildConfig {
     }
   }
 
-  /// KDF development builds expose a seven-character tag in `version`.
-  /// The candidate manifest/tooling binds that tag to the complete commit and
-  /// artifact digest; this check detects an unintended runtime binary.
+  /// KDF builds expose a seven-character tag in `version` (KDF CI sets
+  /// `KDF_BUILD_TAG` to `git rev-parse --short=7`). A candidate manifest binds
+  /// that tag to the complete commit and artifact digest; in production the
+  /// tag must name [productionEngineCommit]. Either way this check detects an
+  /// unintended runtime binary.
   void verifyEngineVersion(String version) {
     if (!enabled) return;
     validate();
+    final expected = requiredEngineCommit;
     final versionTag = RegExp(
       r'^[A-Za-z0-9][A-Za-z0-9.+-]*_([a-f0-9]{7}|[a-f0-9]{40})$',
     ).firstMatch(version)?.group(1);
-    if (versionTag != engineCommit &&
-        versionTag != engineCommit.substring(0, 7)) {
-      throw StateError('The running KDF does not match the Solana candidate.');
+    if (versionTag != expected && versionTag != expected.substring(0, 7)) {
+      throw StateError(
+        isCandidate
+            ? 'The running KDF does not match the Solana candidate.'
+            : 'The running KDF is not the engine this build pins for Solana.',
+      );
     }
   }
 
-  /// Useful to callers recording a non-secret candidate identity.
+  /// Useful to callers recording a non-secret build identity.
   String get identity => jsonEncode({
-    'engine_commit': engineCommit,
+    'mode': mode.name,
+    'engine_commit': requiredEngineCommit,
     'coins_commit': coinsCommit,
     'catalog_sha256': catalogSha256,
   });
