@@ -193,7 +193,6 @@ class _OptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
     final ticker = SwapFormat.ticker(quote.to);
-    final total = quote.pricing.totalCostUsd;
     final badge = best
         ? SwapBadge(
             label: LocaleKeys.swapBestNetReturn.tr(),
@@ -219,12 +218,7 @@ class _OptionCard extends StatelessWidget {
           rounding: SwapRounding.down,
         ),
       ),
-      (
-        LocaleKeys.swapTotalCost.tr(),
-        total == null || !quote.pricing.isComplete
-            ? LocaleKeys.swapCostIncomplete.tr()
-            : SwapFormat.usd(total, rounding: SwapRounding.up),
-      ),
+      (LocaleKeys.swapTotalCost.tr(), SwapFormat.totalCost(quote)),
       (
         LocaleKeys.swapOptionEta.tr(),
         SwapFormat.duration(quote.estimatedDuration),
@@ -318,9 +312,8 @@ class _OptionCard extends StatelessWidget {
                                         const SizedBox(height: 3),
                                         Text(
                                           value,
-                                          style: SwapText.strong(
-                                            context,
-                                          ).copyWith(fontSize: 14),
+                                          style: SwapText.strong(context)
+                                              .copyWith(fontSize: 14),
                                         ),
                                       ],
                                     ),
@@ -350,8 +343,8 @@ class _OptionCard extends StatelessWidget {
 
   static String _permission(SwapQuote quote) {
     final approval = quote.approval;
-    if (quote.permissionUnavailable) {
-      return LocaleKeys.swapPermissionUnavailableTitle.tr();
+    if (quote.hasUnverifiedAtomicApproval) {
+      return LocaleKeys.swapPermissionAtomicShort.tr();
     }
     if (approval == null) return LocaleKeys.swapPermissionNone.tr();
     return approval.resetsFirst
@@ -374,31 +367,38 @@ class _FeeBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pricing = quote.pricing;
-    String usd(Decimal? value) => value == null
-        ? LocaleKeys.swapCostIncomplete.tr()
-        : SwapFormat.usd(value, rounding: SwapRounding.up);
+    // A cost with no dollar price is still given, in its own tokens.
+    String cost(Decimal? usd, List<SwapFeeKind> kinds) => SwapFormat.cost(
+      usd,
+      quote.fees.where((fee) => kinds.contains(fee.kind)),
+      known: quote.feesKnown,
+    );
     final approval = pricing.approvalNetworkCostUsd;
     return SwapDetails(
       title: LocaleKeys.swapFeeBreakdown.tr(),
       children: [
         SwapDetailRow(
           label: LocaleKeys.swapNetworkCosts.tr(),
-          value: usd(pricing.networkCostUsd),
+          value: cost(pricing.networkCostUsd, const [
+            SwapFeeKind.network,
+            SwapFeeKind.approvalNetwork,
+          ]),
         ),
         if (quote.approval != null && approval != null)
           SwapDetailRow(
             label: '↳ ${LocaleKeys.swapApprovalNetworkCost.tr()}',
-            value: usd(approval),
+            value: SwapFormat.usd(approval, rounding: SwapRounding.up),
           ),
         SwapDetailRow(
           label: LocaleKeys.swapSwapCosts.tr(),
-          value: usd(pricing.swapCostUsd),
+          value: cost(pricing.swapCostUsd, const [
+            SwapFeeKind.swap,
+            SwapFeeKind.dexFee,
+          ]),
         ),
         SwapDetailRow(
           label: LocaleKeys.swapTotalCost.tr(),
-          value: pricing.isComplete
-              ? usd(pricing.totalCostUsd)
-              : LocaleKeys.swapCostIncomplete.tr(),
+          value: SwapFormat.totalCost(quote),
         ),
       ],
     );

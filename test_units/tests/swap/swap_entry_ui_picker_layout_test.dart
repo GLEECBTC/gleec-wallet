@@ -188,6 +188,41 @@ void main() {
       }
     }
 
+    testWidgets('only the search stays pinned: the filters scroll away with '
+        'the list and leave it the room', (tester) async {
+      const size = Size(375, 667);
+      await searchToTheEnd(tester, size: size, top: 20);
+
+      final list = find.byType(CustomScrollView);
+      final search = find.byType(TextField);
+      // Scrolled out of sight with the list, the filter is off stage.
+      final filter = find.byKey(
+        const Key('swap-picker-network'),
+        skipOffstage: false,
+      );
+      expect(find.descendant(of: list, matching: search), findsNothing);
+      expect(
+        find.descendant(of: list, matching: filter, skipOffstage: false),
+        findsOneWidget,
+      );
+      // Under the search the list has everything down to the keyboard: over
+      // two rows on a small phone, where the pinned filters left under one.
+      final room = size.height - keyboard - tester.getBottomLeft(search).dy;
+      expect(room, greaterThan(150));
+      expect(tester.getRect(list).top, lessThan(size.height - keyboard - 150));
+      expect(searchFocused(), isTrue);
+
+      // The keyboard gone, the filters are back over the list.
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: list, matching: filter, skipOffstage: false),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('swap-picker-network')), findsOneWidget);
+      expect(searchFocused(), isTrue);
+    });
+
     testWidgets('a search that finds nothing can be cleared above it', (
       tester,
     ) async {
@@ -256,6 +291,57 @@ void main() {
     });
   });
 
+  testWidgets('a network filter the list no longer has shows as dropped', (
+    tester,
+  ) async {
+    final arbitrum = assetOf(
+      'ETH-ARB20',
+      subClass: CoinSubClass.arbitrum,
+      chainId: 42161,
+    );
+    final usdcArbitrum = assetOf(
+      'USDC-ARB20',
+      parent: arbitrum,
+      subClass: CoinSubClass.arbitrum,
+      chainId: 42161,
+    );
+    services
+      ..known = [eth, usdc, arbitrum, usdcArbitrum]
+      ..activated = {eth, usdc, arbitrum, usdcArbitrum};
+    SwapCatalog catalogOf(Set<AssetId> assets) => SwapCatalog(
+      sources: [
+        SwapSourceAssets(source: SwapLiquiditySource.routed, quotable: assets),
+      ],
+    );
+    final catalog = ValueNotifier(catalogOf(services.activated));
+    addTearDown(catalog.dispose);
+    await pumpSwapUi(
+      tester,
+      ValueListenableBuilder(
+        valueListenable: catalog,
+        builder: (context, value, _) => picker(catalog: value),
+      ),
+      bloc: swap,
+      services: services,
+    );
+    final filter = find.byKey(const Key('swap-picker-network'));
+    String? shown() => tester.state<FormFieldState<String>>(filter).value;
+
+    await tester.tap(filter);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Arbitrum').last);
+    await tester.pumpAndSettle();
+    expect(shown(), arbitrum.id);
+    expect(find.text('USDC'), findsOneWidget);
+
+    // The network's assets leave the list, and the filter with them.
+    catalog.value = catalogOf({eth, usdc});
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(shown(), '');
+    expect(find.text('USDC'), findsOneWidget);
+  });
+
   testWidgets('the zero-balance switch hides and counts, then restores', (
     tester,
   ) async {
@@ -279,7 +365,7 @@ void main() {
     expect(await services.preferences.hideZeroBalances(), isFalse);
   });
 
-  testWidgets('while one asset activates, no other can be chosen', (
+  testWidgets('selection dismisses without waiting for asset preparation', (
     tester,
   ) async {
     services
@@ -293,19 +379,10 @@ void main() {
     );
 
     await tester.tap(find.text('BTC').first);
-    await tester.pump();
-    expect(find.text('Activating…'), findsOneWidget);
-
-    await tester.tap(find.text('USDC'));
-    await tester.pump();
-    expect(popped, isEmpty);
-    expect(
-      tester.getSemantics(find.text('USDC')),
-      isSemantics(isButton: true, isEnabled: false),
-    );
-
-    services.activationGate!.complete();
     await tester.pumpAndSettle();
     expect(popped, [btc]);
+    expect(services.activations, isEmpty);
+    expect(services.activationGate!.isCompleted, isFalse);
+    expect(find.text('Choose asset'), findsNothing);
   });
 }

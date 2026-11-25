@@ -1,3 +1,4 @@
+import 'swap_test_fixtures.dart';
 // test_units is analysed as app code, where the plugins' test mocks warn.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
@@ -50,7 +51,7 @@ void main() {
 
     setUp(() {
       previousMenu = routingState.selectedMenu;
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: const [],
         inFlight: () async => const [],
       );

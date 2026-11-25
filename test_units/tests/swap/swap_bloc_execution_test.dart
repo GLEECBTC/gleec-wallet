@@ -18,7 +18,7 @@ void main() {
 
   setUp(() {
     executor = FakeExecutor(SwapLiquiditySource.routed);
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [executor],
       inFlight: () async => const [],
     );
@@ -34,7 +34,7 @@ void main() {
   }
 
   test('watching the swap already watched changes nothing', () async {
-    final started = await registry.start(quoteOf());
+    final started = await registry.start(quoteOf(), registry.beginSubmission());
     final bloc = watching(started.id);
     await pumpEventQueue();
     final states = <SwapExecutionState>[];
@@ -49,9 +49,9 @@ void main() {
   });
 
   test('watching another swap follows it instead', () async {
-    final first = await registry.start(quoteOf());
+    final first = await registry.start(quoteOf(), registry.beginSubmission());
     final firstHandle = executor.lastStarted!;
-    final second = await registry.start(quoteOf());
+    final second = await registry.start(quoteOf(), registry.beginSubmission());
     final bloc = watching(first.id);
     await pumpEventQueue();
 
@@ -83,7 +83,7 @@ void main() {
       void Function(FakeAsync async, SwapExecutionBloc bloc) body, {
       SwapExecutionSnapshot? initial,
     }) => fakeAsync((async) {
-      final slow = SwapExecutionRegistry(
+      final slow = testSwapRegistry(
         executors: [executor],
         inFlight: () async => const [],
         retryDelay: retryDelay,
@@ -135,7 +135,10 @@ void main() {
 
   group('cancelling', () {
     Future<(SwapExecutionBloc, FakeHandle)> running() async {
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       final bloc = watching(started.id);
       await pumpEventQueue();
       return (bloc, executor.lastStarted!);

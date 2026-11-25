@@ -40,6 +40,15 @@ mixin RuntimeAuthFixture implements KomodoDefiLocalAuth {
   }
 
   @override
+  Future<T> runWithSession<T>(
+    AuthSessionContext expected,
+    Future<T> Function() dispatch,
+  ) async {
+    ensureSessionContextCurrent(expected);
+    return dispatch();
+  }
+
+  @override
   Stream<AuthSessionContext?> watchSessionContext() {
     _source ??= authStateChanges.listen(runtimeSessions.observe);
     return runtimeSessions.changes;

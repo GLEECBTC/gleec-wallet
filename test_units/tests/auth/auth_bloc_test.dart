@@ -6,11 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 // directly - the same reach the coins-bloc suites make into SDK internals.
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    show PrivateKeyPolicy;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:logging/logging.dart';
 import 'package:web_dex/analytics/wallet_load_timeline.dart';
+import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
@@ -21,9 +25,113 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
+import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/password_rotation_envelope.dart';
+import 'package:web_dex/services/wallet_access/platform/credential_backend.dart';
+import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+
+part 'auth_bloc_managed_cases.dart';
+part 'auth_bloc_session_cases.dart';
+part 'auth_bloc_trezor_cases.dart';
 
 /// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
+  _trezorSignInCases();
+  _engineSessionCases();
+  _managedSignInCases();
+
+  group('AuthBloc asynchronous access observation', () {
+    late _FakeAuth auth;
+    late _FakeWalletAccess access;
+    late AuthBloc bloc;
+
+    setUp(() {
+      auth = _FakeAuth();
+      access = _FakeWalletAccess();
+      bloc = AuthBloc(
+        _FakeSdk(auth),
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+        walletAccessService: access,
+      );
+      addTearDown(bloc.close);
+    });
+
+    test('pending observation cannot restore a cleared auth state', () async {
+      final reached = Completer<void>();
+      final release = Completer<void>();
+      access.onObserve = (_) async {
+        reached.complete();
+        await release.future;
+      };
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: _user()),
+      );
+      await reached.future;
+      bloc.add(const AuthStateClearRequested());
+      await Future<void>.delayed(Duration.zero);
+      release.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.currentUser, isNull);
+      expect(bloc.state.isSignedIn, isFalse);
+    });
+
+    test('newer observed wallet wins over a delayed older wallet', () async {
+      final original = _user();
+      final replacement = _user(name: 'Wallet 2');
+      final reached = Completer<void>();
+      final release = Completer<void>();
+      access.onObserve = (user) async {
+        if (user == original) {
+          reached.complete();
+          await release.future;
+        }
+      };
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+      );
+      await reached.future;
+      final replaced = bloc.stream.firstWhere(
+        (state) => state.currentUser == replacement,
+      );
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+      );
+      await replaced;
+      release.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.currentUser, replacement);
+    });
+
+    test(
+      'restoration rejects a session replaced during access lookup',
+      () async {
+        final user = _user();
+        auth.userToReturn = user;
+        final reached = Completer<void>();
+        final release = Completer<void>();
+        access.onObserve = (_) async {
+          reached.complete();
+          await release.future;
+        };
+        bloc.add(const AuthStateRestoreRequested());
+        await reached.future;
+        auth.sessions.invalidate();
+        auth.userToReturn = user;
+        release.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.currentUser, isNull);
+        expect(bloc.state.isSignedIn, isFalse);
+      },
+    );
+  });
+
   group('AuthBloc sign-in', () {
     late _FakeAuth auth;
     late _FakeSdk sdk;
@@ -110,6 +218,7 @@ void testAuthBloc() {
     );
 
     test('preserves the typed exception for an incorrect password', () async {
+      auth.userToReturn = _user();
       auth.errorToThrow = AuthException(
         'Incorrect password',
         type: AuthExceptionType.incorrectPassword,
@@ -128,6 +237,7 @@ void testAuthBloc() {
     });
 
     test('wraps a non-auth exception as a general auth error', () async {
+      auth.userToReturn = _user();
       auth.errorToThrow = StateError('kdf unreachable');
 
       final bloc = buildBloc();
@@ -289,9 +399,10 @@ void testAuthBloc() {
         final original = _user();
         await selectUser(original);
         auth.onSetKeyValue = (key, value) async {
-          expect(key, 'has_backup');
-          expect(value, isTrue);
-          auth.userToReturn = _user(metadata: const {'has_backup': true});
+          expect({
+            'has_backup': true,
+            'recovery_evidence': 'phraseConfirmed',
+          }, containsPair(key, value));
         };
         final confirmed = bloc.stream.firstWhere(
           (state) => state.currentUser?.metadata['has_backup'] == true,
@@ -301,6 +412,11 @@ void testAuthBloc() {
         await confirmed;
 
         expect(auth.metadataWriteWalletIds, [original.walletId]);
+        expect(bloc.state.currentUser?.wallet.config.hasRecoveryPhrase, isTrue);
+        expect(
+          bloc.state.currentUser?.metadata['recovery_evidence'],
+          'phraseConfirmed',
+        );
       },
     );
 
@@ -314,7 +430,7 @@ void testAuthBloc() {
           await selectUser(original);
           final writeStarted = Completer<void>();
           final writeGate = Completer<void>();
-          auth.onSetKeyValue = (_, _) async {
+          auth.onSessionUpdate = () async {
             writeStarted.complete();
             await writeGate.future;
             if (rejectsStaleWrite) {
@@ -340,6 +456,132 @@ void testAuthBloc() {
   });
 
   group('AuthBloc wallet export', () {
+    test('queued revoked export never reaches the repository', () async {
+      final original = _user();
+      final auth = _FakeAuth()..userToReturn = original;
+      final repository = _FakeWalletsRepository();
+      final bloc = AuthBloc(
+        _FakeSdk(auth),
+        repository,
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+      final gate = WalletOperationGate()
+        ..attachWallet('entry', allowOperations: true);
+      final permit = gate.capture();
+      final event = AuthWalletDownloadRequested(
+        password: 'pw',
+        expectedWalletId: original.walletId,
+        ensureAuthorized: permit.ensureCurrent,
+      );
+      gate.block();
+      gate.allow(walletEntryId: 'entry');
+      bloc.add(event);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.downloadWalletIds, isEmpty);
+      expect(auth.metadataWriteWalletIds, isEmpty);
+    });
+
+    for (final confirmed in [false, null]) {
+      test(
+        confirmed == null
+            ? 'cancelled file save never records backup evidence'
+            : 'unconfirmed browser download records only the request',
+        () async {
+          final original = _user();
+          final auth = _FakeAuth()..userToReturn = original;
+          final repository = _FakeWalletsRepository()
+            ..onDownload = (_, __) async {
+              if (confirmed == null) throw const FileSaveCancelledException();
+              throw const FileSaveUnconfirmedException();
+            };
+          final bloc = AuthBloc(
+            _FakeSdk(auth),
+            repository,
+            _FakeSettingsRepository(),
+            _FakeTradingStatusService(),
+          );
+          addTearDown(bloc.close);
+          bloc.add(
+            AuthWalletDownloadRequested(
+              password: 'pw',
+              expectedWalletId: original.walletId,
+            ),
+          );
+          if (confirmed == false) {
+            await bloc.stream.firstWhere(
+              (state) =>
+                  state
+                      .currentUser
+                      ?.metadata['encrypted_file_export_requested'] ==
+                  true,
+            );
+          } else {
+            await Future<void>.delayed(Duration.zero);
+          }
+          expect(
+            auth.userToReturn?.metadata['encrypted_file_exported'],
+            isNot(true),
+          );
+          expect(auth.userToReturn?.metadata['recovery_evidence'], isNull);
+          expect(auth.userToReturn?.metadata['has_backup'], isNot(true));
+          if (confirmed == null) expect(auth.metadataWriteWalletIds, isEmpty);
+        },
+      );
+    }
+
+    // The settings plate shows progress until this fires, whatever happens.
+    for (final outcome in [
+      'saved',
+      'cancelled',
+      'failed',
+      'revoked',
+      'stale',
+    ]) {
+      test('a $outcome export request reports that it finished', () async {
+        final original = _user();
+        final auth = _FakeAuth()
+          ..userToReturn = outcome == 'stale' ? _user(name: 'Other') : original;
+        final repository = _FakeWalletsRepository()
+          ..onDownload = (_, __) async {
+            if (outcome == 'cancelled') {
+              throw const FileSaveCancelledException();
+            }
+            if (outcome == 'failed') throw StateError('synthetic failure');
+          };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          repository,
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        final gate = WalletOperationGate()
+          ..attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        if (outcome == 'revoked') gate.block();
+        final finished = Completer<void>();
+        bloc.add(
+          AuthWalletDownloadRequested(
+            password: 'pw',
+            expectedWalletId: original.walletId,
+            ensureAuthorized: permit.ensureCurrent,
+            onFinished: finished.complete,
+          ),
+        );
+        await finished.future.timeout(const Duration(seconds: 2));
+        expect(
+          repository.downloadWalletIds,
+          ['saved', 'cancelled', 'failed'].contains(outcome)
+              ? [original.walletId]
+              : isEmpty,
+        );
+        // A lock or switch is the user's doing, not a failed export.
+        expect(bloc.state.isError, outcome == 'failed');
+      });
+    }
+
     test(
       'a stale export request never downloads replacement wallet data',
       () async {
@@ -379,9 +621,7 @@ void testAuthBloc() {
 
     for (final switchWallet in [false, true]) {
       test(
-        switchWallet
-            ? 'export cannot confirm the replacement wallet backup'
-            : 'export confirms the wallet whose data was downloaded',
+        switchWallet ? 'export cannot confirm the replacement wallet backup' : 'export records a file without claiming recovery phrase confirmation',
         () async {
           final original = _user();
           final replacement = _user(name: 'Wallet 2');
@@ -436,7 +676,9 @@ void testAuthBloc() {
           final confirmed = switchWallet
               ? null
               : bloc.stream.firstWhere(
-                  (state) => state.currentUser?.metadata['has_backup'] == true,
+                  (state) =>
+                      state.currentUser?.metadata['encrypted_file_exported'] ==
+                      true,
                 );
           downloadGate.complete();
           if (confirmed != null) {
@@ -452,11 +694,97 @@ void testAuthBloc() {
             expect(bloc.state, same(beforeCompletion));
           } else {
             expect(auth.metadataWriteWalletIds, [original.walletId]);
-            expect(auth.userToReturn?.metadata['has_backup'], isTrue);
+            expect(auth.userToReturn?.metadata['has_backup'], isNot(true));
+            expect(
+              auth.userToReturn?.metadata['recovery_evidence'],
+              'encryptedFileExported',
+            );
+            expect(auth.userToReturn?.wallet.config.hasRecoveryPhrase, isFalse);
           }
         },
       );
     }
+  });
+
+  group('AuthBloc independent recovery evidence', () {
+    test('export preserves already confirmed phrase evidence', () async {
+      final original = _user(
+        metadata: const {
+          'has_backup': true,
+          'recovery_evidence': 'phraseConfirmed',
+        },
+      );
+      final auth = _FakeAuth()..userToReturn = original;
+      final bloc = AuthBloc(
+        _FakeSdk(auth),
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+      final selected = bloc.stream.firstWhere(
+        (state) => state.currentUser != null,
+      );
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+      );
+      await selected;
+      final exported = bloc.stream.firstWhere(
+        (state) =>
+            state.currentUser?.metadata['encrypted_file_exported'] == true,
+      );
+      bloc.add(
+        AuthWalletDownloadRequested(
+          password: 'pw',
+          expectedWalletId: original.walletId,
+        ),
+      );
+      await exported;
+      expect(
+        bloc.state.currentUser!.metadata['recovery_evidence'],
+        'phraseConfirmed',
+      );
+      expect(bloc.state.currentUser!.wallet.config.hasRecoveryPhrase, isTrue);
+    });
+
+    test('reauthentication while exporting cannot record evidence for the new session', () async {
+      final original = _user();
+      final auth = _FakeAuth()..userToReturn = original;
+      final started = Completer<void>();
+      final finish = Completer<void>();
+      final repository = _FakeWalletsRepository()
+        ..onDownload = (_, _) async {
+          started.complete();
+          await finish.future;
+        };
+      final bloc = AuthBloc(
+        _FakeSdk(auth),
+        repository,
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+      final selected = bloc.stream.firstWhere(
+        (state) => state.currentUser != null,
+      );
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+      );
+      await selected;
+      bloc.add(
+        AuthWalletDownloadRequested(
+          password: 'pw',
+          expectedWalletId: original.walletId,
+        ),
+      );
+      await started.future;
+      auth.sessions.invalidate();
+      auth.sessions.observe(original);
+      finish.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(auth.metadataWriteWalletIds, isEmpty);
+      expect(auth.userToReturn!.metadata['encrypted_file_exported'], isNull);
+    });
   });
 
   group('AuthBloc wallet creation', () {
@@ -474,55 +802,56 @@ void testAuthBloc() {
           seed: 'a b c',
         ),
       };
-      test(
-        '$flow waits for initial metadata persistence before login',
-        () async {
-          final auth = _FakeAuth();
-          final started = Completer<void>();
-          final saved = Completer<void>();
-          auth.onRegister = () async {
-            started.complete();
-            await saved.future;
-          };
-          final bloc = AuthBloc(
-            _FakeSdk(auth),
-            _FakeWalletsRepository(),
-            _FakeSettingsRepository(),
-            _FakeTradingStatusService(),
-          );
-          addTearDown(bloc.close);
-          bloc.add(event());
-          await started.future;
-          expect(bloc.state.isLoading, isTrue);
-          expect(bloc.state.currentUser, isNull);
-          // An app resume while creation is saving cannot publish partial state.
-          bloc.add(AuthStateRestoreRequested());
-          await Future<void>.delayed(Duration.zero);
-          expect(bloc.state.currentUser, isNull);
-          final loggedIn = bloc.stream.firstWhere(
-            (state) => state.currentUser != null,
-          );
-          saved.complete();
-          final state = await loggedIn.timeout(const Duration(seconds: 2));
-          expect(state.currentUser!.metadata, containsPair('type', 'hdwallet'));
-          expect(
-            state.currentUser!.metadata,
-            containsPair(
-              'wallet_provenance',
-              flow == 'register' ? 'generated' : 'imported',
-            ),
-          );
-          expect(
-            state.currentUser!.metadata,
-            containsPair('has_backup', flow != 'register'),
-          );
-          expect(
-            state.currentUser!.metadata['activated_coins'],
-            isA<List<String>>(),
-          );
-          expect(auth.metadataWriteWalletIds, isEmpty);
-        },
-      );
+      test('$flow waits for initial metadata persistence before login', () async {
+        final auth = _FakeAuth();
+        final started = Completer<void>();
+        final saved = Completer<void>();
+        auth.onRegister = () async {
+          started.complete();
+          await saved.future;
+        };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          _FakeWalletsRepository(),
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        bloc.add(event());
+        await started.future;
+        expect(bloc.state.isLoading, isTrue);
+        expect(bloc.state.currentUser, isNull);
+        // An app resume while creation is saving cannot publish partial state.
+        bloc.add(AuthStateRestoreRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.currentUser, isNull);
+        final loggedIn = bloc.stream.firstWhere(
+          (state) => state.currentUser != null,
+        );
+        saved.complete();
+        final state = await loggedIn.timeout(const Duration(seconds: 2));
+        expect(state.currentUser!.metadata, containsPair('type', 'hdwallet'));
+        expect(
+          state.currentUser!.metadata,
+          containsPair(
+            'wallet_provenance',
+            flow == 'register' ? 'generated' : 'imported',
+          ),
+        );
+        expect(
+          state.currentUser!.metadata,
+          containsPair('has_backup', flow != 'register'),
+        );
+        expect(
+          state.currentUser!.metadata['recovery_evidence'],
+          flow == 'register' ? 'none' : 'phraseSupplied',
+        );
+        expect(
+          state.currentUser!.metadata['activated_coins'],
+          isA<List<String>>(),
+        );
+        expect(auth.metadataWriteWalletIds, isEmpty);
+      });
       test(
         '$flow preserves the SDK collision error without signing in',
         () async {
@@ -582,6 +911,10 @@ void testAuthBloc() {
         await success;
         expect(auth.sessionUpdates, 1);
         expect(auth.userToReturn!.metadata['has_backup'], isTrue);
+        expect(
+          auth.userToReturn!.metadata['recovery_evidence'],
+          'phraseConfirmed',
+        );
       },
     );
     test(
@@ -735,6 +1068,21 @@ KdfUser _user({String name = 'Wallet 1', JsonMap metadata = const {}}) =>
       metadata: metadata,
     );
 
+class _FakeWalletAccess implements WalletAccessService {
+  Future<void> Function(KdfUser?)? onObserve;
+
+  @override
+  Future<void> observeEngineUser(KdfUser? user) async {
+    await onObserve?.call(user);
+  }
+
+  @override
+  void invalidatePendingOperations() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _FakeAuth implements KomodoDefiLocalAuth {
   final StreamController<KdfUser?> _watcher =
       StreamController<KdfUser?>.broadcast();
@@ -750,13 +1098,18 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Future<void> Function()? onRegister;
   Future<void> Function()? onSessionUpdate;
   int sessionUpdates = 0;
+  List<AuthenticationState> signInStates = const [];
+  bool _inAuthTransition = false;
 
   @override
-  Future<AuthSessionContext> captureSessionContext() async =>
-      sessions.current ?? (throw const AuthSessionChangedException());
+  Future<AuthSessionContext> captureSessionContext() async {
+    if (_inAuthTransition) throw const AuthSessionChangedException();
+    return sessions.current ?? (throw const AuthSessionChangedException());
+  }
+
   @override
   bool isSessionContextCurrent(AuthSessionContext context) =>
-      sessions.isCurrent(context);
+      !_inAuthTransition && sessions.isCurrent(context);
   @override
   void ensureSessionContextCurrent(AuthSessionContext context) {
     if (!isSessionContextCurrent(context)) {
@@ -773,6 +1126,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   ) async {
     ensureSessionContextCurrent(context);
     sessionUpdates++;
+    metadataWriteWalletIds.add(userToReturn!.walletId);
     await onSessionUpdate?.call();
     for (final entry in updates.entries) {
       await onSetKeyValue?.call(entry.key, entry.value);
@@ -809,6 +1163,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     ),
     Mnemonic? mnemonic,
     Map<String, dynamic> initialMetadata = const {},
+    String? provisioningId,
   }) async {
     if (getUsersError != null) throw getUsersError!;
     if (userToReturn?.walletId.name == walletName) {
@@ -835,6 +1190,25 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     signInCalls++;
     if (errorToThrow != null) throw errorToThrow!;
     return userToReturn ?? _user();
+  }
+
+  // Like the SDK, the stream holds an auth transition open until it ends.
+  @override
+  Stream<AuthenticationState> signInStream({
+    required String walletName,
+    required String password,
+    AuthOptions options = const AuthOptions(
+      derivationMethod: DerivationMethod.hdWallet,
+    ),
+  }) async* {
+    sessions.invalidate();
+    _inAuthTransition = true;
+    try {
+      yield* Stream.fromIterable(signInStates);
+    } finally {
+      _inAuthTransition = false;
+      sessions.observe(userToReturn);
+    }
   }
 
   @override
@@ -911,6 +1285,9 @@ class _FakeSdk implements KomodoDefiSdk {
   final AssetManager assets = _FakeAssetManager();
 
   @override
+  late final WalletAssetSelection walletAssets = WalletAssetSelection(auth);
+
+  @override
   void connectStreaming() {}
 
   @override
@@ -929,7 +1306,10 @@ class _FakeWalletsRepository implements WalletsRepository {
     Wallet wallet,
     String password, {
     required WalletId expectedWalletId,
+    void Function()? ensureAuthorized,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    ensureAuthorized?.call();
     downloadWalletIds.add(expectedWalletId);
     await onDownload?.call(wallet, password);
   }

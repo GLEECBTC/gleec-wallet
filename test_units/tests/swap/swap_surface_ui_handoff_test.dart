@@ -23,6 +23,7 @@ import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_motion_fakes.dart';
@@ -54,7 +55,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -79,6 +80,9 @@ void main() {
       receive: usdc,
       inputText: '1',
       balance: d('2'),
+      feeBalance: d('2'),
+      payAddress: '0xPAY',
+      receiveAddress: '0xRECEIVE',
       evaluation: SwapEvaluationStatus.ready,
       quotes: UnifiedSwapQuotes(
         ranked: [quote],
@@ -143,12 +147,17 @@ void main() {
     }
 
     testWidgets('a started swap arrives from the end edge, and the form is '
-        'gone at once', (tester) async {
+        'retained out of sight', (tester) async {
       await show(tester, form);
+      final formElement = tester.element(find.byType(SwapEntryView));
       swap.emit(progress);
       await tester.pump();
       await tester.pump();
       expect(find.byType(SwapEntryView), findsNothing);
+      expect(
+        tester.element(find.byType(SwapEntryView, skipOffstage: false)),
+        same(formElement),
+      );
       expect(find.byType(SwapExecutionView), findsOneWidget);
 
       await tester.pump(SwapMotion.screen ~/ 3);
@@ -218,7 +227,7 @@ void main() {
 
     setUp(() {
       routed = GatedExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -298,7 +307,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -323,7 +332,7 @@ void main() {
       );
       expect(routingState, isNotNull);
 
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       await tester.pump();
       await tester.pump();
       await tester.pump(SwapMotion.pop ~/ 3);

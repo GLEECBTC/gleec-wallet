@@ -27,6 +27,10 @@ fi
 BASE_URL="${BASE_URL%/}"
 
 WIDGET_PATH="/assets/assets/web_pages/fiat_widget.html"
+# The site's CSP allows no inline script, so the wrapper page loads its
+# validation from this sibling file and that is where the checks have to look.
+WIDGET_SCRIPT_PATH="${WIDGET_PATH%/*}/fiat_widget.js"
+SCRIPT_TAG="<script[^>]*[[:space:]]src=[\"'](\\./)?fiat_widget\\.js[\"']"
 ATTEMPTS="${VERIFY_ATTEMPTS:-5}"
 RETRY_DELAY="${VERIFY_RETRY_DELAY:-10}"
 CURL_OPTS=(--silent --show-error --max-time 30 --location
@@ -41,11 +45,13 @@ fail() { printf '  FAIL  %s\n' "$1"; failures=$((failures + 1)); }
 
 # The CDN keeps a copy for up to an hour, so a check straight after a deploy
 # can legitimately still see the previous build. Retry before believing a miss.
-fetch_widget() {
-  local attempt=1 body
+#
+# fetch_asset <path> <marker>: the body is current once it matches <marker>.
+fetch_asset() {
+  local path="$1" marker="$2" attempt=1 body
   while :; do
-    body=$(curl "${CURL_OPTS[@]}" "${BASE_URL}${WIDGET_PATH}?cachebust=${attempt}-$$" 2>/dev/null)
-    if printf '%s' "$body" | grep -q '_komodoApprovedCheckoutUrl'; then
+    body=$(curl "${CURL_OPTS[@]}" "${BASE_URL}${path}?cachebust=${attempt}-$$" 2>/dev/null)
+    if printf '%s' "$body" | grep -qE -- "$marker"; then
       printf '%s' "$body"
       return 0
     fi
@@ -53,10 +59,19 @@ fetch_widget() {
       printf '%s' "$body"
       return 1
     fi
-    echo "  ..    wrapper not updated yet (attempt ${attempt}/${ATTEMPTS}), retrying in ${RETRY_DELAY}s" >&2
+    echo "  ..    ${path##*/} not updated yet (attempt ${attempt}/${ATTEMPTS}), retrying in ${RETRY_DELAY}s" >&2
     sleep "$RETRY_DELAY"
     attempt=$((attempt + 1))
   done
+}
+
+# A script path answering with markup is the `**` rewrite standing in for a
+# file the build does not have.
+is_markup() {
+  case "${1#"${1%%[![:space:]]*}"}" in
+    '<'*) return 0 ;;
+    *)    return 1 ;;
+  esac
 }
 
 # Headers belong to the version being served, so the request has to reach the
@@ -86,7 +101,8 @@ version=$(curl "${CURL_OPTS[@]}" "${BASE_URL}/version.json" 2>/dev/null)
 echo
 
 echo "Fiat on-ramp wrapper (${WIDGET_PATH})"
-widget=$(fetch_widget)
+widget=$(fetch_asset "$WIDGET_PATH" "$SCRIPT_TAG")
+script=""
 
 if [ -z "$widget" ]; then
   fail "could not fetch the wrapper page"
@@ -94,15 +110,32 @@ elif ! printf '%s' "$widget" | grep -q '<title>Fiat OnRamp'; then
   # A missing file falls through firebase.json's `**` rewrite to index.html.
   fail "path did not serve the wrapper asset (SPA rewrite or 404?)"
 else
-  if printf '%s' "$widget" | grep -q '_komodoApprovedCheckoutUrl'; then
-    pass "checkout URL allowlist is present"
+  # Without this the page would run none of the script inspected below, and
+  # those checks would pass on a file nothing loads.
+  if ! printf '%s' "$widget" | grep -qE -- "$SCRIPT_TAG"; then
+    fail "wrapper page does not load ${WIDGET_SCRIPT_PATH##*/} - its checkout validation cannot be verified"
   else
-    fail "checkout URL allowlist is MISSING - this build is unpatched"
+    pass "wrapper page loads ${WIDGET_SCRIPT_PATH##*/}"
+    script=$(fetch_asset "$WIDGET_SCRIPT_PATH" '_komodoApprovedCheckoutUrl')
+    if [ -z "$script" ]; then
+      fail "could not fetch the wrapper script (${WIDGET_SCRIPT_PATH})"
+    elif is_markup "$script"; then
+      fail "${WIDGET_SCRIPT_PATH} did not serve the wrapper script (SPA rewrite or 404?)"
+      script=""
+    elif printf '%s' "$script" | grep -q '_komodoApprovedCheckoutUrl'; then
+      pass "checkout URL allowlist is present"
+    else
+      fail "checkout URL allowlist is MISSING - this build is unpatched"
+    fi
   fi
 
-  if printf '%s' "$widget" | grep -q 'targetUrl = atob(urlParam)'; then
+  # The page as well as its script, so inline script coming back is inspected.
+  # Neither sink check reports a pass unless the script itself was read.
+  wrapper_source=$(printf '%s\n%s' "$widget" "$script")
+
+  if printf '%s' "$wrapper_source" | grep -q 'targetUrl = atob(urlParam)'; then
     fail "unvalidated atob() -> iframe.src sink is still present"
-  else
+  elif [ -n "$script" ]; then
     pass "no unvalidated atob() -> iframe.src sink"
   fi
 
@@ -113,9 +146,9 @@ else
     pass "iframe sandbox does not grant unconditional top navigation"
   fi
 
-  if printf '%s' "$widget" | grep -qE "postMessage\([^)]*,[[:space:]]*['\"]\*['\"]"; then
+  if printf '%s' "$wrapper_source" | grep -qE "postMessage\([^)]*,[[:space:]]*['\"]\*['\"]"; then
     fail "wrapper still broadcasts postMessage with a wildcard target origin"
-  else
+  elif [ -n "$script" ]; then
     pass "postMessage target origin is pinned"
   fi
 fi
@@ -158,17 +191,20 @@ else
   done
 fi
 
-if ! widget_headers=$(fetch_headers "$WIDGET_PATH"); then
-  fail "could not read response headers from ${BASE_URL}${WIDGET_PATH} - $(tr -d '\n' <"$CURL_ERR")"
-else
-  widget_cache=$(printf '%s' "$widget_headers" \
+for asset in "$WIDGET_PATH" "$WIDGET_SCRIPT_PATH"; do
+  name="${asset##*/}"
+  if ! asset_headers=$(fetch_headers "$asset"); then
+    fail "could not read response headers from ${BASE_URL}${asset} - $(tr -d '\n' <"$CURL_ERR")"
+    continue
+  fi
+  asset_cache=$(printf '%s' "$asset_headers" \
     | grep -i '^cache-control:' | head -1 | sed 's/^[^:]*: *//')
-  case "$widget_cache" in
-    *must-revalidate*) pass "wrapper cache-control: ${widget_cache}" ;;
-    '')                fail "wrapper has no cache-control header" ;;
-    *)                 fail "wrapper cache-control is '${widget_cache}', not revalidating - a future fix to this file takes up to that long to reach already-shipped desktop and mobile builds" ;;
+  case "$asset_cache" in
+    *must-revalidate*) pass "${name} cache-control: ${asset_cache}" ;;
+    '')                fail "${name} has no cache-control header" ;;
+    *)                 fail "${name} cache-control is '${asset_cache}', not revalidating - a future fix to this file takes up to that long to reach already-shipped desktop and mobile builds" ;;
   esac
-fi
+done
 
 echo
 if [ "$failures" -eq 0 ]; then

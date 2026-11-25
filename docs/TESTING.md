@@ -23,7 +23,7 @@ dart run_integration_tests.dart
 # KDF wallet-load harness, replay tier (gates every PR)
 cd sdk/packages/komodo_defi_harness && flutter test --exclude-tags bench
 
-# SDK package tests (gates PRs touching sdk/**)
+# SDK package tests (gates PRs updating the sdk gitlink or sdk/**)
 cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 ```
 
@@ -32,6 +32,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | Suite | Where | Command | CI workflow | Gates? |
 |---|---|---|---|---|
 | Unit + widget | `test_units/` | `flutter test test_units/main.dart` **+ 4 defines** | `unit-tests-on-pr.yml` | Yes |
+| App workspace packages | `packages/komodo_ui_kit/test`, `packages/komodo_persistence_layer/test` | `flutter test --no-pub packages/komodo_ui_kit/test packages/komodo_persistence_layer/test` | `unit-tests-on-pr.yml` | Yes |
 | Integration / GUI | `test_integration/` | `dart run_integration_tests.dart` | `ui-tests-on-pr.yml` | Yes |
 | KDF harness — replay | `sdk/packages/komodo_defi_harness` | `flutter test --exclude-tags bench` | `kdf-harness-on-pr.yml` | Yes |
 | KDF harness — bench | same | `flutter test --tags bench` + `compare_bench.dart` | `kdf-harness-on-pr.yml` | Yes, at 30% regression |
@@ -69,9 +70,13 @@ how the app reads it.
 
 ### The aggregator trap
 
-CI runs *only* `test_units/main.dart`. **A test file not reachable from it never runs,
-anywhere, and nothing reports that.** Adding a test means adding an import there. Two
-files are orphaned today — see §9.
+The app unit/widget step runs *only* `test_units/main.dart`. **A new file under
+`test_units/` that is not reachable from it does not run in CI.** Add an import
+there when adding a test. Two files are orphaned today — see §9.
+
+The same workflow separately runs the two app-owned workspace package test
+directories. This includes the persistence close/reopen regression and the UI
+scrollbar focus regression; SDK package suites remain separate.
 
 ### Coverage
 
@@ -123,6 +128,21 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
 
+### LI.FI production CI gate
+
+Run `bash .github/scripts/test_lifi_profiles.sh` after resolving the locked Wallet
+dependencies. The existing required `validate_code_guidelines` job runs this on
+every PR. It runs the public configuration/command regressions and compiles the
+Dart policy tests for the compiled default and explicit production profile, checking the expected identity,
+178/22 bps, the proxy and serialized KDF startup fields. Staging requests must fail before Flutter starts. No API key, server or
+funded wallet is required. The SDK reference YAML must match its canonical JSON;
+release event, artifact naming and pinned-action checks are included. The Dart
+tests are also imported by `test_units/main.dart`.
+
+The separate `lifi_profile_validation` workflow is a quick Python-only check,
+not the required merge gate. See [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md)
+for the public artifact records and verification tools.
+
 ### LI.FI read-only native smoke
 
 From the wallet root after generating native KDF/coin assets:
@@ -153,6 +173,32 @@ refreshed configurations. See the handover for
 [current validation](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#fresh-validation) and
 [historical results](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#historical-validation-before-the-combined-candidate).
 
+### Solana development acceptance
+
+The [integration guide](SOLANA_INTEGRATION.md) records the candidate manifest,
+immutable catalog, isolation requirements and validation evidence. Keep the
+[engine dependencies](SOLANA_KDF_DEPENDENCIES.md) open until corrected-engine
+runtime checks pass; fixtures do not close them.
+
+```sh
+# Safe runner/manifest unit checks, from the wallet root
+python3 -m unittest discover -s tool -p 'test_solana*.py'
+
+# Isolated, fresh, unfunded native wallet; never points at existing wallet data
+KDF_BINARY="$PWD/.solana/kdf-candidate" python3 tool/solana_smoke.py \
+  --coins .solana/coins_config.json \
+  --manifest .solana/candidate-manifest.json \
+  --json .solana/unfunded-smoke-report.json
+```
+
+Solana wallet tests, including deterministic atomic lifecycle/recovery cases,
+are registered in `test_units/main.dart`. SDK Solana fixtures run within the
+types, RPC, core SDK and harness package suites above. Registry scanner/generator
+tests live in the separate coins candidate checkout and run with
+`python3 -B -m unittest discover -s utils/tests -p 'test_solana_registry.py'`.
+Funded devnet rounds follow the existing live-swap brief and require a person to
+commit funds. Production artifacts and catalog pins are not changed by these checks.
+
 ## 5. SDK package tests
 
 ```bash
@@ -161,7 +207,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 
 `KDF_HARNESS` must stay empty: the suite has no process-tier tests, but asset generation
 fetches the KDF binary, so anything keying off binary-existence would spawn a real KDF.
-The workflow is path-scoped to `sdk/**`, so an app-only PR never runs it.
+The workflow is path-scoped to the `sdk` submodule gitlink and `sdk/**`, so an app-only PR never runs it.
 
 Every other SDK package has tests and **no CI**: `komodo_cex_market_data`,
 `komodo_defi_types`, `komodo_coin_updates`, `komodo_defi_rpc_methods`,
@@ -194,6 +240,35 @@ The wrapper enables software WebGL for headless Wasm tests. Override the binary
 path for your platform. Native harness secure-storage mocks verify SDK behavior
 and cache continuity, not operating-system keychain protection. The browser
 platform-key test registers the real WebCrypto storage implementation.
+
+Full application acceptance must also exercise Dart2Wasm when validating a
+Flutter upgrade. A passing Wasm compilation or SDK transport test does not
+cover the app's authentication transitions. From the wallet root:
+
+```bash
+fvm flutter build web --release --no-pub --wasm --csp \
+  --no-web-resources-cdn --output=build/web-wasm \
+  --dart-define-from-file=docs/LIFI_PRODUCTION_BUILD_DEFINES.json \
+  --dart-define=ANALYTICS_DISABLED=true \
+  --dart-define=BYPASS_LEGAL_DOCUMENT_GATE=false \
+  --dart-define=TRON_GASLESS_ENABLED=true \
+  --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+  --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+  --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+python3 tool/prepare_wallet_web_assets.py build/web-wasm
+GLEEC_TEST_WEB_COMPILER=wasm \
+  node test_units/services/wallet_access/web_wallet_recovery.browser.test.js
+```
+
+Use Node 22 or later and an installed Chrome, optionally selected with
+`GLEEC_TEST_CHROME`. The disposable local server serves Wasm JavaScript modules
+with the correct MIME type. The driver fingerprints `main.dart.wasm`, requires
+that runtime to load and rejects JavaScript fallback. The recovery flow creates
+only unfunded test wallets and checks phrase/file restoration, identity,
+derivation and diagnostic canaries. Hosted acceptance remains tied to the
+deployed JavaScript digest. See [passkey migration and Android bridge
+checks](AUTH_PASSKEY_REUSE.md#automated-regression-checks) for the pre-#3641
+migration round and signed-emulator instrumentation.
 
 The explicit geo-disable branch has a separate compile-time regression. From
 the wallet root, run:
@@ -385,10 +460,10 @@ Current as of the last audit. Each is a real defect, not a caveat.
 > and asynchronous failures. For older builds, confirm the suite's final marker
 > in the browser log before trusting its reported success.
 
-1. **Two `test_units/` files are orphaned** and never run anywhere:
-   `views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart`,
-   `views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart`.
-   `testTruncateDecimal()` is also commented out in `test_units/main.dart`.
+1. **Legacy migration coverage is registered in the unit gate.** The cleanup
+   plate and compatibility dialog suites run from `test_units/main.dart`,
+   including default strong-password validation, explicit weak-password opt-in,
+   and cancellation. `testTruncateDecimal()` remains commented out.
 2. **The macOS Debug/Profile configuration has no provisioning profile.** A
    `-D macos -m profile` run fails at `No profiles for 'com.GleecDEX.wallet' were found`.
    Only the Release configuration (bundle id `com23.GleecDEX.wallet`, Developer ID

@@ -481,7 +481,7 @@ abstract class LocaleKeys {
   static const trezorEnterPinHint = 'trezorEnterPinHint';
   static const trezorInProgressTitle = 'trezorInProgressTitle';
   static const trezorInProgressHint = 'trezorInProgressHint';
-  static const trezorErrorBusy = 'trezorErrorBusy';
+  static const trezorErrorSignInFailed = 'trezorErrorSignInFailed';
   static const trezorErrorInvalidPin = 'trezorErrorInvalidPin';
   static const trezorSelectTitle = 'trezorSelectTitle';
   static const trezorSelectSubTitle = 'trezorSelectSubTitle';
@@ -998,6 +998,7 @@ abstract class LocaleKeys {
   static const followTrezorInstructions = 'followTrezorInstructions';
   static const orderFailedTryAgain = 'orderFailedTryAgain';
   static const noOptionsToPurchase = 'noOptionsToPurchase';
+  static const fiatProviderUnavailable = 'fiatProviderUnavailable';
   static const youReceive = 'youReceive';
   static const selectFiat = 'selectFiat';
   static const selectCoin = 'selectCoin';
@@ -1335,6 +1336,8 @@ abstract class LocaleKeys {
       'privateKeyExportCoverageNotice';
   static const privateKeyExportLegacyCoverage =
       'privateKeyExportLegacyCoverage';
+  static const privateKeyExportActiveWalletCoverage =
+      'privateKeyExportActiveWalletCoverage';
   static const privateKeyExportAccountCoverage =
       'privateKeyExportAccountCoverage';
   static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
@@ -1597,9 +1600,9 @@ abstract class LocaleKeys {
   static const swapCopy = 'swapCopy';
   static const swapShow = 'swapShow';
   static const swapCopied = 'swapCopied';
-  static const swapPermissionUnavailableTitle =
-      'swapPermissionUnavailableTitle';
-  static const swapPermissionUnavailableBody = 'swapPermissionUnavailableBody';
+  static const swapPermissionAtomicTitle = 'swapPermissionAtomicTitle';
+  static const swapPermissionAtomicBody = 'swapPermissionAtomicBody';
+  static const swapPermissionAtomicShort = 'swapPermissionAtomicShort';
   static const swapPermissionNoneTitle = 'swapPermissionNoneTitle';
   static const swapPermissionNoneBody = 'swapPermissionNoneBody';
   static const swapPermissionExactTitle = 'swapPermissionExactTitle';
@@ -1931,4 +1934,344 @@ abstract class LocaleKeys {
   static const swapSlippageSaveNone = 'swapSlippageSaveNone';
   static const swapAnnounceSlippage = 'swapAnnounceSlippage';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
+  static const withdrawSolanaUnavailable = 'withdrawSolanaUnavailable';
+  static const withdrawSolanaToken2022Unavailable =
+      'withdrawSolanaToken2022Unavailable';
+  static const withdrawSolanaTokenMaxUnavailable =
+      'withdrawSolanaTokenMaxUnavailable';
+  static const withdrawSolanaOptionsUnsupported =
+      'withdrawSolanaOptionsUnsupported';
+  static const withdrawSolanaMemoTooLong = 'withdrawSolanaMemoTooLong';
+  static const withdrawSolanaInvalidAmount = 'withdrawSolanaInvalidAmount';
+  static const withdrawSolanaReviewChanged = 'withdrawSolanaReviewChanged';
+  static const withdrawSolanaSubmissionUnknown =
+      'withdrawSolanaSubmissionUnknown';
+  static const withdrawSolanaSubmissionUnknownTitle =
+      'withdrawSolanaSubmissionUnknownTitle';
+  static const withdrawSolanaSubmissionUnknownAdvice =
+      'withdrawSolanaSubmissionUnknownAdvice';
+  static const withdrawSolanaNetworkFee = 'withdrawSolanaNetworkFee';
+  static const withdrawSolanaAccountDeposit = 'withdrawSolanaAccountDeposit';
+  static const withdrawSolanaAccountDepositDescription =
+      'withdrawSolanaAccountDepositDescription';
+  static const swapReviewRequiredFunding = 'swapReviewRequiredFunding';
+  static const swapReviewRequiredFundingExplanation =
+      'swapReviewRequiredFundingExplanation';
+  static const withdrawSolanaInsufficientPlatformBalance =
+      'withdrawSolanaInsufficientPlatformBalance';
+  static const withdrawSolanaInvalidTokenRecipient =
+      'withdrawSolanaInvalidTokenRecipient';
+  static const swapFundingBalanceUnavailable = 'swapFundingBalanceUnavailable';
+  static const solanaMarketMakerUnavailable = 'solanaMarketMakerUnavailable';
+  static const authCreatingWallet = 'authCreatingWallet';
+  static const authInstantCreationDescription =
+      'authInstantCreationDescription';
+  static const authCreationRetryDescription = 'authCreationRetryDescription';
+  static const authConfirmWithDevice = 'authConfirmWithDevice';
+  static const authUnprotectedConfirmation = 'authUnprotectedConfirmation';
+  static const authUseDeviceUnlock = 'authUseDeviceUnlock';
+  static const authUsePassword = 'authUsePassword';
+  static const authSensitiveAuthorizationReason =
+      'authSensitiveAuthorizationReason';
+  static const authUnlockCanceled = 'authUnlockCanceled';
+  static const authUnlockTitle = 'authUnlockTitle';
+  static const authUnlockDescription = 'authUnlockDescription';
+  static const authUnprotectedLocalDescription =
+      'authUnprotectedLocalDescription';
+  static const authUnlock = 'authUnlock';
+  static const authUnlockWithPasskey = 'authUnlockWithPasskey';
+  static const authOpenWallet = 'authOpenWallet';
+  static const authSwitchWallet = 'authSwitchWallet';
+  static const authRecoverWallet = 'authRecoverWallet';
+  static const authWalletSetupTitle = 'authWalletSetupTitle';
+  static const authRecoveryReminder = 'authRecoveryReminder';
+  static const authDeviceProtectionReminder = 'authDeviceProtectionReminder';
+  static const authBackUpRecoveryPhrase = 'authBackUpRecoveryPhrase';
+  static const authProtectDevice = 'authProtectDevice';
+  static const authDeviceProtectionTitle = 'authDeviceProtectionTitle';
+  static const authEnableDeviceUnlock = 'authEnableDeviceUnlock';
+  static const authEnablePasskeyUnlock = 'authEnablePasskeyUnlock';
+  static const authLockAfterTitle = 'authLockAfterTitle';
+  static const authLockImmediately = 'authLockImmediately';
+  static const authLockThirtySeconds = 'authLockThirtySeconds';
+  static const authLockGraceDescription = 'authLockGraceDescription';
+  static const authPasswordManagerNotBackup = 'authPasswordManagerNotBackup';
+  static const authBrowserUnprotected = 'authBrowserUnprotected';
+  static const authDeviceUnprotected = 'authDeviceUnprotected';
+  static const authPasskeyProtected = 'authPasskeyProtected';
+  static const authPasswordProtected = 'authPasswordProtected';
+  static const authOsAccountProtected = 'authOsAccountProtected';
+  static const authDeviceProtected = 'authDeviceProtected';
+  static const authProtectionEnabled = 'authProtectionEnabled';
+  static const authPasswordManagerAccepted = 'authPasswordManagerAccepted';
+  static const authPasswordManagerDeclined = 'authPasswordManagerDeclined';
+  static const authPasswordManagerFailed = 'authPasswordManagerFailed';
+  static const authPasswordManagerUnavailable =
+      'authPasswordManagerUnavailable';
+  static const authPasswordManagerUnknown = 'authPasswordManagerUnknown';
+  static const authProtectionFailed = 'authProtectionFailed';
+  static const authPersonalPasswordOptional = 'authPersonalPasswordOptional';
+  static const authDeletionAuthorization = 'authDeletionAuthorization';
+  static const authShowPassword = 'authShowPassword';
+  static const authHidePassword = 'authHidePassword';
+  static const authWalletName = 'authWalletName';
+  static const authPassword = 'authPassword';
+  static const authPrivacyCover = 'authPrivacyCover';
+  static const authAuthorizationTitle = 'authAuthorizationTitle';
+  static const authPasswordChangeDisclosure = 'authPasswordChangeDisclosure';
+  static const authCreationProtectionNotice = 'authCreationProtectionNotice';
+  static const authManagedUnlockCanceled = 'authManagedUnlockCanceled';
+  static const authManagedUnlockFailed = 'authManagedUnlockFailed';
+  static const authManagedUnlockFailedGenerated =
+      'authManagedUnlockFailedGenerated';
+  static const authManagedUnlockCanceledGenerated =
+      'authManagedUnlockCanceledGenerated';
+  static const authManagedUnlockGone = 'authManagedUnlockGone';
+  static const authManagedUnlockGoneGenerated =
+      'authManagedUnlockGoneGenerated';
+  static const authDeviceUnlockLost = 'authDeviceUnlockLost';
+  static const authBrowserUnlockLost = 'authBrowserUnlockLost';
+  static const authUnlockLostGeneratedHint = 'authUnlockLostGeneratedHint';
+  static const authUnlockLostPasswordHint = 'authUnlockLostPasswordHint';
+  static const authUseRecoveryPhrase = 'authUseRecoveryPhrase';
+  static const authUseSavedPassword = 'authUseSavedPassword';
+  static const authSignOutFailed = 'authSignOutFailed';
+  static const authCredentialCleanupPending = 'authCredentialCleanupPending';
+  static const authRetryCredentialCleanup = 'authRetryCredentialCleanup';
+  static const authRenameWallet = 'authRenameWallet';
+  static const authRenameWalletDescription = 'authRenameWalletDescription';
+  static const authRenameWalletSaved = 'authRenameWalletSaved';
+  static const authRenameWalletFailed = 'authRenameWalletFailed';
+  static const authRenameWalletNameRequired = 'authRenameWalletNameRequired';
+  static const authSaveWalletName = 'authSaveWalletName';
+  static const authRenameWalletNameInvalid = 'authRenameWalletNameInvalid';
+  static const authRenameWalletNameUsed = 'authRenameWalletNameUsed';
+  static const authExplorePrices = 'authExplorePrices';
+  static const authOpenWalletSetup = 'authOpenWalletSetup';
+  static const authReplacePasskeyUsingPassword =
+      'authReplacePasskeyUsingPassword';
+  static const authReplacePasskeyDescription = 'authReplacePasskeyDescription';
+  static const authPasskeyReplaced = 'authPasskeyReplaced';
+  static const authUnlockWalletBeforeDeletion =
+      'authUnlockWalletBeforeDeletion';
+  static const authRemoveWalletTitle = 'authRemoveWalletTitle';
+  static const authRemoveWalletDescription = 'authRemoveWalletDescription';
+  static const authRemoveWalletAction = 'authRemoveWalletAction';
+  static const authRemoveWalletActivityWarning =
+      'authRemoveWalletActivityWarning';
+  static const authWalletRemovedSettingsPending =
+      'authWalletRemovedSettingsPending';
+  static const authPasskeySetupTitle = 'authPasskeySetupTitle';
+  static const authPasskeySetupDescription = 'authPasskeySetupDescription';
+  static const authPasskeyLocalScope = 'authPasskeyLocalScope';
+  static const authCreatePasskey = 'authCreatePasskey';
+  static const authPasskeyReadyTitle = 'authPasskeyReadyTitle';
+  static const authDeviceReadyTitle = 'authDeviceReadyTitle';
+  static const authPasswordReadyTitle = 'authPasswordReadyTitle';
+  static const authUnprotectedTitle = 'authUnprotectedTitle';
+  static const authDeviceSetupTitle = 'authDeviceSetupTitle';
+  static const authDeviceSetupDescription = 'authDeviceSetupDescription';
+  static const authProtectionCanceled = 'authProtectionCanceled';
+  static const authPasskeyUnsupported = 'authPasskeyUnsupported';
+  static const authProtectionChecking = 'authProtectionChecking';
+  static const authProtectionCheckFailed = 'authProtectionCheckFailed';
+  static const authPasswordManagerAutomatic = 'authPasswordManagerAutomatic';
+  static const authLockPreferenceSaved = 'authLockPreferenceSaved';
+  static const authRecoveryReady = 'authRecoveryReady';
+  static const authRecoveryNotReady = 'authRecoveryNotReady';
+  static const authRecoveryIndependent = 'authRecoveryIndependent';
+  static const authReviewProtection = 'authReviewProtection';
+  static const authImportDerivationHint = 'authImportDerivationHint';
+  static const authImportPasswordPurpose = 'authImportPasswordPurpose';
+  static const authShowRecoveryPhrase = 'authShowRecoveryPhrase';
+  static const authHideRecoveryPhrase = 'authHideRecoveryPhrase';
+  static const authPasskeySetupConfirmations = 'authPasskeySetupConfirmations';
+  static const authPasskeySetupCompactDescription =
+      'authPasskeySetupCompactDescription';
+  static const authPasskeyLocalScopeCompact = 'authPasskeyLocalScopeCompact';
+  static const authPasskeySetupPending = 'authPasskeySetupPending';
+  static const authProtectionPending = 'authProtectionPending';
+  static const authPasskeyReadyCompactDescription =
+      'authPasskeyReadyCompactDescription';
+  static const authRecoveryPhraseTitle = 'authRecoveryPhraseTitle';
+  static const authRecoveryPhraseDescription = 'authRecoveryPhraseDescription';
+  static const authRecoveryImported = 'authRecoveryImported';
+  static const authEncryptedWalletFileTitle = 'authEncryptedWalletFileTitle';
+  static const authEncryptedWalletFileDescription =
+      'authEncryptedWalletFileDescription';
+  static const authPasswordManagerPending = 'authPasswordManagerPending';
+  static const authProtectionBusy = 'authProtectionBusy';
+  static const authProtectionStale = 'authProtectionStale';
+  static const portfolioStatUnavailable = 'portfolioStatUnavailable';
+  static const portfolioProfitLossUnavailable =
+      'portfolioProfitLossUnavailable';
+  static const portfolioExcludesUnpricedAssets =
+      'portfolioExcludesUnpricedAssets';
+  static const authDeviceUnlockFailed = 'authDeviceUnlockFailed';
+  static const authDeviceUnlockLockedOut = 'authDeviceUnlockLockedOut';
+  static const authDeviceUnlockReset = 'authDeviceUnlockReset';
+  static const authConfirmationCanceled = 'authConfirmationCanceled';
+  static const authAccessCheckFailed = 'authAccessCheckFailed';
+  static const authUnlockWalletTitle = 'authUnlockWalletTitle';
+  static const authOpenWalletTitle = 'authOpenWalletTitle';
+  static const authUnlockWithDevice = 'authUnlockWithDevice';
+  static const authUsePasskey = 'authUsePasskey';
+  static const authDeviceUnlockUnavailable = 'authDeviceUnlockUnavailable';
+  static const authPasskeyUnlockUnavailable = 'authPasskeyUnlockUnavailable';
+  static const authGeneratedPasswordHint = 'authGeneratedPasswordHint';
+  static const authPasswordMaybeGeneratedHint =
+      'authPasswordMaybeGeneratedHint';
+  static const authSwitchWalletConfirmTitle = 'authSwitchWalletConfirmTitle';
+  static const authSwitchWalletConfirmBody = 'authSwitchWalletConfirmBody';
+  static const authRecoverWalletConfirmTitle = 'authRecoverWalletConfirmTitle';
+  static const authRecoverWalletConfirmBody = 'authRecoverWalletConfirmBody';
+  static const authSignOutActivityWarning = 'authSignOutActivityWarning';
+  static const authSignOutAndSwitch = 'authSignOutAndSwitch';
+  static const authSignOutAndRecover = 'authSignOutAndRecover';
+  static const authSigningOut = 'authSigningOut';
+  static const authRemoveWalletDialogTitle = 'authRemoveWalletDialogTitle';
+  static const authRemoveWalletDialogBody = 'authRemoveWalletDialogBody';
+  static const authRemoveWalletNotBackedUp = 'authRemoveWalletNotBackedUp';
+  static const authBackUpRecoveryPhraseFirst = 'authBackUpRecoveryPhraseFirst';
+  static const authRemoveWalletAcknowledge = 'authRemoveWalletAcknowledge';
+  static const authRemoveWalletBackedUpReminder =
+      'authRemoveWalletBackedUpReminder';
+  static const authRemoveWalletConfirm = 'authRemoveWalletConfirm';
+  static const authRemoveWalletDeviceConfirmation =
+      'authRemoveWalletDeviceConfirmation';
+  static const authRemoveWalletChecking = 'authRemoveWalletChecking';
+  static const authRemovingWallet = 'authRemovingWallet';
+  static const authRemoveWalletPendingTransfers =
+      'authRemoveWalletPendingTransfers';
+  static const authTransferRecipientLabel = 'authTransferRecipientLabel';
+  static const authWalletRemoved = 'authWalletRemoved';
+  static const authCreationTakingLonger = 'authCreationTakingLonger';
+  static const authWalletTagGenerated = 'authWalletTagGenerated';
+  static const authWalletTagImported = 'authWalletTagImported';
+  static const authWalletOptions = 'authWalletOptions';
+  static const authRemoveFromThisDevice = 'authRemoveFromThisDevice';
+  static const authCredentialCleanupFailed = 'authCredentialCleanupFailed';
+  static const authCredentialCleanupInProgress =
+      'authCredentialCleanupInProgress';
+  static const authImportFailed = 'authImportFailed';
+  static const authImportFileNotOpened = 'authImportFileNotOpened';
+  static const authImportFileOpening = 'authImportFileOpening';
+  static const authImportFileLegacyTypeHint = 'authImportFileLegacyTypeHint';
+  static const authImportFileLegacyNotice = 'authImportFileLegacyNotice';
+  static const authImportFileNewer = 'authImportFileNewer';
+  static const authImportFileDamaged = 'authImportFileDamaged';
+  static const authEncryptedWalletFilePreparing =
+      'authEncryptedWalletFilePreparing';
+  static const authImportFileRejected = 'authImportFileRejected';
+  static const authPasswordRequirementsHint = 'authPasswordRequirementsHint';
+  static const authRecoveryBackedUp = 'authRecoveryBackedUp';
+  static const authRecoveryTaskReason = 'authRecoveryTaskReason';
+  static const authPasskeyStepDescription = 'authPasskeyStepDescription';
+  static const authDeviceStepDescription = 'authDeviceStepDescription';
+  static const authSetWalletPassword = 'authSetWalletPassword';
+  static const authLockUnavailablePasskeys = 'authLockUnavailablePasskeys';
+  static const authLockUnavailableScreenLock = 'authLockUnavailableScreenLock';
+  static const authLockUnavailablePlatform = 'authLockUnavailablePlatform';
+  static const authConfirmRecoveryPhrase = 'authConfirmRecoveryPhrase';
+  static const authGeneratedPasswordNotSaved = 'authGeneratedPasswordNotSaved';
+  static const authLockFiveMinutes = 'authLockFiveMinutes';
+  static const authLockFifteenMinutes = 'authLockFifteenMinutes';
+  static const authLockAlwaysImmediate = 'authLockAlwaysImmediate';
+  static const authReplacePasskeyGeneratedDescription =
+      'authReplacePasskeyGeneratedDescription';
+  static const authDeviceLocalScope = 'authDeviceLocalScope';
+  static const authRecoveryHiddenLeftApp = 'authRecoveryHiddenLeftApp';
+  static const authRecoveryHiddenLocked = 'authRecoveryHiddenLocked';
+  static const authRecoveryLegacyUnconfirmed = 'authRecoveryLegacyUnconfirmed';
+  static const authRecoveryFileOnly = 'authRecoveryFileOnly';
+  static const authRecoveryNotBackedUp = 'authRecoveryNotBackedUp';
+  static const authEncryptedWalletFileNeedsPassword =
+      'authEncryptedWalletFileNeedsPassword';
+  static const authBackToSecurity = 'authBackToSecurity';
+  static const authPasswordChangedDeviceUnlockOff =
+      'authPasswordChangedDeviceUnlockOff';
+  static const authPasswordChangedPasskeyOff = 'authPasswordChangedPasskeyOff';
+  static const authDeviceUnlockOffTitle = 'authDeviceUnlockOffTitle';
+  static const authDeviceUnlockOffDescription =
+      'authDeviceUnlockOffDescription';
+  static const authPasskeyOffTitle = 'authPasskeyOffTitle';
+  static const authPasskeyOffDescription = 'authPasskeyOffDescription';
+  static const authUseExistingPasskey = 'authUseExistingPasskey';
+  static const authExistingPasskeyPending = 'authExistingPasskeyPending';
+  static const authExistingPasskeyNotFound = 'authExistingPasskeyNotFound';
+  static const authExistingPasskeyUnsupported =
+      'authExistingPasskeyUnsupported';
+  static const authExistingPasskeyProviderError = 'authExistingPasskeyProviderError';
+  static const authPasskeySetupInterrupted = 'authPasskeySetupInterrupted';
+  static const authExistingPasskeyReady = 'authExistingPasskeyReady';
+  static const authExistingPasskeyOffDescription =
+      'authExistingPasskeyOffDescription';
+  static const authPasskeyProtectedDevice = 'authPasskeyProtectedDevice';
+  static const authUseDeviceUnlockInstead = 'authUseDeviceUnlockInstead';
+  static const authPasskeyLostDeviceDescription =
+      'authPasskeyLostDeviceDescription';
+  static const authPasskeyLostDeviceGeneratedDescription =
+      'authPasskeyLostDeviceGeneratedDescription';
+  static const authChooseAnotherPasskeyWithPassword =
+      'authChooseAnotherPasskeyWithPassword';
+  static const authUseDeviceUnlockWithPassword =
+      'authUseDeviceUnlockWithPassword';
+  static const authPasskeyChosen = 'authPasskeyChosen';
+  static const authStopUsingPasskey = 'authStopUsingPasskey';
+  static const authPasskeyRemoving = 'authPasskeyRemoving';
+  static const authPasskeyRemoved = 'authPasskeyRemoved';
+  static const authPasswordChangedDevicePasskeyOff =
+      'authPasswordChangedDevicePasskeyOff';
+  static const swapAssetPreparationUnavailable =
+      'swapAssetPreparationUnavailable';
+  static const swapAvailabilityChecking = 'swapAvailabilityChecking';
+  static const swapAvailabilityUnavailable = 'swapAvailabilityUnavailable';
+  static const swapPreparingAssets = 'swapPreparingAssets';
+  static const swapCheckingFunds = 'swapCheckingFunds';
+  static const swapQuoteSlow = 'swapQuoteSlow';
+  static const swapEstimateUpdating = 'swapEstimateUpdating';
+  static const swapEstimatePlaceholder = 'swapEstimatePlaceholder';
+  static const swapMoreQuotesChecking = 'swapMoreQuotesChecking';
+  static const swapNetworkFilter = 'swapNetworkFilter';
+  static const swapAllNetworks = 'swapAllNetworks';
+  static const swapReviewPeerToPeer = 'swapReviewPeerToPeer';
+  static const swapConfirmSwap = 'swapConfirmSwap';
+  static const swapBackToWallet = 'swapBackToWallet';
+  static const swapViewAsset = 'swapViewAsset';
+  static const swapReceiptDetails = 'swapReceiptDetails';
+  static const swapProgressDetails = 'swapProgressDetails';
+  static const swapUpdatingBalance = 'swapUpdatingBalance';
+  static const swapCheckingTransferTitle = 'swapCheckingTransferTitle';
+  static const swapCheckingTransferBody = 'swapCheckingTransferBody';
+  static const swapBetterOptionAvailable = 'swapBetterOptionAvailable';
+  static const swapPreviousEstimate = 'swapPreviousEstimate';
+  static const swapLegalConsentCompact = 'swapLegalConsentCompact';
+  static const swapReviewToWallet = 'swapReviewToWallet';
+  static const swapReviewSameWallet = 'swapReviewSameWallet';
+  static const swapReviewCostsUnknownNote = 'swapReviewCostsUnknownNote';
+  static const swapReviewUpdatedIntro = 'swapReviewUpdatedIntro';
+  static const swapReviewUpdatedFallback = 'swapReviewUpdatedFallback';
+  static const swapReviewUpdatedSpoken = 'swapReviewUpdatedSpoken';
+  static const swapProgressDeliveryDetail = 'swapProgressDeliveryDetail';
+  static const swapProgressFewMinutes = 'swapProgressFewMinutes';
+  static const swapProgressActionNoPageBody = 'swapProgressActionNoPageBody';
+  static const swapProgressEndedTitle = 'swapProgressEndedTitle';
+  static const swapProgressStillChecking = 'swapProgressStillChecking';
+  static const swapProgressLoading = 'swapProgressLoading';
+  static const swapProgressNotFoundTitle = 'swapProgressNotFoundTitle';
+  static const swapProgressNotFoundBody = 'swapProgressNotFoundBody';
+  static const swapOpenActivity = 'swapOpenActivity';
+  static const swapBackToActivity = 'swapBackToActivity';
+  static const swapBalanceUpdated = 'swapBalanceUpdated';
+  static const swapBalanceNotRefreshed = 'swapBalanceNotRefreshed';
+  static const swapActivityLoading = 'swapActivityLoading';
+  static const swapAmountToPayIn = 'swapAmountToPayIn';
+  static const swapAmountToPayInUsd = 'swapAmountToPayInUsd';
+  static const swapA11yNoEstimate = 'swapA11yNoEstimate';
+  static const swapA11yReceiveEstimate = 'swapA11yReceiveEstimate';
+  static const swapA11yReceiveEstimateUsd = 'swapA11yReceiveEstimateUsd';
+  static const swapWalletSwaps = 'swapWalletSwaps';
+  static const swapWalletSummaryInProgress = 'swapWalletSummaryInProgress';
+  static const swapWalletSummaryAttention = 'swapWalletSummaryAttention';
+  static const swapWalletSummaryReceived = 'swapWalletSummaryReceived';
 }

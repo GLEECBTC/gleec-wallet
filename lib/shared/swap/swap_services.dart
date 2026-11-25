@@ -5,8 +5,8 @@ import 'package:decimal/decimal.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/app_config/app_config.dart' show excludedAssetList;
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
@@ -14,22 +14,29 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_analytics.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_session_draft.dart';
+import 'package:web_dex/shared/swap/swap_spend_precision.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/shared/utils/utils.dart' as utils;
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
+
+export 'package:web_dex/shared/swap/swap_session_draft.dart' show SwapDraft;
 
 /// A request to open the swap form on a pair, as tickers. The amount is in
 /// pay-asset units, or in US dollars when `fiat` is set.
@@ -56,15 +63,19 @@ class SwapServices {
     required DexRepository dexRepository,
     required MyOrdersService orders,
     required Mm2Api mm2Api,
+    BaseStorage? storage,
     void Function(AnalyticsEventData event)? logAnalytics,
+    TradingAssetPolicy? tradingPolicy,
   }) : _sdk = sdk,
        _coinsRepo = coinsRepo,
+       _tradingPolicy = tradingPolicy,
        _mm2Api = mm2Api {
     pricing = SwapPricingService(SdkSwapPriceSource(sdk.marketData));
     registry = SwapExecutionRegistry(
       executors: [
         RoutedSwapExecutor(sdk.routedSwaps, networks: networks),
         AtomicSwapExecutor(
+          auth: sdk.auth,
           dexRepository: dexRepository,
           orders: orders,
           networks: networks,
@@ -72,11 +83,17 @@ class SwapServices {
         ),
       ],
       inFlight: _inFlight,
+      currentSession: () => _session,
+      isSessionCurrent: sdk.auth.isSessionContextCurrent,
     );
     _analytics = SwapAnalyticsReporter(
       registry: registry,
       log: logAnalytics ?? _queueAnalytics,
       walletType: () => _user?.type ?? '',
+    );
+    presentation = SwapPresentationSession(
+      registry: registry,
+      refreshBalances: _refreshReceiptBalances,
     );
     history = SwapHistoryRepository(
       routedSwaps: sdk.routedSwaps,
@@ -87,10 +104,15 @@ class SwapServices {
     terms = SwapTermsRepository(
       walletKey: _walletKey,
       legalDocuments: legalDocuments,
+      storage: storage,
     );
-    preferences = SwapPreferences(walletKey: _walletKey);
+    preferences = SwapPreferences(walletKey: _walletKey, storage: storage);
     _userSubscription = sdk.auth.watchCurrentUser().listen(
       _onUserChanged,
+      onError: (Object _) {},
+    );
+    _sessionSubscription = sdk.auth.watchSessionContext().listen(
+      _onSessionChanged,
       onError: (Object _) {},
     );
   }
@@ -98,9 +120,25 @@ class SwapServices {
   final KomodoDefiSdk _sdk;
   final CoinsRepo _coinsRepo;
   final Mm2Api _mm2Api;
+  final TradingAssetPolicy? _tradingPolicy;
+
+  late final _spendPrecision = SwapSpendPrecision(
+    assetOf: assetOf,
+    tokenDecimals:
+        ({
+          required protocolType,
+          required platform,
+          required contractAddress,
+        }) async => (await _sdk.client.rpc.utility.getTokenInfo(
+          protocolType: protocolType,
+          platform: platform,
+          contractAddress: contractAddress,
+        )).info.decimals,
+  );
 
   late final SwapPricingService pricing;
   late final SwapExecutionRegistry registry;
+  late final SwapPresentationSession presentation;
   late final SwapHistoryRepository history;
   late final SwapTermsRepository terms;
   late final SwapPreferences preferences;
@@ -111,10 +149,15 @@ class SwapServices {
   final RoutedSwapRateLimit _routedRateLimit = RoutedSwapRateLimit();
 
   StreamSubscription<KdfUser?>? _userSubscription;
+  StreamSubscription<AuthSessionContext?>? _sessionSubscription;
+  AuthSessionContext? _session;
+  bool _disposed = false;
   KdfUser? _user;
   final StreamController<SwapExecutionRef> _openRequests =
       StreamController<SwapExecutionRef>.broadcast();
   SwapExecutionRef? _pendingOpen;
+  final _activityRequests = StreamController<void>.broadcast();
+  bool _pendingActivity = false;
 
   /// Swaps currently on screen. Notices about them are redundant.
   final Set<String> viewing = {};
@@ -122,6 +165,16 @@ class SwapServices {
   final StreamController<SwapIntent> _intents =
       StreamController<SwapIntent>.broadcast();
   SwapIntent? _pendingIntent;
+  final _draft = SwapSessionDraft();
+
+  Object get draftSession => _draft.session;
+
+  SwapDraft? draftFor(Object session) => _draft.read(session);
+
+  /// A widget disposed after sign-out must not restore the old spend amount.
+  void rememberDraft(Object session, SwapDraft? draft) {
+    _draft.remember(session, draft);
+  }
 
   /// The last deep-link intent the Swap surface applied, so rebuilding the
   /// surface does not re-apply a link the user has since moved on from.
@@ -129,6 +182,7 @@ class SwapServices {
 
   /// Asks the Swap form to open on a pair — from a coin page's Swap action.
   void requestIntent(SwapIntent intent) {
+    _signInRestoreIntent = null;
     _pendingIntent = intent;
     if (!_intents.isClosed) _intents.add(intent);
   }
@@ -140,10 +194,12 @@ class SwapServices {
   SwapIntent? takePendingIntent() {
     final pending = _pendingIntent;
     _pendingIntent = null;
+    if (pending == _signInRestoreIntent) _signInRestoreIntent = null;
     return pending;
   }
 
   SwapIntent? _signInIntent;
+  SwapIntent? _signInRestoreIntent;
 
   /// Whether a sign-in started from the swap form is under way.
   bool get signInFromSwap => _signInIntent != null;
@@ -152,18 +208,21 @@ class SwapServices {
   /// announced: the signed-out form, still mounted, would take it first.
   void beginSignIn(SwapIntent intent) {
     _signInIntent = intent;
+    _signInRestoreIntent = intent;
     _pendingIntent = intent;
   }
 
   /// Without a wallet, drops the intent so a later visit does not reopen on it.
   void endSignIn({required bool signedIn}) {
     if (!signedIn && _pendingIntent == _signInIntent) _pendingIntent = null;
+    if (!signedIn) _signInRestoreIntent = null;
     _signInIntent = null;
   }
 
   /// Asks the Swap surface to show a swap — from a notice, say, while the
   /// surface may not be mounted yet.
   void requestOpen(SwapExecutionRef ref) {
+    _pendingActivity = false;
     _pendingOpen = ref;
     if (!_openRequests.isClosed) _openRequests.add(ref);
   }
@@ -175,6 +234,21 @@ class SwapServices {
   SwapExecutionRef? takePendingOpen() {
     final pending = _pendingOpen;
     _pendingOpen = null;
+    return pending;
+  }
+
+  /// Opens the complete Activity list from a wallet summary of several swaps.
+  void requestActivity() {
+    _pendingOpen = null;
+    _pendingActivity = true;
+    if (!_activityRequests.isClosed) _activityRequests.add(null);
+  }
+
+  Stream<void> get activityRequests => _activityRequests.stream;
+
+  bool takePendingActivity() {
+    final pending = _pendingActivity;
+    _pendingActivity = false;
     return pending;
   }
 
@@ -214,6 +288,10 @@ class SwapServices {
   /// The full asset for [id].
   Asset? assetOf(AssetId id) => _available[id];
 
+  /// The pay asset's executable precision, resolved after asset activation.
+  Future<int?> spendDecimalsOf(AssetId id) =>
+      _spendPrecision.decimalsOf(id, allowLookup: _user != null);
+
   /// Every asset the wallet knows.
   Iterable<AssetId> get knownAssets => _available.keys;
 
@@ -226,19 +304,11 @@ class SwapServices {
   /// Whether the coin config marks [id] wallet-only.
   bool isWalletOnly(AssetId id) => assetOf(id)?.isWalletOnly ?? false;
 
-  /// Unknown atomic permission is never evidence that no approval is needed.
-  /// Use the configured contract even when the token parent is unresolved.
-  bool atomicPermissionUnavailable(AssetId id) {
-    if (atomicTokenPermissionUnavailable(id)) return true;
-    try {
-      final asset = assetOf(id);
-      if (asset == null) return true;
-      return evmCoinSubClasses.contains(id.subClass) &&
-          (asset.protocol.contractAddress ?? '').isNotEmpty;
-    } on Object {
-      return true;
-    }
-  }
+  /// Permission details for atomic token payments are determined after matching.
+  /// Use the contract as well as the id when a parent has not resolved yet.
+  bool atomicTokenApproval(AssetId id) =>
+      evmCoinSubClasses.contains(id.subClass) &&
+      (id.isChildAsset || (contractOf(id) ?? '').isNotEmpty);
 
   /// Whether [id] is a test-network asset.
   bool isTestnet(AssetId id) {
@@ -273,22 +343,50 @@ class SwapServices {
 
   /// A key identifying the signed-in wallet, for per-wallet preferences.
   Future<String?> _walletKey() async {
-    final user = _user ?? await _sdk.auth.currentUser;
-    return user?.walletId.compoundId;
+    final session = _session;
+    return !_disposed &&
+            session != null &&
+            _sdk.auth.isSessionContextCurrent(session)
+        ? session.walletId.compoundId
+        : null;
   }
 
   void _onUserChanged(KdfUser? user) {
-    final previous = _user?.walletId;
     _user = user;
-    if (user == null) {
-      unawaited(registry.reset());
+  }
+
+  void _onSessionChanged(AuthSessionContext? session) {
+    if (_disposed ||
+        (session != null && !_sdk.auth.isSessionContextCurrent(session))) {
       return;
     }
-    if (previous != null && previous != user.walletId) {
-      unawaited(registry.reset().then((_) => registry.resumeInFlight()));
-      return;
-    }
-    if (previous == null) unawaited(registry.resumeInFlight());
+    final previous = _session;
+    _session = session;
+    // Identity enrichment may replace the value without ending its epoch.
+    if (previous == session) return;
+    _spendPrecision.reset();
+    _draft.reset();
+    _resetPresentation();
+    unawaited(
+      registry.reset().then((_) async {
+        if (!_disposed &&
+            session != null &&
+            _session == session &&
+            _sdk.auth.isSessionContextCurrent(session)) {
+          await registry.resumeInFlight();
+        }
+      }),
+    );
+  }
+
+  void _resetPresentation() {
+    presentation.reset();
+    viewing.clear();
+    _pendingOpen = null;
+    _pendingActivity = false;
+    // Keep the consumed route signature: the router can retain query values
+    // after sign-out. Only a fresh navigation may apply that link again.
+    if (_pendingIntent != _signInRestoreIntent) _pendingIntent = null;
   }
 
   Future<List<SwapExecutionRef>> _inFlight() => _inFlightOf(const {
@@ -337,9 +435,8 @@ class SwapServices {
       for (final swap in page.swaps)
         if (swap.events.every((e) => e.event.type != 'Finished') &&
             swap.events.isNotEmpty &&
-            DateTime.fromMillisecondsSinceEpoch(
-              swap.events.last.timestamp,
-            ).isAfter(since))
+            DateTime.fromMillisecondsSinceEpoch(swap.events.last.timestamp)
+                .isAfter(since))
           (id: swap.uuid, source: SwapLiquiditySource.atomic),
     ];
   }
@@ -362,6 +459,12 @@ class SwapServices {
   }
 
   /// Builds the quote repository, gated by the live trading checks.
+  ///
+  /// [tradingAllowed] says whether this location may trade a pair, and both
+  /// sources report its refusal as that restriction. The order book's own
+  /// rules are added here, for the order book alone: a wallet-only asset can
+  /// still be routed. A caller that folds those rules into [tradingAllowed]
+  /// keeps such assets from routed swaps too, under the location's wording.
   UnifiedSwapRepository createRepository({
     required bool Function(AssetId from, AssetId to) tradingAllowed,
     required bool Function() clockValid,
@@ -382,10 +485,15 @@ class SwapServices {
           networks: networks,
           addressOf: addressOf,
           tradingAllowed: tradingAllowed,
+          pairAllowed: (from, to) =>
+              _tradingPolicy?.allowsPair(from.id, to.id) ??
+              canTradeAssetPair(from.id, to.id),
+          assetAllowed: _tradingPolicy?.allowsAsset,
           clockValid: clockValid,
           isWalletOnly: isWalletOnly,
-          permissionUnavailable: atomicPermissionUnavailable,
+          tokenApproval: atomicTokenApproval,
           gasLimitsOf: gasLimitsOf,
+          spendDecimalsOf: spendDecimalsOf,
         ),
       ],
       pricing: pricing,
@@ -476,6 +584,29 @@ class SwapServices {
     }
   }
 
+  /// Refreshes the actual balance source after an evidenced completion. The
+  /// received amount is never added to a cached balance in presentation code.
+  Future<bool> _refreshReceiptBalances(SwapExecutionSnapshot snapshot) async {
+    final assets = {
+      if (snapshot.from != null) snapshot.from!,
+      if (SwapExecutionPresentation(snapshot).receivedAsset case final asset?)
+        asset,
+    };
+    if (assets.isEmpty) return false;
+    final results = await Future.wait([
+      for (final asset in assets)
+        () async {
+          try {
+            await _sdk.balances.getBalance(asset, forceRefresh: true);
+            return true;
+          } on Object {
+            return false;
+          }
+        }(),
+    ]);
+    return results.every((current) => current);
+  }
+
   /// What [id]'s other addresses in this wallet can spend, as last read:
   /// swaps spend from [addressOf] alone. Null when no address was read.
   Decimal? spendableElsewhere(AssetId id) {
@@ -501,7 +632,6 @@ class SwapServices {
   /// Holdings with their USD value, for choosing a default pair.
   Future<List<SwapHolding>> holdings() async {
     final activated = await activatedAssets();
-    await pricing.prices.warm(activated);
     return [
       for (final id in activated)
         if (_holding(id) case final SwapHolding holding) holding,
@@ -529,10 +659,16 @@ class SwapServices {
 
   /// Stops following swaps and releases resources.
   Future<void> dispose() async {
+    _disposed = true;
+    _session = null;
+    await _sessionSubscription?.cancel();
+    _spendPrecision.reset();
     await _userSubscription?.cancel();
     await _openRequests.close();
+    await _activityRequests.close();
     await _intents.close();
     await _analytics.dispose();
+    await presentation.dispose();
     await registry.dispose();
   }
 

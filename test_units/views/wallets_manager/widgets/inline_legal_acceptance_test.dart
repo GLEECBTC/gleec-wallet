@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:easy_localization/easy_localization.dart';
 // No public API resets the global translations between aggregated suites.
 // ignore: implementation_imports
@@ -7,16 +5,15 @@ import 'package:easy_localization/src/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/hw_dialog_wallet_select.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_creation.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
+import '../../../support/legacy_wallet_file_writer.dart';
 import '../../../support/legal_onboarding_harness.dart';
 
 Future<void> _fillPasswords(WidgetTester tester) async {
@@ -49,59 +46,36 @@ void main() {
     tearDown(() => Localization.load(const Locale('en')));
 
     for (final updated in [false, true]) {
-      for (final keyboard in [false, true]) {
-        testWidgets(
-          'create accepts only on valid submission (updated: $updated, keyboard: $keyboard)',
-          (tester) async {
-            final harness = LegalFormHarness(updated: updated);
-            var created = 0;
-            await harness.pump(
-              tester,
-              WalletCreation(
-                action: WalletsManagerAction.create,
-                onCreate:
-                    ({
-                      required name,
-                      required password,
-                      walletType,
-                      required rememberMe,
-                    }) => created++,
-                onCancel: () {},
-              ),
-            );
-            _expectInlineNotice(tester, updated: updated);
-            final oldRecord = await harness.repository.readAcceptance();
-            expect(
-              tester
-                  .widget<UiPrimaryButton>(
-                    find.byKey(const Key('confirm-password-button')),
-                  )
-                  .onPressed,
-              isNull,
-            );
-            expect(created, 0);
-            expect(
-              (await harness.repository.readAcceptance())?.surface,
-              oldRecord?.surface,
-            );
-            await enterLegalField(tester, 'name-wallet-field', 'My wallet');
-            await _fillPasswords(tester);
-            if (keyboard) {
-              await tester.testTextInput.receiveAction(TextInputAction.done);
-              await tester.pumpAndSettle();
-              await tester.pump();
-            } else {
-              await tapLegalSubmit(tester, 'confirm-password-button');
-            }
-            expect(created, 1);
-            expect(
-              (await harness.repository.readAcceptance())?.surface,
-              'wallet-creation',
-            );
-            expect(await harness.repository.hasAcceptedCurrentTerms(), isTrue);
-          },
-        );
-      }
+      testWidgets(
+        'create accepts with one action and no typing (updated: $updated)',
+        (tester) async {
+          final harness = LegalFormHarness(updated: updated);
+          var created = 0;
+          await harness.pump(
+            tester,
+            WalletCreation(
+              action: WalletsManagerAction.create,
+              onCreate: () => created++,
+              onCancel: () {},
+            ),
+          );
+          _expectInlineNotice(tester, updated: updated);
+          final oldRecord = await harness.repository.readAcceptance();
+          expect(find.byType(TextFormField), findsNothing);
+          expect(created, 0);
+          expect(
+            (await harness.repository.readAcceptance())?.surface,
+            oldRecord?.surface,
+          );
+          await tapLegalSubmit(tester, 'confirm-password-button');
+          expect(created, 1);
+          expect(
+            (await harness.repository.readAcceptance())?.surface,
+            'wallet-creation',
+          );
+          expect(await harness.repository.hasAcceptedCurrentTerms(), isTrue);
+        },
+      );
 
       testWidgets(
         'seed import accepts on final Import only (updated: $updated)',
@@ -111,13 +85,11 @@ void main() {
           await harness.pump(
             tester,
             WalletSimpleImport(
-              onImport:
-                  ({
-                    required name,
-                    required password,
-                    required walletConfig,
-                    required rememberMe,
-                  }) => imported++,
+              onImport: ({
+                required name,
+                required password,
+                required walletConfig,
+              }) => imported++,
               onUploadFiles: ({required fileName, required fileData}) {},
               onCancel: () {},
             ),
@@ -148,22 +120,18 @@ void main() {
         'file import accepts after successful decryption (updated: $updated)',
         (tester) async {
           final harness = LegalFormHarness(updated: updated);
-          final encrypted = await tester.runAsync(() async {
-            final tool = EncryptionTool();
-            final config = WalletConfig(
-              seedPhrase: await tool.encryptData(
-                legalTestPassword,
-                legalTestSeed,
-              ),
-              activatedCoins: [],
-              hasBackup: true,
-              type: WalletType.hdwallet,
-            );
-            return tool.encryptData(
+          final encrypted = await tester.runAsync(
+            () => legacyWalletFile(
               legalTestPassword,
-              jsonEncode(config.toJson()),
-            );
-          });
+              WalletConfig(
+                seedPhrase: '',
+                activatedCoins: [],
+                hasBackup: true,
+                type: WalletType.hdwallet,
+              ),
+              legalTestSeed,
+            ),
+          );
           var imported = 0;
           await harness.pump(
             tester,
@@ -172,13 +140,11 @@ void main() {
                 content: encrypted!,
                 name: 'My wallet.json',
               ),
-              onImport:
-                  ({
-                    required name,
-                    required password,
-                    required walletConfig,
-                    required rememberMe,
-                  }) => imported++,
+              onImport: ({
+                required name,
+                required password,
+                required walletConfig,
+              }) => imported++,
               onCancel: () {},
             ),
           );
@@ -234,8 +200,9 @@ void main() {
           (await harness.repository.readAcceptance())?.surface,
           oldRecord?.surface,
         );
-        await tester.ensureVisible(find.text('Log In'));
-        await tester.tap(find.text('Log In'));
+        final unlock = find.byKey(const Key('wallet-password-unlock'));
+        await tester.ensureVisible(unlock);
+        await tester.tap(unlock);
         await tester.pumpAndSettle();
         await tester.pump();
         expect(loggedIn, 1);
@@ -278,34 +245,21 @@ void main() {
       );
     }
 
-    testWidgets('duplicate wallet name and cancellation do not accept', (
-      tester,
-    ) async {
+    testWidgets('cancellation before creation does not accept', (tester) async {
       final harness = LegalFormHarness(updated: true);
-      harness.wallets.uniquenessError = 'Name already exists';
       var created = 0;
       var cancelled = 0;
       await harness.pump(
         tester,
         WalletCreation(
           action: WalletsManagerAction.create,
-          onCreate:
-              ({
-                required name,
-                required password,
-                walletType,
-                required rememberMe,
-              }) => created++,
+          onCreate: () => created++,
           onCancel: () => cancelled++,
         ),
       );
-      await enterLegalField(tester, 'name-wallet-field', 'My wallet');
-      await _fillPasswords(tester);
-      await tapLegalSubmit(tester, 'confirm-password-button');
-      expect(created, 0);
-      expect((await harness.repository.readAcceptance())?.surface, 'old-form');
       await tester.ensureVisible(find.text('Cancel'));
       await tester.tap(find.text('Cancel'));
+      expect(created, 0);
       expect(cancelled, 1);
       expect((await harness.repository.readAcceptance())?.surface, 'old-form');
     });

@@ -1,8 +1,88 @@
+import 'views/common/wallet_access/auth_setup_flow_test.dart'
+    as auth_setup_flow_test;
+import 'services/wallet_access/passkey/passkey_envelope_test.dart'
+    as passkey_envelope_test;
+import 'services/wallet_access/passkey/passkey_credential_backend_test.dart'
+    as passkey_credential_backend_test;
+import 'views/common/wallet_access/wallet_protection_native_passkey_test.dart'
+    as wallet_protection_native_passkey_test;
+import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
+import 'services/wallet_access/swap_submission_lock_test.dart'
+    as swap_submission_lock_test;
+import 'services/wallet_access/wallet_credential_cleanup_test.dart'
+    as wallet_credential_cleanup_test;
+import 'services/wallet_access/wallet_access_service_test.dart'
+    as wallet_access_service_test;
+import 'services/wallet_access/wallet_access_rollback_test.dart'
+    as wallet_access_rollback_test;
+import 'services/wallet_access/artifact_privacy_test.dart'
+    as artifact_privacy_test;
+import 'bloc/update_bloc_dismissal_test.dart' as update_bloc_dismissal_test;
+import 'services/wallet_access/native_credential_backend_channel_test.dart'
+    as native_credential_backend_channel_test;
+import 'services/wallet_access/native_credential_backend_linux_test.dart'
+    as native_credential_backend_linux_test;
+import 'services/wallet_access/password_rotation_envelope_test.dart'
+    as password_rotation_envelope_test;
+import 'tests/wallet/recovery_evidence_test.dart';
+import 'views/common/wallet_access/managed_wallet_access_test.dart'
+    as managed_wallet_access_test;
+import 'views/common/wallet_access/auth_accessibility_test.dart'
+    as auth_accessibility_test;
+import 'views/common/wallet_access/auth_recovery_accessibility_test.dart'
+    as auth_recovery_accessibility_test;
+import 'views/common/wallet_access/auth_settings_accessibility_test.dart'
+    as auth_settings_accessibility_test;
+import 'services/wallet_access/web_credential_bridge_test.dart'
+    as web_credential_bridge_test;
+import 'services/wallet_access/financial_operation_gate_test.dart'
+    as financial_operation_gate_test;
+import 'services/wallet_access/app_lock_boundary_test.dart'
+    as app_lock_boundary_test;
+import 'services/wallet_access/wallet_operation_gate_test.dart'
+    as wallet_operation_gate_test;
+import 'services/wallet_access/unlock_coordinator_test.dart'
+    as unlock_coordinator_test;
+import 'views/settings/wallet_display_name_section_test.dart'
+    as wallet_display_name_section_test;
+import 'views/settings/passkey_replacement_section_test.dart'
+    as passkey_replacement_section_tests;
+import 'views/settings/password_update_provider_test.dart'
+    as password_update_provider_tests;
+import 'views/settings/wallet_removal_section_test.dart'
+    as wallet_removal_section_tests;
+import 'tests/integration_test_runner_test.dart'
+    as integration_test_runner_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
+import 'tests/swap/solana_trade_dispatch_test.dart'
+    as solana_trade_dispatch_test;
+import 'tests/mm2/mm2_initialization_test.dart' as mm2_initialization_test;
+import 'tests/mm2/kdf_data_directory_test.dart' as kdf_data_directory_test;
+import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
+import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
+import 'tests/swap/solana_atomic_lifecycle_test.dart'
+    as solana_atomic_lifecycle_test;
+
 import 'package:flutter_test/flutter_test.dart';
+
+import 'views/wallets_manager/widgets/wallet_list_item_test.dart'
+    as wallet_list_item_test;
+import 'views/settings/security_recovery_flow_test.dart'
+    as security_recovery_flow_test;
+import 'views/settings/recovery_plates_test.dart' as recovery_plates_test;
+import 'views/common/wallet_access/wallet_protection_states_test.dart'
+    as wallet_protection_states_test;
+import 'views/common/wallet_access/wallet_lock_screen_test.dart'
+    as wallet_lock_screen_test;
+import 'views/common/wallet_access/wallet_authorization_form_test.dart'
+    as wallet_authorization_form_test;
+
 import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
 import 'services/file_loader/guarded_file_saver_test.dart'
     as guarded_file_saver_test;
+import 'services/file_loader/legacy_export_residue_test.dart'
+    as legacy_export_residue_test;
 import 'services/logger/safe_log_exporter_test.dart' as safe_log_exporter_test;
 import 'services/logger/logger_privacy_test.dart' as logger_privacy_test;
 import 'services/feedback/feedback_diagnostics_test.dart'
@@ -36,6 +116,13 @@ import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
 
 import 'services/initializer/app_error_handling_test.dart'
     as app_error_handling_test;
+import 'services/storage/app_storage_test.dart' as app_storage_test;
+import 'tests/fiat/fiat_provider_availability_test.dart'
+    as fiat_provider_availability_test;
+import 'views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart'
+    as legacy_migration_cleanup_plate_test;
+import 'views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart'
+    as legacy_migration_compatibility_dialog_test;
 import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
     as wallet_simple_import_test;
 
@@ -45,12 +132,23 @@ import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
 // reachable from here never runs - these 18 were silently skipped.
 import 'bloc/cex_market_data/common/update_frequency_backoff_strategy_test.dart'
     as update_frequency_backoff_strategy_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_calculator_test.dart'
+    as profit_loss_calculator_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_repository_test.dart'
+    as profit_loss_repository_test;
+import 'bloc/assets_overview/asset_overview_bloc_test.dart'
+    as asset_overview_bloc_test;
+import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
+    as portfolio_growth_repository_test;
+import 'views/wallet/portfolio_profit_loss_views_test.dart'
+    as portfolio_profit_loss_views_test;
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
 import 'shared/widgets/connect_wallet_button_test.dart'
     as connect_wallet_button_test;
 import 'shared/widgets/quick_login_switch_test.dart' as quick_login_switch_test;
+import 'shared/widgets/app_dialog_test.dart' as app_dialog_test;
 import 'shared/widgets/terms_consent_text_test.dart' as terms_consent_text_test;
 import 'tests/analytics/firebase_config_test.dart' as firebase_config_test;
 import 'tests/analytics/firebase_analytics_api_test.dart'
@@ -66,6 +164,10 @@ import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/fiat/fiat_provider_failure_test.dart'
     as fiat_provider_failure_test;
 import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
+import 'tests/mm2/sdk_build_manifest_test.dart' as sdk_build_manifest_test;
+import 'tests/ci/lifi_workflow_contract_test.dart'
+    as lifi_workflow_contract_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
 import 'tests/wallet/activated_coin_id_migration_test.dart'
@@ -78,6 +180,8 @@ import 'tests/views/dex/simple/form/tables/coins_table_item_key_test.dart'
     as coins_table_item_key_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
+import 'tests/views/dex/swap_terminal_status_test.dart'
+    as swap_terminal_status_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
     as gasless_pending_transfer_panel_test;
 import 'tests/wallet/coin_details/gasless_recovery_banner_scope_test.dart'
@@ -90,14 +194,24 @@ import 'views/wallets_manager/widgets/hardware_wallets_manager_test.dart'
     as hardware_wallets_manager_test;
 import 'views/wallets_manager/widgets/wallet_login_test.dart'
     as wallet_login_test;
+import 'views/wallets_manager/widgets/wallet_login_unlock_lost_test.dart'
+    as wallet_login_unlock_lost_test;
 import 'views/wallets_manager/widgets/wallets_manager_entry_test.dart'
     as wallets_manager_entry_test;
+import 'views/wallets_manager/widgets/wallet_opened_elsewhere_test.dart'
+    as wallet_opened_elsewhere_test;
 import 'views/wallets_manager/widgets/wallets_manager_test.dart'
     as wallets_manager_test;
 
 import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
+import 'tests/dex/history_list_test.dart' as history_list_test;
 import 'tests/encryption/encrypt_data_tests.dart';
+import 'tests/wallet_file/wallet_file_codec_test.dart';
+import 'tests/wallet_file/wallet_file_format_test.dart';
+import 'tests/wallet_file/wallet_file_vectors_test.dart';
+import 'views/wallets_manager/widgets/wallet_import_by_file_test.dart'
+    as wallet_import_by_file_test;
 import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
     as fiat_checkout_url_allowlist_test;
 import 'tests/formatter/compare_dex_to_cex_tests.dart';
@@ -123,8 +237,6 @@ import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
 import 'tests/router/swap_route_alias_test.dart' as swap_route_alias_test;
-import 'tests/swap/swap_atomic_permission_boundary_test.dart'
-    as atomic_permission;
 import 'tests/swap/swap_accessibility_test.dart' as swap_accessibility_test;
 import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
@@ -162,6 +274,16 @@ import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_atomic_exact_price_test.dart'
     as swap_atomic_exact_price_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
+import 'tests/swap/swap_surface_ui_waiting_test.dart'
+    as swap_surface_ui_waiting_test;
+import 'tests/swap/swap_ux_capture_test.dart' as swap_ux_capture_test;
+import 'tests/swap/wallet_swap_status_test.dart' as wallet_swap_status_test;
+import 'tests/swap/swap_bloc_preparation_test.dart'
+    as swap_bloc_preparation_test;
+import 'tests/swap/swap_bloc_stream_test.dart' as swap_bloc_stream_test;
+import 'tests/swap/swap_preferences_mode_test.dart'
+    as swap_preferences_mode_test;
+import 'tests/swap/swap_quote_stream_test.dart' as swap_quote_stream_test;
 import 'tests/swap/unified_swap_bloc_test.dart' as unified_swap_bloc_test;
 import 'tests/swap/unified_swap_catalog_bloc_test.dart'
     as unified_swap_catalog_bloc_test;
@@ -282,6 +404,12 @@ import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
 import 'tests/swap/swap_bloc_start_path_test.dart' as swap_bloc_start_path_test;
 import 'tests/swap/swap_bloc_start_refund_test.dart'
     as swap_bloc_start_refund_test;
+import 'tests/swap/swap_bloc_session_followups_test.dart'
+    as swap_bloc_session_followups_test;
+import 'tests/swap/swap_bloc_start_session_test.dart'
+    as swap_bloc_start_session_test;
+import 'tests/swap/swap_submission_authorization_test.dart'
+    as swap_submission_authorization_test;
 import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
 import 'tests/swap/swap_bloc_validation_test.dart' as swap_bloc_validation_test;
 import 'tests/swap/swap_bloc_values_test.dart' as swap_bloc_values_test;
@@ -291,6 +419,11 @@ import 'tests/swap/swap_entry_ui_cards_test.dart' as swap_entry_ui_cards_test;
 import 'tests/swap/swap_entry_ui_cta_side_test.dart'
     as swap_entry_ui_cta_side_test;
 import 'tests/swap/swap_entry_ui_cta_test.dart' as swap_entry_ui_cta_test;
+import 'tests/swap/swap_entry_delight_test.dart' as swap_entry_delight_test;
+import 'tests/swap/swap_entry_ui_stability_test.dart'
+    as swap_entry_ui_stability_test;
+import 'tests/swap/swap_review_changes_test.dart' as swap_review_changes_test;
+import 'tests/swap/swap_review_commit_test.dart' as swap_review_commit_test;
 import 'tests/swap/swap_entry_ui_decimals_test.dart'
     as swap_entry_ui_decimals_test;
 import 'tests/swap/swap_entry_ui_failures_test.dart'
@@ -457,10 +590,13 @@ import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_confirm_receipt_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_fill_section_test.dart';
+import 'tests/wallet/coin_details/withdraw_solana_unknown_status_test.dart'
+    as withdraw_solana_unknown_status_test;
 import 'tests/wallet/coin_details/coin_addresses_bloc_gasless_revalidation_test.dart';
 import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
+import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -490,9 +626,60 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
-  atomic_permission.main();
+  group('wallet_list_item_test', wallet_list_item_test.main);
+  group('security_recovery_flow_test', security_recovery_flow_test.main);
+  group('recovery_plates_test', recovery_plates_test.main);
+  group('wallet_protection_states_test', wallet_protection_states_test.main);
+  group('passkey_envelope_test', passkey_envelope_test.main);
+  group(
+    'passkey_credential_backend_test',
+    passkey_credential_backend_test.main,
+  );
+  group(
+    'wallet_protection_native_passkey_test',
+    wallet_protection_native_passkey_test.main,
+  );
+  group('wallet_lock_screen_test', wallet_lock_screen_test.main);
+  group('wallet_authorization_form_test', wallet_authorization_form_test.main);
+  auth_setup_flow_test.main();
+  wallet_protection_bloc_test.main();
+  swap_submission_lock_test.main();
+  wallet_credential_cleanup_test.main();
+  wallet_access_service_test.main();
+  wallet_access_rollback_test.main();
+  artifact_privacy_test.main();
+  update_bloc_dismissal_test.main();
+  group(
+    'native_credential_backend_channel_test',
+    native_credential_backend_channel_test.main,
+  );
+  native_credential_backend_linux_test.main();
+  password_rotation_envelope_test.main();
+  testRecoveryEvidence();
+  managed_wallet_access_test.main();
+  auth_accessibility_test.main();
+  auth_recovery_accessibility_test.main();
+  auth_settings_accessibility_test.main();
+  web_credential_bridge_test.main();
+  financial_operation_gate_test.main();
+  app_lock_boundary_test.main();
+  wallet_operation_gate_test.main();
+  unlock_coordinator_test.main();
+  wallet_display_name_section_test.main();
+  passkey_replacement_section_tests.main();
+  password_update_provider_tests.main();
+  wallet_removal_section_tests.main();
+  solana_build_config_test.main();
+  solana_trade_dispatch_test.main();
+  mm2_initialization_test.main();
+  kdf_data_directory_test.main();
+  prefetch_native_kdf_test.main();
+  integration_test_runner_test.main();
+  solana_trading_test.main();
+  solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
+  legacy_export_residue_test.main();
   safe_log_exporter_test.main();
   logger_privacy_test.main();
   feedback_diagnostics_test.main();
@@ -510,6 +697,10 @@ void main() {
   auto_scroll_text_test.main();
   scale_down_or_scroll_test.main();
   app_error_handling_test.main();
+  app_storage_test.main();
+  fiat_provider_availability_test.main();
+  legacy_migration_cleanup_plate_test.main();
+  legacy_migration_compatibility_dialog_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
     testUpdateVersionCompare();
@@ -574,6 +765,9 @@ void main() {
 
   group('Crypto:', () {
     testEncryptDataTool();
+    testWalletFileFormat();
+    testWalletFileCodec();
+    testWalletFileVectors();
   });
 
   group('MyRecentSwaps:', () {
@@ -582,6 +776,7 @@ void main() {
 
   group('Dex trading safety:', () {
     testTradingEntitiesGuards();
+    history_list_test.main();
     testOrderModelValidation();
   });
 
@@ -612,6 +807,7 @@ void main() {
   testCoinActivationStateBridge();
   testAuthBloc();
   testWalletOperationIdentity();
+  wallet_data_loader_test.main();
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();
@@ -628,6 +824,7 @@ void main() {
   legal_refresh_test.main();
   legal_hosting_test.main();
   legal_document_gate_test.main();
+  wallet_import_by_file_test.main();
   trading_status_service_test.main();
   trading_status_disabled_policy_test.main();
   wallet_deleting_test.main();
@@ -643,10 +840,22 @@ void main() {
   // Previously unreachable suites. Each declares its own groups inside its
   // `main()`, so calling it here is equivalent to running the file directly.
   update_frequency_backoff_strategy_test.main();
+  profit_loss_calculator_test.main();
+  profit_loss_repository_test.main();
+  asset_overview_bloc_test.main();
+  group(
+    'portfolio_growth_repository_test',
+    portfolio_growth_repository_test.main,
+  );
+  group(
+    'portfolio_profit_loss_views_test',
+    portfolio_profit_loss_views_test.main,
+  );
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
   connect_wallet_button_test.main();
+  app_dialog_test.main();
   analytics_test.main();
   firebase_config_test.main();
   firebase_analytics_api_test.main();
@@ -656,6 +865,10 @@ void main() {
   fiat_default_preference_test.main();
   tron_fiat_mapping_test.main();
   fiat_provider_failure_test.main();
+  group(
+    'withdraw_solana_unknown_status_test',
+    withdraw_solana_unknown_status_test.main,
+  );
   tron_gasless_provider_config_test.main();
   lifi_proxy_url_test.main();
   unified_swap_repository_test.main();
@@ -674,6 +887,13 @@ void main() {
   swap_slippage_test.main();
   swap_route_alias_test.main();
   swap_widgets_test.main();
+  swap_ux_capture_test.main();
+  wallet_swap_status_test.main();
+  group('swap_surface_ui_waiting_test', swap_surface_ui_waiting_test.main);
+  swap_bloc_preparation_test.main();
+  swap_bloc_stream_test.main();
+  swap_preferences_mode_test.main();
+  swap_quote_stream_test.main();
   swap_accessibility_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
@@ -705,6 +925,9 @@ void main() {
   swap_routed_funding_test.main();
   swap_release_integration_test.main();
   lifi_integrator_policy_test.main();
+  prefetch_native_kdf_test.main();
+  sdk_build_manifest_test.main();
+  lifi_workflow_contract_test.main();
   swap_routed_payout_test.main();
   swap_src_routed_offer_test.main();
   swap_src_routed_quote_log_test.main();
@@ -765,6 +988,9 @@ void main() {
   swap_bloc_start_test.main();
   swap_bloc_start_path_test.main();
   swap_bloc_start_refund_test.main();
+  swap_bloc_session_followups_test.main();
+  swap_bloc_start_session_test.main();
+  swap_submission_authorization_test.main();
   swap_bloc_timers_test.main();
   swap_bloc_validation_test.main();
   swap_bloc_values_test.main();
@@ -772,6 +998,10 @@ void main() {
   swap_entry_ui_cards_test.main();
   swap_entry_ui_cta_side_test.main();
   swap_entry_ui_cta_test.main();
+  group('swap_entry_delight_test', swap_entry_delight_test.main);
+  group('swap_entry_ui_stability_test', swap_entry_ui_stability_test.main);
+  group('swap_review_changes_test', swap_review_changes_test.main);
+  group('swap_review_commit_test', swap_review_commit_test.main);
   swap_entry_ui_decimals_test.main();
   swap_entry_ui_failures_test.main();
   swap_entry_ui_fee_shortfall_test.main();
@@ -843,12 +1073,15 @@ void main() {
   swap_sign_in_surface_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
+  swap_terminal_status_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
   gasless_recovery_banner_scope_test.main();
   trezor_dialog_select_wallet_test.main();
   hardware_wallets_manager_test.main();
   wallet_login_test.main();
+  wallet_login_unlock_lost_test.main();
   wallets_manager_entry_test.main();
+  wallet_opened_elsewhere_test.main();
   wallets_manager_test.main();
 }

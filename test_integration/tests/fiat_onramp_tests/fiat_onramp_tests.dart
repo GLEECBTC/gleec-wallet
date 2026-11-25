@@ -11,9 +11,11 @@ import 'form_tests.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  fiatOnRampWidgetTests();
+  // Release-owner exception for 0.10.0: Banxa quote access is unavailable.
+  // Keep the named deferral visible; re-enable after proxy access is restored.
+  fiatOnRampWidgetTests(skip: true);
   // Accepted release limitation: Ramp credentials are unavailable. Keep its
-  // status visible without preventing Banxa from running. The standalone Ramp
+  // status visible separately from the Banxa deferral. The standalone Ramp
   // target can be run when service recovery is ready for verification.
   fiatOnRampWidgetTests(provider: 'Ramp', skip: true);
 }

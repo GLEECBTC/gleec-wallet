@@ -27,7 +27,6 @@ const bool kBypassLegalDocumentGate = bool.fromEnvironment(
 );
 
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
-const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
 const String defaultFiatPreferenceKey = 'default_fiat_preference_v1';
 
 // anchor: protocols support

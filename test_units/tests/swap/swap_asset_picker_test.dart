@@ -34,7 +34,7 @@ class _EnglishAssetLoader extends AssetLoader {
 }
 
 /// Covers what the picker offers: every asset some source can trade, the
-/// inactive ones activated only when chosen, and — for what to receive —
+/// inactive ones returned immediately for background preparation, and — for what to receive —
 /// the assets the pay asset cannot reach, set apart with the reason. When
 /// paying, assets without a balance can be hidden.
 void main() {
@@ -148,6 +148,13 @@ void main() {
 
     expect(find.text('Not available with GLEEC'), findsOneWidget);
     expect(
+      tester
+          .getSemantics(find.text('Not available with GLEEC'))
+          .getSemanticsData()
+          .headingLevel,
+      2,
+    );
+    expect(
       find.text(
         "GLEEC trades only on the order book, where these assets aren't "
         'listed.',
@@ -162,7 +169,7 @@ void main() {
     expect(usdcRow.dy, lessThan(header.dy));
   });
 
-  testWidgets('choosing an inactive asset activates it, then returns it', (
+  testWidgets('choosing an inactive asset returns before preparation', (
     tester,
   ) async {
     activated = {eth, gleecEvm};
@@ -182,7 +189,7 @@ void main() {
     await tester.tap(find.text(SwapFormat.ticker(btc)).first);
     await tester.pumpAndSettle();
 
-    expect(services.activated, [btc]);
+    expect(services.activated, isEmpty);
     expect(popped, [btc]);
   });
 

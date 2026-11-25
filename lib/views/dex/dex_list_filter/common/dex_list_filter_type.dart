@@ -41,13 +41,13 @@ class DexListFilterType<T> extends StatelessWidget {
 }
 
 class _DexListFilterTypeDesktop<T> extends StatelessWidget {
-  const _DexListFilterTypeDesktop(
-      {Key? key,
-      required this.values,
-      required this.selectedValues,
-      required this.onChange,
-      required this.title})
-      : super(key: key);
+  const _DexListFilterTypeDesktop({
+    Key? key,
+    required this.values,
+    required this.selectedValues,
+    required this.onChange,
+    required this.title,
+  }) : super(key: key);
 
   final List<DexListFilterTypeValue<T>> values;
   final List<T>? selectedValues;
@@ -60,24 +60,26 @@ class _DexListFilterTypeDesktop<T> extends StatelessWidget {
       data: Theme.of(context).brightness == Brightness.light
           ? newThemeLight
           : newThemeDark,
-      child: Builder(builder: (context) {
-        final ext = Theme.of(context).extension<ColorSchemeExtension>();
-        return MultiSelectDropdownButton<T>(
-          title: title,
-          items: values.map((e) => e.value).toList(),
-          displayItem: (p0) =>
-              values.firstWhere((element) => element.value == p0).label,
-          selectedItems: selectedValues,
-          onChanged: onChange,
-          colorScheme: UIChipColorScheme(
-            emptyContainerColor: ext?.surfCont,
-            emptyTextColor: ext?.s70,
-            pressedContainerColor: ext?.surfContLowest,
-            selectedContainerColor: ext?.primary,
-            selectedTextColor: ext?.surf,
-          ),
-        );
-      }),
+      child: Builder(
+        builder: (context) {
+          final ext = Theme.of(context).extension<ColorSchemeExtension>();
+          return MultiSelectDropdownButton<T>(
+            title: title,
+            items: values.map((e) => e.value).toList(),
+            displayItem: (p0) =>
+                values.firstWhere((element) => element.value == p0).label,
+            selectedItems: selectedValues,
+            onChanged: onChange,
+            colorScheme: UIChipColorScheme(
+              emptyContainerColor: ext?.surfCont,
+              emptyTextColor: ext?.s70,
+              pressedContainerColor: ext?.surfContLowest,
+              selectedContainerColor: ext?.primary,
+              selectedTextColor: ext?.surf,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -106,10 +108,7 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ),
         Expanded(
@@ -126,15 +125,20 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
     );
   }
 
-  Widget _buildItem(final List<DexListFilterTypeValue<T>> values, String label,
-      BuildContext context) {
+  Widget _buildItem(
+    List<DexListFilterTypeValue<T>> values,
+    String label,
+    BuildContext context,
+  ) {
     const double borderWidth = 2.0;
     const double topPadding = 6.0;
     final selectedValues = this.selectedValues;
-    final bool isSelected = selectedValues != null &&
+    final bool isSelected =
+        selectedValues != null &&
         selectedValues.length == values.length &&
-        selectedValues
-            .every((sv) => values.where((v) => v.value == sv).isNotEmpty);
+        selectedValues.every(
+          (sv) => values.where((v) => v.value == sv).isNotEmpty,
+        );
 
     return Padding(
       padding: isSelected
@@ -152,16 +156,15 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
             borderRadius: BorderRadius.circular(26),
             border: isSelected
                 ? Border.all(
-                    color: theme.custom.defaultBorderButtonBorder, width: 2)
+                    color: theme.custom.defaultBorderButtonBorder,
+                    width: 2,
+                  )
                 : null,
           ),
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -170,10 +173,7 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
 }
 
 class DexListFilterTypeValue<T> {
-  DexListFilterTypeValue({
-    required this.label,
-    required this.value,
-  });
+  DexListFilterTypeValue({required this.label, required this.value});
   final String label;
   final T value;
 }

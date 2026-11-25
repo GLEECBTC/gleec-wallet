@@ -206,8 +206,6 @@ class TradePreimageInternalError implements BaseError {
 
 class TradePreimageErrorFactory implements ErrorFactory<TradePreimageRequest> {
   Map<String, BaseError Function(Map<String, dynamic>)> errors = {
-    'AtomicPermissionUnavailable': (json) =>
-        TextError(error: json['error'] as String),
     TradePreimageNotSufficientBalanceError.type: (json) =>
         TradePreimageNotSufficientBalanceError.fromJson(json),
     TradePreimageNotSufficientBaseCoinBalanceError.type: (json) =>

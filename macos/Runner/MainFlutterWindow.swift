@@ -4,6 +4,8 @@ import FlutterMacOS
 class MainFlutterWindow: NSWindow {
   private var reducedMotionChannel: FlutterMethodChannel?
   private var reducedMotionObserver: NSObjectProtocol?
+  private var credentialVault: WalletCredentialVault?
+  private var passkeyBridge: WalletPasskeyBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -13,6 +15,8 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     registerReducedMotion(messenger: flutterViewController.engine.binaryMessenger)
+    credentialVault = WalletCredentialVault(messenger: flutterViewController.engine.binaryMessenger)
+    passkeyBridge = WalletPasskeyBridge(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }

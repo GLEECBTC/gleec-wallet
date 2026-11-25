@@ -135,6 +135,7 @@ void main() {
             .getSemanticsData();
         expect(data.label, 'Activity');
         expect(data.flagsCollection.isHeader, isTrue);
+        expect(data.headingLevel, 1);
         expect(tester.widget<Text>(find.text('Activity')).style!.fontSize, 28);
         semantics.dispose();
       });

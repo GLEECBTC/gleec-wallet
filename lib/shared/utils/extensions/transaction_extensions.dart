@@ -3,6 +3,10 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 
 /// Extension methods for the Transaction class
 extension TransactionExtensions on Transaction {
+  bool get isSolanaTransaction =>
+      assetId.subClass == CoinSubClass.solana ||
+      assetId.subClass == CoinSubClass.solanaToken;
+
   /// Transfer within this wallet, with no external debit beyond a native fee
   /// (e.g. an EOA→custody consolidation or an HD self-transfer).
   bool get isInternalTransfer {

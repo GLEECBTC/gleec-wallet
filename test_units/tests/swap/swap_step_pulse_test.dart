@@ -165,7 +165,7 @@ void main() {
 
     setUp(() {
       routed = GatedExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -202,10 +202,12 @@ void main() {
       return handle;
     }
 
-    testWidgets('pulses the step while the engine answers', (tester) async {
+    testWidgets('keeps the compact progress still between real events', (
+      tester,
+    ) async {
       await open(tester, snapshotOf());
-      expect(current, findsOneWidget);
-      expect(tester.hasRunningAnimations, isTrue);
+      expect(current, findsNothing);
+      expect(tester.hasRunningAnimations, isFalse);
       await tester.pumpAndSettle();
     });
 
@@ -224,20 +226,21 @@ void main() {
       });
     }
 
-    testWidgets('pulses again when the app comes back to the foreground', (
-      tester,
-    ) async {
-      await open(tester, snapshotOf());
-      await tester.pumpAndSettle();
-      expect(tester.hasRunningAnimations, isFalse);
+    testWidgets(
+      'does not replay effects when the app returns to the foreground',
+      (tester) async {
+        await open(tester, snapshotOf());
+        await tester.pumpAndSettle();
+        expect(tester.hasRunningAnimations, isFalse);
 
-      tester.binding
-        ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
-        ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-      expect(tester.hasRunningAnimations, isTrue);
-      await tester.pumpAndSettle();
-    });
+        tester.binding
+          ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+          ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+        expect(tester.hasRunningAnimations, isFalse);
+        await tester.pumpAndSettle();
+      },
+    );
 
     testWidgets('pulses after the swap moves on while watched', (tester) async {
       final handle = await open(tester, snapshotOf());

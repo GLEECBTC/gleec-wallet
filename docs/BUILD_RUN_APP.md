@@ -2,6 +2,11 @@
 
 Before proceeding, make sure that you have set up a working environment for your host platform according to the [guide](PROJECT_SETUP.md#host-platform-setup).
 
+Use Flutter **3.50.0 / Dart 3.14.0**, pinned in `.fvmrc`. Run `fvm install`
+and use `fvm flutter` for the commands below, or prepend `.fvm/flutter_sdk/bin`
+to your session's `PATH`. The SDK submodule uses the same pin. See
+[Flutter version management](FLUTTER_VERSION.md).
+
 There are two main commands, `flutter run` to run the app or `flutter build` to build for the specified platform.
 
 When using `flutter run` you can specify the mode in which the app will run. By default, it uses the debug mode.
@@ -45,7 +50,7 @@ An empty value (`--dart-define=LIFI_PROXY_URL=`) makes KDF call LI.FI's public A
 - KDF receives it as `lifi_proxy_url` and requests `<URL>/v1/quote`, `/v1/status`, `/v1/chains`, `/v1/tokens` and `/v1/tools`. The URL may end in `/v1`, `/` or neither.
 - KDF signs every proxy request with its P2P key (the `X-Auth-Payload` header), the same scheme as GasFree's proxy. The proxy answers an unsigned request with 401, so only a Komodo proxy works here, and KDF must run with P2P on; the SDK refuses a proxy URL when P2P is off. The proxy also refused an engine started without seed nodes (2026-10-07), so a test engine needs the usual ones. For web builds the proxy must allow that header in CORS.
 - The proxy refuses a peer over its limit with an empty HTTP 406. KDF reports that as `RateLimited` without a `provider_request_id`, and the swap form pauses cross-network prices as it does for LI.FI's own 429.
-- Whoever serves this URL decides what KDF signs, so it must be HTTPS. KDF also can't use a URL with credentials, a query or a fragment. Any other value is ignored with a log line, and the public API is used. Debug builds also accept plain HTTP to this machine (`localhost`, `127.0.0.1`, `::1`).
+- The URL must be HTTPS. KDF can't use a URL with credentials, a query or a fragment. Any other value is ignored with a log line, and the public API is used. Debug builds also accept plain HTTP to this machine (`localhost`, `127.0.0.1`, `::1`).
 - The key stays on the proxy. There is no setting for it: LI.FI says a key must never ship in a client.
 - A partner key's limit covers every user at once, so size it for peak use. Quotes from every open swap form count, and so does KDF's status polling: every 5 seconds (12 requests a minute) for each cross-network swap until it finishes, errors included.
 
@@ -58,7 +63,7 @@ to no integrator. Wallet defaults, confirmed for this integration, are:
 | Build define | Default |
 |---|---|
 | `LIFI_INTEGRATOR_ENABLED` | `true` |
-| `LIFI_INTEGRATOR_NAME` | `gleec-dex-staging` |
+| `LIFI_INTEGRATOR_NAME` | `gleec-dex-production` |
 | `LIFI_INTEGRATOR_FEE_BPS` | `178` |
 | `LIFI_FEE_BPS` | `22` |
 
@@ -73,6 +78,9 @@ restarts. KDF requests the fee and validates the provider's allocation. Neither
 Flutter nor the proxy calculates or injects a commission; the proxy holds the API
 key. The combined included fee is displayed once, already reflected in the quote.
 These 178 + 22 bps are deployment policy, not two independently measured payouts.
+
+For the public production profile, CI validation and artifact verification,
+see [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md).
 
 The coin feed remains pinned. SDK normalization supplies missing native-platform
 fee models for Base (`op_stack`), Mantle (`mantle`), Monad (`monad`) and Avalanche

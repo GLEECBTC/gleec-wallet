@@ -7,6 +7,9 @@ on:
     branches:
       - dev
 
+permissions:
+  contents: read
+
 env:
   TRON_GASLESS_MAINNET_BASE_URL: "https://quicknode.gleec.com/gasfree/tron"
   TRON_GASLESS_MAINNET_SERVICE_PROVIDER: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
@@ -19,16 +22,16 @@ jobs:
       - name: Shortify commit sha
         id: shortify_commit
         shell: bash
-        run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Get branch
         id: get_branch
         shell: bash
-        run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
+        run: echo "ref_short=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
 
       - name: Setup GH Actions
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 

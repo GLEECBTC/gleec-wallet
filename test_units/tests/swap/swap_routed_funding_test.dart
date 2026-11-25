@@ -10,7 +10,6 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
-import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
@@ -216,7 +215,7 @@ void _run(
       ..respond = (call) =>
           _ethOffer('${call.amount}', required: required, quotedAt: now());
     final storage = MemoryStorage();
-    final registry = SwapExecutionRegistry(
+    final registry = testSwapRegistry(
       executors: [FakeExecutor(SwapLiquiditySource.routed)],
       inFlight: () async => const [],
     );

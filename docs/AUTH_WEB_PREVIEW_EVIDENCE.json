@@ -1,0 +1,245 @@
+{
+  "schema": 1,
+  "verifiedAtUtc": "2026-11-09T00:18:41.894870+00:00",
+  "scope": "current-production-baseline security preview; excludes the new authentication/onboarding release",
+  "preview": {
+    "url": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+    "version": "sites/gleec-wallet-official/versions/4a7943088d4ee536",
+    "workflowRun": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/42538745323",
+    "workflowCommit": "c6839e245554337379b62ea10651d36fcb7833b6"
+  },
+  "candidate": {
+    "sourceCommit": "7154c3c578ea1456543dd6c1b00ebd45053485e0",
+    "sdkCommit": "dac63d7e8ce6fc2583862dcb69e56c01a8dc6494",
+    "archiveSHA256": "a26c400356a4327a86c423ee6e202af13314dc5cc54c0134c6b4794b04a17c0d",
+    "mainSHA256": "57ff05372df7031c5e9213198bd4ad9bfcb6b8749f297c0dcd999c15e531d7e9",
+    "hostingOverlaySHA256": "4ba5e021a0ce94f8e0b02f30635367d6586e0b31d31d052505faf020678c27fd"
+  },
+  "expectedApplicationHeaders": {
+    "Cache-Control": "no-cache, max-age=0, must-revalidate",
+    "Content-Security-Policy": "default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-uGXOfa1CtBizLQ0TdMrpsMrnzKSOLSpfhZGPlfDLta0='; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self' https:; form-action 'self'; frame-ancestors 'self'",
+    "X-Frame-Options": "SAMEORIGIN",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), usb=(self), serial=(), bluetooth=(), idle-detection=()"
+  },
+  "applicationResponses": [
+    {
+      "path": "/",
+      "status": 200,
+      "sha256": "fa92d53a6808ec2915896e6a882a1cb8829717e531ed83ab35bd1e64f1607b1e",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/index.html",
+      "status": 200,
+      "sha256": "fa92d53a6808ec2915896e6a882a1cb8829717e531ed83ab35bd1e64f1607b1e",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/wallet",
+      "status": 200,
+      "sha256": "fa92d53a6808ec2915896e6a882a1cb8829717e531ed83ab35bd1e64f1607b1e",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/wallet/security/fixture",
+      "status": 200,
+      "sha256": "fa92d53a6808ec2915896e6a882a1cb8829717e531ed83ab35bd1e64f1607b1e",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/main.dart.js",
+      "status": 200,
+      "sha256": "57ff05372df7031c5e9213198bd4ad9bfcb6b8749f297c0dcd999c15e531d7e9",
+      "contentType": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/flutter_bootstrap.js",
+      "status": 200,
+      "sha256": "f461259f10137574d8ec434e99c24c7fa997cf2b8c027f9f5c03de29988d9ee8",
+      "contentType": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/flutter_service_worker.js",
+      "status": 200,
+      "sha256": "a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c",
+      "contentType": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/services/security-startup-1.js",
+      "status": 200,
+      "sha256": "f6114be72e4eefb68b4e587a952a2124b7ce6e2b3736a5da19e5ff82a61142b4",
+      "contentType": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/.well-known/apple-app-site-association",
+      "status": 200,
+      "sha256": "94132e592a0170f86bae380dd1e894bce1d34ecddd15cf32047d6bfa43c1a8ca",
+      "contentType": "application/json",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/assets/assets/web_pages/fiat_widget.html",
+      "status": 200,
+      "sha256": "45aa3f1707c19d067d6cf9118d558d88ae2691d869cf813c5d7099c8f3a02769",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "public, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/assets/assets/web_pages/fiat_widget.js",
+      "status": 200,
+      "sha256": "217142843cf8d061fa42f5b907757aab57343e5300a1d094c7137e982ec36945",
+      "contentType": "text/javascript; charset=utf-8",
+      "cacheControl": "public, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/assets/packages/flutter_inappwebview/assets/t_rex_runner/t-rex.html",
+      "status": 200,
+      "sha256": "11865712809e8f8249a7f21ae77030880db0548f57e5357bc284104df4da1172",
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "no-cache, max-age=0, must-revalidate",
+      "strictCSP": true
+    },
+    {
+      "path": "/assets/packages/komodo_defi_framework/assets/coin_icons/png/btc.png",
+      "status": 200,
+      "sha256": "5297e6733ff967c95451848191921ddc3f937b5fc144700a1112322f06acd420",
+      "contentType": "image/png",
+      "cacheControl": "public, max-age=2592000",
+      "strictCSP": true
+    }
+  ],
+  "browser": {
+    "disposableUnfundedProfile": true,
+    "passwordFormCreation": true,
+    "settingsSignOut": true,
+    "coldReloadAndOriginalPasswordSignIn": true,
+    "newAuthenticationBridgeAbsent": true,
+    "cspViolations": 0,
+    "executableResources": [
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/assets/packages/flutter_inappwebview_web/assets/web/web_support.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/services/theme_checker/theme_checker.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/services/security-startup-1.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/flutter_bootstrap.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/services/security-startup-2.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/canvaskit/chromium/canvaskit.wasm"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/canvaskit/chromium/canvaskit.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/main.dart.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/res/kdflib_bootstrapper.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/kdflib.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline1.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/snippets/libp2p-wasm-ext-7e5f5edb880ee0f5/src/websockets.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline0.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/snippets/web3-3a881fca17d19cd8/inline0.js"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/kdf/kdf/bin/kdflib_bg.wasm"
+      },
+      {
+        "origin": "https://gleec-wallet-official--auth-security-20261108-ke7ob56c.web.app",
+        "path": "/main.dart.js_1.part.js"
+      }
+    ],
+    "ownedProfileAndBrowserCleaned": true
+  },
+  "reservedNamespace": {
+    "responses": [
+      {
+        "path": "/__/auth/handler",
+        "status": 200,
+        "csp": null,
+        "contentType": "text/html; charset=utf-8",
+        "inlineScripts": 1
+      },
+      {
+        "path": "/__/auth/iframe",
+        "status": 200,
+        "csp": null,
+        "contentType": "text/html; charset=utf-8",
+        "inlineScripts": 1
+      },
+      {
+        "path": "/__/firebase/10.14.1/firebase-app-compat.js",
+        "status": 200,
+        "csp": null,
+        "contentType": "text/javascript; charset=utf-8",
+        "inlineScripts": 0
+      }
+    ],
+    "assessment": "Provider-managed helper routes do not inherit application CSP; this is a coverage limitation, not a demonstrated injection exploit. Edge activation is deferred."
+  },
+  "productionReadBack": {
+    "productionMainUnchanged": true,
+    "mainSHA256": "185236d23e35594cb201a92065b690c2fd623905aef25ed54b8301caef9040c3",
+    "rootCSP": "frame-ancestors 'self'"
+  },
+  "changesNotPerformed": [
+    "production deployment",
+    "Cloudflare routing or activation",
+    "funded transactions",
+    "physical biometric/provider tests"
+  ],
+  "sanitization": "Contains public routes, hashes, configuration and boolean test outcomes only. No credentials, wallet secrets, cookies, authorization headers or profile data."
+}

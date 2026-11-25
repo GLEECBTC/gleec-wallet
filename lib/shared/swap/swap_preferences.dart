@@ -20,6 +20,7 @@ class SwapPreferences {
   static const _pairKey = 'swap_last_pair_v1';
   static const _recentKey = 'swap_recent_assets_v1';
   static const _hideZeroKey = 'swap_pay_hide_zero_v1';
+  static const _fiatModeKey = 'swap_fiat_mode_v1';
 
   /// How many recent assets are kept.
   static const maxRecent = 8;
@@ -50,8 +51,14 @@ class SwapPreferences {
   }
 
   /// Remembers [from] and [to] as the last pair.
-  Future<void> rememberPair(AssetId from, AssetId to) async {
-    final key = await _key(_pairKey);
+  Future<void> rememberPair(
+    AssetId from,
+    AssetId to, {
+    String? walletKey,
+  }) async {
+    final key = walletKey == null
+        ? await _key(_pairKey)
+        : '$_pairKey:$walletKey';
     if (key == null) return;
     await _storage.write(key, jsonEncode({'from': from.id, 'to': to.id}));
   }
@@ -103,5 +110,25 @@ class SwapPreferences {
     final key = await _key(_hideZeroKey);
     if (key == null) return;
     await _storage.write(key, jsonEncode(hide));
+  }
+
+  /// Null means there has been no explicit choice: use dollars when priced.
+  Future<bool?> prefersFiatAmount() async {
+    try {
+      final key = await _key(_fiatModeKey);
+      if (key == null) return null;
+      final raw = await _storage.read(key);
+      final value = raw is String ? jsonDecode(raw) : raw;
+      return value is bool ? value : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Remembers the display/input mode, never a spend amount.
+  Future<void> rememberFiatAmount(bool fiat) async {
+    final key = await _key(_fiatModeKey);
+    if (key == null) return;
+    await _storage.write(key, jsonEncode(fiat));
   }
 }

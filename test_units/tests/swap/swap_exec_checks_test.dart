@@ -40,7 +40,10 @@ void main() {
   test("a routed swap passes on the SDK's answers", () async {
     final manager = FakeRoutedManager();
     final executor = RoutedSwapExecutor(manager, networks: () => execNetworks);
-    final handle = await executor.start(quoteOf(payload: offerOf()));
+    final handle = await executor.start(
+      quoteOf(payload: offerOf()),
+      authorization: testSwapAuthorization(),
+    );
     final checks = <DateTime>[];
     handle.checks.listen(checks.add);
     final at = DateTime.utc(2026, 10, 1, 12);
@@ -60,7 +63,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );

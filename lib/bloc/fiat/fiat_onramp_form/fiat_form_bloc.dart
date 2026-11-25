@@ -260,9 +260,17 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
           webViewMode: webViewMode,
         ),
       );
+    } on FiatProviderRejected catch (error) {
+      emit(_parseOrderError(error.error));
     } catch (e, s) {
       _log.shout('Error submitting fiat form', e, s);
-      emit(state.copyWith(status: FiatFormStatus.failure, checkoutUrl: ''));
+      emit(
+        state.copyWith(
+          status: FiatFormStatus.failure,
+          fiatOrderStatus: FiatOrderStatus.failed,
+          checkoutUrl: '',
+        ),
+      );
     }
   }
 
@@ -299,9 +307,13 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     FiatFormResetRequested event,
     Emitter<FiatFormState> emit,
   ) {
-    final initialStateWithLists = FiatFormState.initial(
-      selectedFiat: state.selectedFiat.value,
-    ).copyWith(fiatList: state.fiatList, coinList: state.coinList);
+    final initialStateWithLists =
+        FiatFormState.initial(selectedFiat: state.selectedFiat.value).copyWith(
+          fiatList: state.fiatList,
+          coinList: state.coinList,
+          currenciesStatus: state.currenciesStatus,
+          providerUnavailable: state.providerUnavailable,
+        );
     emit(_defaultPaymentMethods(initialStateWithLists));
   }
 
@@ -363,12 +375,16 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     FiatFormCurrenciesRefreshRequested event,
     Emitter<FiatFormState> emit,
   ) async {
+    emit(state.copyWith(currenciesStatus: FiatFormStatus.loading));
     try {
       final fiatList = await _fiatRepository.getFiatList();
       final coinList = await _fiatRepository.getCoinList();
       coinList.removeWhere(
         (coin) => excludedAssetList.contains(coin.getAbbr()),
       );
+      if (fiatList.isEmpty || coinList.isEmpty) {
+        throw const FiatProviderUnavailable();
+      }
 
       final storedFiat = await loadDefaultFiatPreference(_storage);
       final FiatCurrency? fiatFromStoredPreference = storedFiat != null
@@ -399,6 +415,8 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
         await persistDefaultFiatPreference(_storage, resolvedSelectedFiat);
       }
 
+      if (emit.isDone) return;
+
       emit(
         state.copyWith(
           fiatList: fiatList,
@@ -406,15 +424,23 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
           selectedFiat: resolvedSelectedFiat == null
               ? null
               : CurrencyInput.dirty(resolvedSelectedFiat),
+          currenciesStatus: FiatFormStatus.success,
         ),
       );
-    } catch (e, s) {
-      _log.shout('Error loading currency list', e, s);
+      add(const FiatFormPaymentMethodsRefreshRequested());
+    } catch (e) {
+      if (emit.isDone) return;
+      _log.warning('Error loading currency list');
       emit(
         state.copyWith(
           fiatList: [],
           coinList: [],
           status: FiatFormStatus.failure,
+          currenciesStatus: FiatFormStatus.failure,
+          paymentMethods: [],
+          selectedPaymentMethod: FiatPaymentMethod.none,
+          providerUnavailable: e is! FiatProviderRejected,
+          providerError: () => e is FiatProviderRejected ? e.error.title : null,
         ),
       );
     }
@@ -551,6 +577,8 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     yield state.copyWith(
       fiatAmount: _getFiatAmountInputBounds(state.fiatAmount.value),
       providerError: () => null,
+      providerUnavailable: false,
+      status: FiatFormStatus.loading,
     );
 
     if (!_hasValidFiatAmount()) {
@@ -567,9 +595,9 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       await for (final methods in methodsStream) {
         yield _updatePaymentMethods(methods);
       }
-    } on Exception catch (error, stacktrace) {
-      _log.shout('Error refreshing payment methods', error, stacktrace);
-      yield _paymentMethodsUnavailable();
+    } catch (error) {
+      _log.warning('Error refreshing payment methods');
+      yield _paymentMethodsUnavailable(error);
     }
   }
 
@@ -584,7 +612,6 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
 
   FiatFormState _updatePaymentMethods(List<FiatPaymentMethod> methods) {
     if (methods.isEmpty) {
-      _log.warning('No payment methods available for the selected pair');
       return _paymentMethodsUnavailable();
     }
 
@@ -601,6 +628,7 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
         selectedPaymentMethod: method,
         status: FiatFormStatus.success,
         providerError: () => null,
+        providerUnavailable: false,
         fiatAmount: _getFiatAmountInputBounds(
           state.fiatAmount.value,
           selectedPaymentMethod: method,
@@ -608,15 +636,17 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       );
     } catch (e, s) {
       _log.shout('Error updating payment methods', e, s);
-      return _paymentMethodsUnavailable();
+      return _paymentMethodsUnavailable(const FiatProviderUnavailable());
     }
   }
 
-  FiatFormState _paymentMethodsUnavailable() => state.copyWith(
+  FiatFormState _paymentMethodsUnavailable([Object? failure]) => state.copyWith(
     paymentMethods: const [],
     selectedPaymentMethod: FiatPaymentMethod.none,
     status: FiatFormStatus.failure,
-    providerError: () => null,
+    providerUnavailable: failure != null && failure is! FiatProviderRejected,
+    providerError: () =>
+        failure is FiatProviderRejected ? failure.error.title : null,
     fiatAmount: _getFiatAmountInputBounds(
       state.fiatAmount.value,
       selectedPaymentMethod: FiatPaymentMethod.none,

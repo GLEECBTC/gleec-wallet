@@ -1,3 +1,4 @@
+import 'swap_test_fixtures.dart';
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
@@ -104,13 +105,16 @@ void main() {
               'is not found',
         };
       final executor = AtomicSwapExecutor(
+        auth: testSwapAuth,
         dexRepository: DexRepository(rpc),
         orders: MyOrdersService(rpc),
         networks: () => execNetworks,
         resolveAsset: resolveTicker,
       );
       SwapExecutionHandle? handle;
-      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      executor
+          .start(atomicQuoteOf(), authorization: testSwapAuthorization())
+          .then((h) => handle = h);
       async.flushMicrotasks();
       async.elapse(const Duration(seconds: 3));
       expect(handle!.latest.isTerminal, isFalse);

@@ -1,14 +1,18 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart'
+    show WalletDeletionCommittedException;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
     show
         AuthException,
         AuthExceptionType,
         CoinSubClass,
+        KdfUser,
+        RpcDispatchGuard,
+        RpcDispatchRejected,
         WalletId,
         WalletChangedDisconnectException;
 import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
@@ -19,7 +23,13 @@ import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/prepared_legacy_migration.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
+    show GuardedDestinationSelector;
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart'
+    show WalletOperationDenied;
+import 'package:web_dex/services/wallet_file/wallet_file_codec.dart';
 import 'package:web_dex/shared/utils/validators.dart';
 import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -94,20 +104,26 @@ class WalletsRepository {
     this._legacyWalletStorage, {
     KomodoLegacyWalletMigration? legacyNativeWalletMigration,
     EncryptionTool? encryptionTool,
+    WalletFileCodec? walletFileCodec,
     FileLoader? fileLoader,
     ZcashParamsDownloader Function()? zcashParamsDownloaderFactory,
+    WalletAccessService? walletAccess,
   }) : _legacyNativeWalletMigration =
            legacyNativeWalletMigration ?? KomodoLegacyWalletMigration(),
        _encryptionTool = encryptionTool ?? EncryptionTool(),
+       _walletFileCodec = walletFileCodec ?? const WalletFileCodec(),
        _fileLoader = fileLoader ?? FileLoader.fromPlatform(),
+       _walletAccess = walletAccess,
        _zcashParamsDownloaderFactory =
            zcashParamsDownloaderFactory ?? ZcashParamsDownloaderFactory.create;
 
   final KomodoDefiSdk _kdfSdk;
+  final WalletAccessService? _walletAccess;
   final Mm2Api _mm2Api;
   final BaseStorage _legacyWalletStorage;
   final KomodoLegacyWalletMigration _legacyNativeWalletMigration;
   final EncryptionTool _encryptionTool;
+  final WalletFileCodec _walletFileCodec;
   final FileLoader _fileLoader;
   final ZcashParamsDownloader Function() _zcashParamsDownloaderFactory;
   final StreamController<List<Wallet>> _walletsController =
@@ -311,21 +327,79 @@ class WalletsRepository {
           acknowledgedReview.walletId.name != wallet.name) {
         throw const WalletDeletionReviewRequiredException();
       }
-      final result = await _kdfSdk.walletDeletion.delete(
-        acknowledgedReview: acknowledgedReview,
-        password: password,
+      final ensureAuthorized = _walletAccess?.deletionAuthorizationValidator(
+        wallet,
       );
-      if (result.status != WalletDeletionStatus.deleted) return result;
+      Future<WalletDeletionResult> removeReviewedWallet() => _kdfSdk
+          .walletDeletion
+          .delete(acknowledgedReview: acknowledgedReview, password: password);
+      final result = ensureAuthorized == null
+          ? await removeReviewedWallet()
+          : await RpcDispatchGuard.run(
+              ensureAuthorized,
+              removeReviewedWallet,
+              methods: const {'delete_wallet'},
+            );
+      if (result.status != WalletDeletionStatus.deleted) {
+        await _abandonUncommittedDeletion(wallet);
+        return result;
+      }
+      await _walletAccess?.finishDeletion(wallet);
       _cachedWallets?.removeWhere((w) => w.name == wallet.name);
       _emitCachedWalletsIfAvailable();
       return result;
+    } on WalletDeletionCommittedException catch (error) {
+      // The SDK has confirmed engine removal and already ran the vault hooks.
+      // Do not present a second destructive attempt for a metadata-only error.
+      if (error.walletId != acknowledgedReview?.walletId) rethrow;
+      await _walletAccess?.finishDeletion(wallet);
+      var metadataClean = false;
+      try {
+        metadataClean = await _kdfSdk.auth.retryWalletDeletionCleanup(error);
+      } on Object {
+        // Engine removal is already committed. Report the fixed partial
+        // outcome instead of raw cleanup details or a second Delete action.
+      }
+      late final List<KdfUser> remaining;
+      try {
+        remaining = await _kdfSdk.auth.getUsers();
+      } on Object {
+        invalidateCache();
+        throw error;
+      }
+      final nameReused = remaining.any(
+        (user) => user.walletId.name == wallet.name,
+      );
+      if (nameReused) {
+        invalidateCache();
+        return const WalletDeletionResult(WalletDeletionStatus.targetChanged);
+      }
+      _cachedWallets?.removeWhere((candidate) => candidate.name == wallet.name);
+      _emitCachedWalletsIfAvailable();
+      if (metadataClean) {
+        return const WalletDeletionResult(WalletDeletionStatus.deleted);
+      }
+      rethrow;
     } catch (e) {
+      await _abandonUncommittedDeletion(wallet);
       log(
         'Failed to delete wallet: $e',
         path: 'wallet_bloc => deleteWallet',
         isError: true,
       ).ignore();
       rethrow;
+    }
+  }
+
+  /// The proof prepared for a deletion belongs to that one attempt. Left
+  /// behind after a refusal, its journaled intent would later read as an
+  /// interrupted deletion of a wallet that still exists.
+  Future<void> _abandonUncommittedDeletion(Wallet wallet) async {
+    try {
+      await _walletAccess?.abandonDeletion(wallet);
+    } on Object {
+      // The deletion's own outcome is what the caller needs. Startup also
+      // withdraws an intent whose wallet the engine still lists.
     }
   }
 
@@ -675,14 +749,26 @@ class WalletsRepository {
     }
   }
 
-  @Deprecated('Use the KomodoDefiSdk.auth.getMnemonicEncrypted method instead.')
+  /// Saves the signed-in [wallet] as a version 2 wallet file protected by
+  /// [password], the wallet password: reading the phrase checks it.
+  ///
+  /// The engine's own encrypted mnemonic is not reused: its MAC leaves its
+  /// parameters unauthenticated, it has no room for the wallet type, and it
+  /// holds only the phrase. See [WalletFileCodec].
   Future<void> downloadEncryptedWallet(
     Wallet wallet,
     String password, {
     required WalletId expectedWalletId,
+    void Function()? ensureAuthorized,
+    GuardedDestinationSelector? selectDestination,
   }) async {
     Future<void> ensureOriginalWallet() async {
+      if (_walletAccess != null && ensureAuthorized == null) {
+        throw const WalletAccessException(WalletAccessFailure.staleOperation);
+      }
+      ensureAuthorized?.call();
       final currentWalletId = (await _kdfSdk.auth.currentUser)?.walletId;
+      ensureAuthorized?.call();
       if (expectedWalletId.pubkeyHash?.trim().isNotEmpty != true ||
           currentWalletId?.pubkeyHash?.trim().isNotEmpty != true ||
           currentWalletId != expectedWalletId) {
@@ -694,31 +780,48 @@ class WalletsRepository {
 
     try {
       await ensureOriginalWallet();
-      Wallet workingWallet = wallet.copy();
-      if (wallet.config.seedPhrase.isEmpty) {
-        final mnemonic = await _kdfSdk.auth.getMnemonicPlainText(password);
-        await ensureOriginalWallet();
-        final String encryptedSeed = await _encryptionTool.encryptData(
-          password,
-          mnemonic.plaintextMnemonic ?? '',
-        );
-        workingWallet = workingWallet.copyWith(
-          config: workingWallet.config.copyWith(seedPhrase: encryptedSeed),
-        );
+      if (wallet.isHW) {
+        throw StateError('A hardware wallet has no phrase to export');
       }
-      final String data = jsonEncode(workingWallet.config);
-      final String encryptedData = await _encryptionTool.encryptData(
-        password,
-        data,
+      final mnemonic = await RpcDispatchGuard.run(
+        () => ensureAuthorized?.call(),
+        () => _kdfSdk.auth.getMnemonicPlainText(password),
+        methods: const {'get_mnemonic'},
       );
-      final String sanitizedFileName = _sanitizeFileName(workingWallet.name);
+      await ensureOriginalWallet();
+      final String encryptedData = await _walletFileCodec.seal(
+        password: password,
+        mnemonic: mnemonic.plaintextMnemonic ?? '',
+        config: wallet.config,
+        // The engine's derivation decides the addresses; the app's own label
+        // for the wallet could disagree with it.
+        derivation: expectedWalletId.authOptions.derivationMethod,
+      );
+      final String sanitizedFileName = _sanitizeFileName(wallet.name);
       await ensureOriginalWallet();
       await _fileLoader.save(
         fileName: sanitizedFileName,
         data: encryptedData,
         type: LoadFileType.text,
+        beforeWrite: ensureAuthorized,
+        selectDestination: selectDestination,
       );
+      ensureAuthorized?.call();
     } on WalletChangedDisconnectException {
+      rethrow;
+    } on FileSaveCancelledException {
+      rethrow;
+    } on FileSaveUnconfirmedException {
+      rethrow;
+    } on RpcDispatchRejected {
+      // Not a failed export: the authorization ended before anything was
+      // read, and the caller ends the attempt quietly.
+      rethrow;
+    } on WalletOperationDenied {
+      // Nor these: a lock or switch ended it, often while the file was being
+      // protected, and nothing was written.
+      rethrow;
+    } on WalletAccessException {
       rethrow;
     } catch (e) {
       throw Exception('Failed to download encrypted wallet: $e');

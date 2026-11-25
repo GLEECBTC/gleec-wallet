@@ -1,6 +1,7 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/views/dex/entity_details/trading_progress_status.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 import 'swap_motion_fakes.dart';
@@ -8,6 +9,33 @@ import 'swap_motion_fakes.dart';
 /// Covers the motion that follows content and state: blocks that grow to new
 /// content, and the pulse that marks where a swap is.
 void main() {
+  group('the legacy swap progress ring', () {
+    Widget ring({required bool reduceMotion}) => motionApp(
+      const SwapProgressStatus(progress: 40),
+      reduceMotion: reduceMotion,
+    );
+
+    testWidgets('sweeps while motion is on', (tester) async {
+      await tester.pumpWidget(ring(reduceMotion: false));
+      expect(tester.hasRunningAnimations, isTrue);
+      expect(find.text('40 %'), findsOneWidget);
+    });
+
+    testWidgets('holds still with reduced motion, and says the same', (
+      tester,
+    ) async {
+      await tester.pumpWidget(ring(reduceMotion: true));
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(find.text('40 %'), findsOneWidget);
+
+      // The setting changing while it shows takes effect at once.
+      await tester.pumpWidget(ring(reduceMotion: false));
+      expect(tester.hasRunningAnimations, isTrue);
+      await tester.pumpWidget(ring(reduceMotion: true));
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+  });
+
   group('SwapSmoothSize', () {
     Widget sized(
       double height, {
@@ -188,6 +216,22 @@ void main() {
       await tester.pumpWidget(pulse(2));
       await tester.pump(SwapMotion.beat ~/ 2);
       await tester.pumpWidget(pulse(2, active: false));
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(painter(tester), isNot(paints..rrect()));
+    });
+
+    testWidgets('a live ring stops in the background without replay', (
+      tester,
+    ) async {
+      addTearDown(() => resumeMotionApp(tester));
+      await tester.pumpWidget(pulse(1));
+      await tester.pumpWidget(pulse(2));
+      await tester.pump(SwapMotion.beat ~/ 2);
+      pauseMotionApp(tester);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      resumeMotionApp(tester);
       await tester.pump();
       expect(tester.hasRunningAnimations, isFalse);
       expect(painter(tester), isNot(paints..rrect()));

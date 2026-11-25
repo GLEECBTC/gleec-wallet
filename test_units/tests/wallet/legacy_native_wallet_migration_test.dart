@@ -22,7 +22,8 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
+
+import '../../support/legacy_wallet_file_writer.dart';
 
 const _legacySeedPhrase =
     'abandon abandon abandon abandon abandon abandon '
@@ -1190,10 +1191,7 @@ Future<Wallet> _buildSharedPrefsLegacyWallet({
   required String password,
   List<String> activatedCoins = const <String>['KMD'],
 }) async {
-  final encryptedSeed = await EncryptionTool().encryptData(
-    password,
-    _legacySeedPhrase,
-  );
+  final encryptedSeed = await legacyEncrypt(password, _legacySeedPhrase);
   return Wallet(
     id: id,
     name: name,
@@ -1451,6 +1449,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     ),
     Mnemonic? mnemonic,
     Map<String, dynamic> initialMetadata = const {},
+    String? provisioningId,
   }) async {
     if (users.any((user) => user.walletId.name == walletName)) {
       throw AuthException(

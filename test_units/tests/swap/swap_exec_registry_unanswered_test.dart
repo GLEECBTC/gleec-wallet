@@ -30,7 +30,7 @@ void main() {
     List<SwapExecutionRef> inFlight = const [],
     Future<List<SwapExecutionRef>> Function()? read,
   }) => fakeAsync((async) {
-    final registry = SwapExecutionRegistry(
+    final registry = testSwapRegistry(
       executors: [routed, atomic],
       inFlight: read ?? () async => inFlight,
       retryDelay: retryDelay,

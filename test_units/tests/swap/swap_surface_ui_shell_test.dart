@@ -10,6 +10,7 @@ import 'package:web_dex/views/swap/swap_shell.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 import 'swap_accessibility_checks.dart';
+import 'swap_motion_fakes.dart';
 import 'swap_surface_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
 
@@ -127,7 +128,7 @@ void main() {
 
       setUp(() {
         routed = FakeExecutor(SwapLiquiditySource.routed);
-        registry = SwapExecutionRegistry(
+        registry = testSwapRegistry(
           executors: [routed],
           inFlight: () async => const [],
         );
@@ -201,8 +202,8 @@ void main() {
       testWidgets('counts running swaps on Activity, for a screen reader too', (
         tester,
       ) async {
-        await registry.start(quoteOf());
-        await registry.start(quoteOf(id: 'q2'));
+        await registry.start(quoteOf(), registry.beginSubmission());
+        await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
         await show(tester);
 
         final dot = tester.widget<SwapCountDot>(find.byType(SwapCountDot));
@@ -214,7 +215,7 @@ void main() {
       });
 
       testWidgets('reads the Activity count once', (tester) async {
-        await registry.start(quoteOf());
+        await registry.start(quoteOf(), registry.beginSubmission());
         await show(tester);
 
         expect(
@@ -226,7 +227,7 @@ void main() {
       testWidgets('turns the count to a warning when a swap needs attention', (
         tester,
       ) async {
-        await registry.start(quoteOf());
+        await registry.start(quoteOf(), registry.beginSubmission());
         await show(tester);
 
         routed.lastStarted!.push(
@@ -244,6 +245,40 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(SwapCountDot), findsNothing);
         expect(find.bySemanticsLabel(RegExp('active')), findsNothing);
+      });
+
+      testWidgets('the count pops when it changes, not when Swap is shown', (
+        tester,
+      ) async {
+        Iterable<double> shrunk() =>
+            effectScales(tester).where((scale) => scale < 0.99);
+        await registry.start(quoteOf(), registry.beginSubmission());
+        await pumpSurface(
+          tester,
+          SwapShell(
+            destinationBuilder: (destination) =>
+                Text('body:${destination.name}'),
+          ),
+          services: services,
+          size: const Size(420, 800),
+          settle: false,
+        );
+        // A count already there when the shell arrives is simply there.
+        expect(find.byType(SwapCountDot), findsOneWidget);
+        expect(shrunk(), isEmpty);
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(shrunk(), isEmpty);
+        await tester.pumpAndSettle();
+
+        await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
+        // The count arrives, then the frames its pop is drawn in.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.widget<SwapCountDot>(find.byType(SwapCountDot)).count, 2);
+        expect(shrunk(), isNotEmpty);
+        await tester.pumpAndSettle();
+        expect(shrunk(), isEmpty);
       });
 
       testWidgets('shows no count without swap services', (tester) async {

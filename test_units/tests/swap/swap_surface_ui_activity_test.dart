@@ -35,7 +35,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -115,7 +115,7 @@ void main() {
 
       expect(history.loads, hasLength(2));
       expect(find.text("We couldn't load Activity"), findsNothing);
-      expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
+      expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
     });
 
     group('when there is nothing to show', () {
@@ -172,14 +172,51 @@ void main() {
       await show(tester);
 
       expect(find.text('Confirming on Ethereum'), findsOneWidget);
-      expect(find.text('Action required'), findsNWidgets(2));
-      expect(find.byType(SwapBadge), findsOneWidget);
+      // Said once, as the row's status: a badge beside it repeated it.
+      expect(find.text('Action required'), findsOneWidget);
+      expect(find.byType(SwapBadge), findsNothing);
       expect(find.text(SwapFormat.time(DateTime(2020, 3, 1))), findsOneWidget);
       expect(find.text(SwapFormat.time(DateTime(2020, 2, 1))), findsOneWidget);
       final palette = SwapPalette.dark;
       expect(colourOf(tester, 'Confirming on Ethereum'), palette.textTertiary);
       expect(colourOf(tester, 'Action required'), palette.warning);
       await expectSwapAccessible(tester);
+    });
+
+    testWidgets('rows stay whole on a small phone at 200% text: the date goes '
+        'under the swap, not beside it', (tester) async {
+      history.entries = [running, waiting];
+      await pumpSurface(
+        tester,
+        const MediaQuery(
+          data: MediaQueryData(
+            size: Size(360, 740),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: SwapActivityView(),
+        ),
+        services: services,
+        swap: swap,
+        shell: shell,
+        size: const Size(360, 740),
+        wrap: [
+          (child) => BlocProvider(
+            create: (_) =>
+                SwapActivityBloc(history: history, registry: registry)
+                  ..add(const SwapActivityStarted()),
+            child: child,
+          ),
+        ],
+      );
+
+      expect(tester.takeException(), isNull);
+      final pair = find.text('1 ETH → ≈ 3,000 USDC').first;
+      final when = find.text(SwapFormat.time(DateTime(2020, 3, 1)));
+      expect(
+        tester.getTopLeft(when).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(pair).dy),
+      );
+      await expectSwapAccessible(tester, largeText: true);
     });
 
     testWidgets('Needs attention says why each swap is there', (tester) async {
@@ -269,8 +306,8 @@ void main() {
     testWidgets('counts running swaps and unread problems on the filters', (
       tester,
     ) async {
-      await registry.start(quoteOf());
-      await registry.start(quoteOf(id: 'q2'));
+      await registry.start(quoteOf(), registry.beginSubmission());
+      await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
       await show(tester);
 
       Finder count(String filter) => find.descendant(

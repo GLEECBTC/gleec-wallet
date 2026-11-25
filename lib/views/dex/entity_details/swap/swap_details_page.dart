@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:app_theme/app_theme.dart';
-import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -39,7 +38,11 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         TradingDetailsHeader(title: _headerText),
-        SwapProgressStatus(progress: _progress, isFailed: _isFailed),
+        SwapProgressStatus(
+          progress: _progress,
+          isFailed: _isFailed,
+          isSuccessful: _isSuccessful,
+        ),
         SwapDetails(
           swapStatus: widget.swapStatus,
           isFailed: _isFailed,
@@ -68,31 +71,30 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
 
   String get _headerText {
     if (_isFailed) return LocaleKeys.tradingDetailsTitleFailed.tr();
+    if (_isSuccessful) return LocaleKeys.tradingDetailsTitleCompleted.tr();
     final haveEvents = widget.swapStatus.events.isNotEmpty;
     if (haveEvents) {
-      final isSuccess =
-          widget.swapStatus.events.last.event.type ==
-          widget.swapStatus.successEvents.last;
-      if (isSuccess) return LocaleKeys.tradingDetailsTitleCompleted.tr();
       return LocaleKeys.tradingDetailsTitleInProgress.tr();
     }
     return LocaleKeys.tradingDetailsTitleOrderMatching.tr();
   }
 
-  bool get _isFailed {
-    return widget.swapStatus.events.firstWhereOrNull(
-          (event) => widget.swapStatus.errorEvents.contains(event.event.type),
-        ) !=
-        null;
-  }
+  bool get _isFailed => widget.swapStatus.isFailed;
+
+  bool get _isSuccessful =>
+      widget.swapStatus.successEvents.isNotEmpty &&
+      widget.swapStatus.isSuccessful;
 
   int get _progress {
+    if (_isSuccessful) return 100;
+    final expectedEventCount = widget.swapStatus.successEvents.length;
+    if (expectedEventCount == 0) return 0;
+
+    // Progress is only an estimate. The terminal event, not the event count,
+    // decides success; errors or extra events must not complete the swap.
     return min(
-      100,
-      (100 *
-              widget.swapStatus.events.length /
-              (widget.swapStatus.successEvents.length - 1))
-          .ceil(),
+      99,
+      (100 * widget.swapStatus.events.length / expectedEventCount).ceil(),
     );
   }
 }

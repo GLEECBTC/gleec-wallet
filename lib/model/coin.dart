@@ -119,13 +119,18 @@ class Coin extends Equatable {
   bool get isErcType => protocolType == 'ERC20' || protocolType == 'ETH';
 
   bool get isTxMemoSupported =>
-      type == CoinType.tendermint || type == CoinType.tendermintToken;
+      type == CoinType.tendermint ||
+      type == CoinType.tendermintToken ||
+      type == CoinType.solana ||
+      type == CoinType.solanaToken;
 
   bool get isCustomFeeSupported =>
       type != CoinType.tendermintToken &&
       type != CoinType.tendermint &&
       type != CoinType.trx &&
-      type != CoinType.trc20;
+      type != CoinType.trc20 &&
+      type != CoinType.solana &&
+      type != CoinType.solanaToken;
 
   static bool checkSegwitByAbbr(String abbr) => abbr.contains('-segwit');
   static String normalizeAbbr(String abbr) => abbr.replaceAll('-segwit', '');

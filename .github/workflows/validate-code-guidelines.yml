@@ -8,6 +8,9 @@ on:
     branches:
       - "**"
 
+permissions:
+  contents: read
+
 jobs:
   validate_code_guidelines:
     runs-on: ubuntu-latest
@@ -15,7 +18,7 @@ jobs:
     steps:
       - name: Setup GH Actions
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
@@ -38,12 +41,28 @@ jobs:
             dart pub get -C sdk
           fi
 
+      # Keep LI.FI inside this existing required check; a separate optional
+      # path-filtered workflow must not allow a broken production profile to merge.
+      - name: Test production LI.FI configuration
+        timeout-minutes: 10
+        run: bash .github/scripts/test_lifi_profiles.sh
+
+      # Offline, standard library only: new tool tests must stay that way.
+      - name: Test the build and release gate tools
+        id: test_gate_tools
+        timeout-minutes: 10
+        run: |
+          python3 -m unittest discover -s tool -p 'test_*.py' -v
+          python3 -m unittest discover -s tool/auth_release_gates -p 'test_*.py' -v
+
       # The Firebase deploy action reads its published URL out of the CLI's
       # own output. That is a regex over another tool's text, so it can stop
       # matching silently; these fixtures are what notice.
       - name: Test the hosting deploy URL reader
         id: test_hosting_deploy_url
-        run: .github/scripts/test_hosting_deploy_url.sh
+        run: |
+          .github/scripts/test_hosting_deploy_url.sh
+          python3 .github/scripts/test_firebase_hosting_deploy.py
 
       # `flutter analyze` runs with --no-fatal-warnings --no-fatal-infos, and a
       # background painted with a foreground colour role compiles cleanly

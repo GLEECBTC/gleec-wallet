@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' show Tristate;
 
 import 'package:easy_localization/easy_localization.dart';
@@ -10,9 +9,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/hw_dialog_wallet_select.dart';
@@ -21,10 +20,11 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
+import '../../../support/legacy_wallet_file_writer.dart';
 import '../../../support/legal_onboarding_harness.dart';
 
-const _unavailable =
-    'The legal documentation could not be retrieved. Please consult Gleec’s online legal documentation before proceeding.';
+// Read from the catalogue: its wording is edited centrally.
+String get _unavailable => LocaleKeys.legalDocumentsUnavailable.tr();
 
 Future<void> _passwords(WidgetTester tester) async {
   await enterLegalField(tester, 'create-password-field', legalTestPassword);
@@ -39,23 +39,12 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
     switch (form) {
       'create' => WalletCreation(
         action: WalletsManagerAction.create,
-        onCreate:
-            ({
-              required name,
-              required password,
-              walletType,
-              required rememberMe,
-            }) => submitted(),
+        onCreate: submitted,
         onCancel: () {},
       ),
       'seed' => WalletSimpleImport(
-        onImport:
-            ({
-              required name,
-              required password,
-              required walletConfig,
-              required rememberMe,
-            }) => submitted(),
+        onImport: ({required name, required password, required walletConfig}) =>
+            submitted(),
         onUploadFiles: ({required fileName, required fileData}) {},
         onCancel: () {},
       ),
@@ -64,13 +53,8 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
           content: fileContent ?? 'not-decrypted-while-gated',
           name: 'My wallet.json',
         ),
-        onImport:
-            ({
-              required name,
-              required password,
-              required walletConfig,
-              required rememberMe,
-            }) => submitted(),
+        onImport: ({required name, required password, required walletConfig}) =>
+            submitted(),
         onCancel: () {},
       ),
       'login' => WalletLogIn(
@@ -84,8 +68,7 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
 Future<void> _fillForm(WidgetTester tester, String form) async {
   switch (form) {
     case 'create':
-      await enterLegalField(tester, 'name-wallet-field', 'My wallet');
-      await _passwords(tester);
+      break;
     case 'seed':
       await enterLegalField(tester, 'name-wallet-field', 'My wallet');
       await enterLegalField(tester, 'import-seed-field', legalTestSeed);
@@ -149,22 +132,18 @@ void main() {
           )..remoteAvailable = succeeds;
           String? fileContent;
           if (form == 'file') {
-            fileContent = await tester.runAsync(() async {
-              final tool = EncryptionTool();
-              final config = WalletConfig(
-                seedPhrase: await tool.encryptData(
-                  legalTestPassword,
-                  legalTestSeed,
-                ),
-                activatedCoins: [],
-                hasBackup: true,
-                type: WalletType.hdwallet,
-              );
-              return tool.encryptData(
+            fileContent = await tester.runAsync(
+              () => legacyWalletFile(
                 legalTestPassword,
-                jsonEncode(config.toJson()),
-              );
-            });
+                WalletConfig(
+                  seedPhrase: '',
+                  activatedCoins: [],
+                  hasBackup: true,
+                  type: WalletType.hdwallet,
+                ),
+                legalTestSeed,
+              ),
+            );
           }
           var submitted = 0;
           await harness.pump(
@@ -182,7 +161,7 @@ void main() {
           await tester.ensureVisible(button);
           await tester.tap(button);
           await tester.tap(button);
-          if (form != 'hardware') {
+          if (form != 'hardware' && form != 'create') {
             await tester.testTextInput.receiveAction(TextInputAction.done);
           }
           await tester.pump();
@@ -247,7 +226,7 @@ void main() {
           semantics.dispose();
           await tester.ensureVisible(button);
           await tester.tap(button, warnIfMissed: false);
-          if (form != 'hardware') {
+          if (form != 'hardware' && form != 'create') {
             await tester.testTextInput.receiveAction(TextInputAction.done);
           } else {
             await tester.sendKeyEvent(LogicalKeyboardKey.enter);

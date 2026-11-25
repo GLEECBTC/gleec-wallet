@@ -17,6 +17,11 @@ class Wallet {
     this.legacyWalletExtras,
   });
 
+  /// Matches the catalog entry even when a caller holds an older projection.
+  bool matchesKdfUser(KdfUser user) =>
+      name == user.walletId.name &&
+      (config.pubKey == null || config.pubKey == user.walletId.pubkeyHash);
+
   factory Wallet.fromJson(Map<String, dynamic> json) => Wallet(
     id: json['id'] as String? ?? '',
     name: json['name'] as String? ?? '',
@@ -62,6 +67,13 @@ class Wallet {
   String id;
   String name;
   WalletConfig config;
+
+  /// Editable presentation only. [name] remains the engine/catalog identity.
+  String get displayName {
+    final label = config.displayName?.trim();
+    return label == null || label.isEmpty ? name : label;
+  }
+
   LegacyWalletSource? legacySource;
   MigratedLegacyWalletSource? migratedLegacySource;
   Map<String, dynamic>? legacyWalletExtras;
@@ -172,7 +184,11 @@ class WalletConfig {
     this.isLegacyWallet = false,
     this.provenance = WalletProvenance.unknown,
     this.createdAt,
-  });
+    this.displayName,
+    RecoveryEvidence? recoveryEvidence,
+  }) : recoveryEvidence =
+           recoveryEvidence ??
+           (hasBackup ? RecoveryEvidence.legacyUnknown : RecoveryEvidence.none);
 
   factory WalletConfig.fromJson(Map<String, dynamic> json) {
     return WalletConfig(
@@ -181,10 +197,15 @@ class WalletConfig {
       ),
       seedPhrase: json['seed_phrase'] as String? ?? '',
       pubKey: json['pub_key'] as String?,
+      displayName: json['display_name'] as String?,
       activatedCoins: List<String>.from(
         json['activated_coins'] as List? ?? <String>[],
       ).toList(),
       hasBackup: json['has_backup'] as bool? ?? false,
+      recoveryEvidence: RecoveryEvidence.parse(
+        json['recovery_evidence'],
+        legacyHasBackup: json['has_backup'] == true,
+      ),
       provenance: WalletProvenance.fromJson(
         json['wallet_provenance'] as String? ?? json['provenance'] as String?,
       ),
@@ -196,8 +217,13 @@ class WalletConfig {
 
   String seedPhrase;
   String? pubKey;
+  String? displayName;
   List<String> activatedCoins;
   bool hasBackup;
+  RecoveryEvidence recoveryEvidence;
+  bool get hasRecoveryPhrase =>
+      recoveryEvidence == RecoveryEvidence.phraseConfirmed ||
+      recoveryEvidence == RecoveryEvidence.phraseSupplied;
   WalletType type;
   bool isLegacyWallet;
   WalletProvenance provenance;
@@ -208,8 +234,10 @@ class WalletConfig {
       'type': type.name,
       'seed_phrase': seedPhrase,
       'pub_key': pubKey,
+      'display_name': displayName,
       'activated_coins': activatedCoins,
       'has_backup': hasBackup,
+      'recovery_evidence': recoveryEvidence.name,
       'provenance': provenance.name,
       'created_at': createdAt?.millisecondsSinceEpoch,
     };
@@ -219,9 +247,11 @@ class WalletConfig {
     return WalletConfig(
       activatedCoins: [...activatedCoins],
       hasBackup: hasBackup,
+      recoveryEvidence: recoveryEvidence,
       type: type,
       seedPhrase: seedPhrase,
       pubKey: pubKey,
+      displayName: displayName,
       // Preserve legacy flag when copying config; losing this flag breaks
       // legacy login flow and can hide the wallet from lists.
       isLegacyWallet: isLegacyWallet,
@@ -233,8 +263,10 @@ class WalletConfig {
   WalletConfig copyWith({
     String? seedPhrase,
     String? pubKey,
+    String? displayName,
     List<String>? activatedCoins,
     bool? hasBackup,
+    RecoveryEvidence? recoveryEvidence,
     WalletType? type,
     bool? isLegacyWallet,
     WalletProvenance? provenance,
@@ -243,8 +275,10 @@ class WalletConfig {
     return WalletConfig(
       seedPhrase: seedPhrase ?? this.seedPhrase,
       pubKey: pubKey ?? this.pubKey,
+      displayName: displayName ?? this.displayName,
       activatedCoins: activatedCoins ?? [...this.activatedCoins],
       hasBackup: hasBackup ?? this.hasBackup,
+      recoveryEvidence: recoveryEvidence ?? this.recoveryEvidence,
       type: type ?? this.type,
       isLegacyWallet: isLegacyWallet ?? this.isLegacyWallet,
       provenance: provenance ?? this.provenance,
@@ -264,6 +298,22 @@ class WalletConfig {
     }
     return null;
   }
+}
+
+enum RecoveryEvidence {
+  none,
+  phraseConfirmed,
+  phraseSupplied,
+  encryptedFileExported,
+  legacyUnknown;
+
+  static RecoveryEvidence parse(
+    Object? value, {
+    bool legacyHasBackup = false,
+  }) => values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => legacyHasBackup ? legacyUnknown : none,
+  );
 }
 
 enum WalletType {
@@ -309,6 +359,18 @@ enum WalletProvenance {
 }
 
 extension KdfUserWalletExtension on KdfUser {
+  AuthOptions walletSignInOptions({
+    DerivationMethod? verifiedDerivation,
+    bool? allowWeakPassword,
+  }) {
+    final stored = walletId.authOptions;
+    return AuthOptions(
+      derivationMethod: verifiedDerivation ?? stored.derivationMethod,
+      privKeyPolicy: stored.privKeyPolicy,
+      allowWeakPassword: allowWeakPassword ?? stored.allowWeakPassword,
+    );
+  }
+
   Wallet get wallet {
     final walletType = _walletTypeFromMetadataOrAuth(this);
     final provenance = _walletProvenanceFromMetadata(this);
@@ -320,9 +382,16 @@ extension KdfUserWalletExtension on KdfUser {
       config: WalletConfig(
         seedPhrase: '',
         pubKey: walletId.pubkeyHash,
+        displayName: metadata['display_name'] is String
+            ? metadata['display_name'] as String
+            : null,
         activatedCoins:
             metadata.valueOrNull<List<String>>('activated_coins') ?? [],
         hasBackup: metadata['has_backup'] as bool? ?? false,
+        recoveryEvidence: RecoveryEvidence.parse(
+          metadata['recovery_evidence'],
+          legacyHasBackup: metadata['has_backup'] == true,
+        ),
         type: walletType,
         provenance: provenance,
         createdAt: createdAt,
@@ -340,8 +409,14 @@ extension KdfSdkWalletExtension on KomodoDefiSdk {
 
 WalletType _walletTypeFromMetadataOrAuth(KdfUser user) {
   final metadataType = user.metadata['type'];
-  if (metadataType is String && metadataType.isNotEmpty) {
-    return WalletType.fromJson(metadataType);
+  // Software addresses follow the derivation in the SDK identity. An older
+  // wallet may have authenticated in another mode since its initial import.
+  for (final type in WalletType.values) {
+    if (type.name == metadataType &&
+        type != WalletType.hdwallet &&
+        type != WalletType.iguana) {
+      return type;
+    }
   }
 
   return user.walletId.isHd ? WalletType.hdwallet : WalletType.iguana;

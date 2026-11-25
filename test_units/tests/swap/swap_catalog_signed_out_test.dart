@@ -1,15 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
-import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
@@ -17,9 +16,12 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
+
+class _CatalogAuth extends Fake implements KomodoDefiLocalAuth {}
 
 /// Covers what the swap form can offer without a wallet. Nothing is active,
 /// so the list is built without asking the wallet or KDF: either answer can
@@ -75,7 +77,7 @@ void main() {
 
     UnifiedSwapBloc open({required bool signedIn}) {
       final storage = MemoryStorage();
-      final registry = SwapExecutionRegistry(
+      final registry = testSwapRegistry(
         executors: const [],
         inFlight: () async => const [],
       );
@@ -242,4 +244,3 @@ class _Kdf implements ApiClient {
 }
 
 // A catalog lookup must not ask for a signed-in wallet.
-class _CatalogAuth extends Fake implements KomodoDefiLocalAuth {}

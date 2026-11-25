@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:easy_localization/easy_localization.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
-
+import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    as typed_rpc;
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show KomodoDefiRpcMethodsExtension, RpcDispatchGuard, RpcDispatchRejected;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show RpcDispatchGuard, RpcDispatchRejected, KomodoDefiRpcMethodsExtension;
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -23,7 +25,6 @@ import 'package:web_dex/mm2/mm2_api/rpc/import_swaps/import_swaps_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/import_swaps/import_swaps_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/kmd_rewards_info/kmd_rewards_info_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/market_maker_bot_request.dart';
-import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_maker_vol/max_maker_vol_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_maker_vol/max_maker_vol_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_taker_vol/max_taker_vol_request.dart';
@@ -37,6 +38,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_response
 import 'package:web_dex/mm2/mm2_api/rpc/my_swap_status/my_swap_status_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_tx_history/my_tx_history_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_tx_history/my_tx_history_v2_request.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/nft/withdraw/withdraw_nft_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/orderbook_depth/orderbook_depth_req.dart';
@@ -57,16 +59,262 @@ import 'package:web_dex/mm2/mm2_api/rpc/validateaddress/validateaddress_request.
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/text_error.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 
 class Mm2Api {
-  Mm2Api({required MM2 mm2, required KomodoDefiSdk sdk})
-    : _sdk = sdk,
-      _mm2 = mm2 {
-    nft = Mm2ApiNft(_mm2.call);
+  Mm2Api({
+    required MM2 mm2,
+    required KomodoDefiSdk sdk,
+    WalletOperationGate? operationGate,
+    TradingAssetPolicy? tradingPolicy,
+    Future<JsonMap> Function(Object request)? mutationTransport,
+    Future<JsonMap> Function(Object request)? tradingTransport,
+  }) : _sdk = sdk,
+       _tradingPolicy = tradingPolicy,
+       _mutationTransport = mutationTransport ?? mm2.call,
+       _tradingTransport = tradingTransport ?? mutationTransport ?? mm2.call,
+       _operationGate = operationGate ?? WalletOperationGate.instance,
+       _mm2 = mm2 {
+    nft = Mm2ApiNft((request) {
+      if (request is WithdrawNftRequest) {
+        return _callUserMutation(request, request.method);
+      }
+      return _mm2.call(request);
+    });
   }
 
   final MM2 _mm2;
+  final Future<JsonMap> Function(Object request) _mutationTransport;
+
+  final WalletOperationGate _operationGate;
+
+  /// Recheck every engine-reported funding currency for Solana orders, also
+  /// for maker forms and restored entry points which do not use unified quotes.
+
+  Future<JsonMap> _callUserMutation(
+    Object request,
+    String method, {
+    WalletOperationPermit? permit,
+  }) async {
+    final authorization = permit ?? _operationGate.capture();
+    void ensureAllowed() {
+      authorization.ensureCurrent();
+      _checkTradingRequest(request);
+    }
+
+    ensureAllowed();
+    await _checkSolanaFunding(request);
+    ensureAllowed();
+    return RpcDispatchGuard.run(
+      ensureAllowed,
+      () => _mutationTransport(request),
+      methods: {method},
+    );
+  }
+
+  final TradingAssetPolicy? _tradingPolicy;
+  TradingAssetPolicy? get tradingPolicy => _tradingPolicy;
+  final Future<JsonMap> Function(Object request) _tradingTransport;
+
+  void _checkTradingRequest(Object request) {
+    void requirePair(String base, String rel) {
+      if (!(_tradingPolicy?.allowsPair(base, rel) ??
+          canTradeAssetPair(base, rel))) {
+        throw TradePreflightRejected(
+          StateError('Trading is unavailable for this asset pair.'),
+        );
+      }
+    }
+
+    if (request is SellRequest) {
+      requirePair(request.base, request.rel);
+      if (!(request.isQuoteCurrent?.call() ?? true)) {
+        throw TradePreflightRejected(StateError('The reviewed quote expired.'));
+      }
+    }
+    if (request is SetPriceRequest) requirePair(request.base, request.rel);
+    if (request is MarketMakerBotRequest &&
+        request.method == 'start_simple_market_maker_bot') {
+      for (final pair
+          in request.params?.tradeCoinPairs?.values ??
+              const <TradeCoinPairConfig>[]) {
+        requirePair(pair.baseCoinId, pair.relCoinId);
+        if (_tradingPolicy?.isSolanaPair(pair.baseCoinId, pair.relCoinId) ??
+            false) {
+          throw const TradePreflightRejected(SolanaMarketMakerUnavailable());
+        }
+      }
+    }
+  }
+
+  /// Recheck every engine-reported funding currency for Solana orders, also
+  /// for maker forms and restored entry points which do not use unified quotes.
+  Future<void> _checkSolanaFunding(Object request) async {
+    final String base;
+    final String rel;
+    final Rational volume;
+    final Rational price;
+    final typed_rpc.SwapMethod method;
+    final bool max;
+    if (request is SellRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = request.method == 'buy'
+          ? typed_rpc.SwapMethod.buy
+          : typed_rpc.SwapMethod.sell;
+      max = false;
+    } else if (request is SetPriceRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = typed_rpc.SwapMethod.setPrice;
+      max = request.max;
+    } else {
+      return;
+    }
+    if (!(_tradingPolicy?.isSolanaPair(base, rel) ?? false)) return;
+    final assets = _sdk.assets.available.values;
+    final from = assets.where((asset) => asset.id.id == base).firstOrNull;
+    final to = assets.where((asset) => asset.id.id == rel).firstOrNull;
+    if (from == null || to == null) {
+      throw TradePreflightRejected(StateError('Unknown trading asset'));
+    }
+    try {
+      final preimage = await _sdk.client.rpc.trading
+          .tradePreimage(
+            base: base,
+            rel: rel,
+            swapMethod: method,
+            volume: max
+                ? null
+                : volume.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+            max: max,
+            price: price.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (preimage.totalFees.isEmpty) {
+        throw const FormatException('Missing funding requirements');
+      }
+      final requirements = <String, Rational>{};
+      for (final total in preimage.totalFees) {
+        final required = Rational.parse(total.requiredBalance);
+        if (required < Rational.zero) {
+          throw const FormatException('Invalid funding amount');
+        }
+        requirements[total.coin] =
+            (requirements[total.coin] ?? Rational.zero) + required;
+      }
+      final estimated = <String, Rational>{};
+      final receiveFees = <String, Rational>{};
+      for (final fee in [
+        preimage.takerFee,
+        preimage.feeToSendTakerFee,
+        preimage.baseCoinFee,
+        preimage.relCoinFee,
+      ]) {
+        if (fee == null) continue;
+        final amount = Rational.parse(fee.amount);
+        if (amount < Rational.zero) {
+          throw const FormatException('Invalid fee amount');
+        }
+        if (!fee.paidFromTradingVol) {
+          estimated[fee.coin] = (estimated[fee.coin] ?? Rational.zero) + amount;
+        } else {
+          receiveFees[fee.coin] =
+              (receiveFees[fee.coin] ?? Rational.zero) + amount;
+        }
+      }
+      for (final entry in estimated.entries) {
+        if (entry.value > (requirements[entry.key] ?? Rational.zero)) {
+          requirements[entry.key] = entry.value;
+        }
+      }
+      final reviewed = request is SellRequest
+          ? request.reviewedFeeRequirements
+          : null;
+      if (reviewed != null &&
+          requirements.entries.any(
+            (entry) => entry.value > (reviewed[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade funding changed. Review the quote again.');
+      }
+      final reviewedReceive = request is SellRequest
+          ? request.reviewedReceiveFees
+          : null;
+      if (reviewedReceive != null &&
+          receiveFees.entries.any(
+            (entry) =>
+                entry.value > (reviewedReceive[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade receive fees changed. Review the quote again.');
+      }
+      // A total_fees row can be absent (or zero) for the sold currency.
+      // Its principal still has to be funded independently of the fees.
+      if (!max) {
+        final paying = method == typed_rpc.SwapMethod.buy ? rel : base;
+        final amount = method == typed_rpc.SwapMethod.buy
+            ? volume * price
+            : volume;
+        requirements[paying] = (requirements[paying] ?? Rational.zero) + amount;
+      }
+      for (final entry in requirements.entries) {
+        if (entry.value == Rational.zero) continue;
+        final asset = assets
+            .where((asset) => asset.id.id == entry.key)
+            .firstOrNull;
+        if (asset == null) throw StateError('Unknown funding asset');
+        final balance = await _sdk.balances
+            .getBalance(asset.id, forceRefresh: true)
+            .timeout(const Duration(seconds: 15));
+        if (balance.spendable.toRational() < entry.value) {
+          throw StateError('Insufficient ${entry.key} for trade funding');
+        }
+      }
+    } on Object catch (cause) {
+      // No order was dispatched, so a local funding refusal is certain.
+      throw TradePreflightRejected(cause);
+    }
+  }
+
+  Future<JsonMap> _callTradingRequest(Object request) async {
+    final permit = _operationGate.capture();
+    try {
+      _checkTradingRequest(request);
+      await _checkSolanaFunding(request);
+      // Catalog, quote and engine eligibility can change while funding is read.
+      _checkTradingRequest(request);
+    } on TradePreflightRejected {
+      rethrow;
+    } on Object catch (cause) {
+      // A catalog/balance read can fail before preimage handling begins too.
+      throw TradePreflightRejected(cause);
+    }
+    try {
+      return await RpcDispatchGuard.run(
+        () {
+          permit.ensureCurrent();
+          _checkTradingRequest(request);
+        },
+        () => _tradingTransport(request),
+        methods: const {
+          'buy',
+          'sell',
+          'setprice',
+          'start_simple_market_maker_bot',
+        },
+      );
+    } on RpcDispatchRejected catch (error) {
+      // The SDK checks after credentials/engine preparation, immediately
+      // before transport; a refusal there still proves nothing was sent.
+      throw TradePreflightRejected(error.cause);
+    }
+  }
 
   // Ideally we will transition cleanly over to the SDK, but for methods
   // which are deeply intertwined with the app and are broken by HD wallet
@@ -158,8 +406,9 @@ class Mm2Api {
   }
 
   Future<Map<String, dynamic>?> withdraw(WithdrawRequest request) async {
+    final permit = _operationGate.capture();
     try {
-      return await _mm2.call(request) as Map<String, dynamic>?;
+      return await _callUserMutation(request, request.method, permit: permit);
     } catch (e, s) {
       log(
         'Error withdrawing ${request.params.coin}: $e',
@@ -174,14 +423,13 @@ class Mm2Api {
   Future<SendRawTransactionResponse> sendRawTransaction(
     SendRawTransactionRequest request,
   ) async {
+    final permit = _operationGate.capture();
     try {
-      final response = await _mm2.call(request) as Map<String, dynamic>?;
-      if (response == null) {
-        return SendRawTransactionResponse(
-          txHash: null,
-          error: TextError(error: 'null response'),
-        );
-      }
+      final response = await _callUserMutation(
+        request,
+        request.method,
+        permit: permit,
+      );
       return SendRawTransactionResponse.fromJson(response);
     } catch (e, s) {
       log(
@@ -279,28 +527,9 @@ class Mm2Api {
     }
   }
 
-  // Backstop for Advanced trading, restored bot settings and direct callers.
-  // Read the authoritative protocol rather than guessing from a ticker suffix
-  // or a parentId that might not have resolved in the registry.
-  String? _atomicPermissionError(String ticker) {
-    try {
-      final asset = _sdk.assets.findAssetsByConfigId(ticker).single;
-      final protocol = asset.protocol;
-      if (protocol is! Erc20Protocol ||
-          (protocol.contractAddress ?? '').isEmpty) {
-        return null;
-      }
-    } on Object {
-      // An unavailable/ambiguous asset cannot prove that permission is absent.
-    }
-    return LocaleKeys.swapPermissionUnavailableBody.tr();
-  }
-
   Future<Map<String, dynamic>> sell(SellRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
     try {
-      return await _mm2.call(request);
+      return await _callTradingRequest(request);
     } catch (e, s) {
       log(
         'Error sell ${request.base}/${request.rel}: $e',
@@ -308,23 +537,20 @@ class Mm2Api {
         trace: s,
         isError: true,
       ).ignore();
-      return <String, dynamic>{'error': e};
+      // Text, as KDF's own error answers are: the response model reads no
+      // other, and a refusal before the order was sent has to say why.
+      return <String, dynamic>{'error': e.toString()};
     }
   }
 
   /// [sell] without turning a call that got no answer into an error answer:
   /// KDF's answer, error or not, and a throw when none arrived.
-  Future<Map<String, dynamic>> sellOrThrow(SellRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
-    return _mm2.call(request);
-  }
+  Future<Map<String, dynamic>> sellOrThrow(SellRequest request) =>
+      _callTradingRequest(request);
 
   Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
     try {
-      return await _mm2.call(request) as Map<String, dynamic>?;
+      return await _callTradingRequest(request) as Map<String, dynamic>?;
     } catch (e, s) {
       log(
         'Error setprice ${request.base}/${request.rel}: $e',
@@ -343,9 +569,13 @@ class Mm2Api {
     CancelOrderRequest request, {
     Future<void> Function()? beforeMutation,
   }) async {
+    final permit = _operationGate.capture();
     await beforeMutation?.call();
+    permit.ensureCurrent();
     try {
-      return await _mm2.call(request);
+      return await _callUserMutation(request, request.method, permit: permit);
+    } on RpcDispatchRejected {
+      rethrow;
     } catch (e, s) {
       log(
         'Error cancelOrder ${request.uuid}: $e',
@@ -467,9 +697,15 @@ class Mm2Api {
     RecoverFundsOfSwapRequest request, {
     Future<void> Function()? beforeMutation,
   }) async {
+    final permit = _operationGate.capture();
     await beforeMutation?.call();
+    permit.ensureCurrent();
     try {
-      final JsonMap json = await _mm2.call(request);
+      final JsonMap json = await _callUserMutation(
+        request,
+        request.method,
+        permit: permit,
+      );
       if (json['error'] != null) {
         log(
           'Error recovering funds of swap ${request.uuid}: ${json['error']}',
@@ -599,18 +835,6 @@ class Mm2Api {
     >
   >
   getTradePreimage(TradePreimageRequest request) async {
-    final permissionError = _atomicPermissionError(
-      request.swapMethod == 'buy' ? request.rel : request.base,
-    );
-    if (permissionError != null) {
-      return ApiResponse(
-        request: request,
-        error: {
-          'error_type': 'AtomicPermissionUnavailable',
-          'error': permissionError,
-        },
-      );
-    }
     try {
       final JsonMap responseJson = await _mm2.call(request);
       if (responseJson['error'] != null) {
@@ -643,21 +867,8 @@ class Mm2Api {
   Future<void> startStopMarketMakerBot(
     MarketMakerBotRequest marketMakerBotRequest,
   ) async {
-    if (marketMakerBotRequest.method == 'start_simple_market_maker_bot') {
-      for (final pair
-          in marketMakerBotRequest.params?.tradeCoinPairs?.values ??
-              const <TradeCoinPairConfig>[]) {
-        // Bots can trade in both directions.
-        final permissionError =
-            _atomicPermissionError(pair.baseCoinId) ??
-            _atomicPermissionError(pair.relCoinId);
-        if (permissionError != null) {
-          throw AtomicPermissionUnavailableException(permissionError);
-        }
-      }
-    }
     try {
-      final JsonMap response = await _mm2.call(marketMakerBotRequest.toJson());
+      final JsonMap response = await _callTradingRequest(marketMakerBotRequest);
       log(
         response.toString(),
         path: 'api => ${marketMakerBotRequest.method} => _call',

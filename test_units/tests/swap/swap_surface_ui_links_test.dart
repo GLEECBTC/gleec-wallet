@@ -35,7 +35,7 @@ void main() {
       previousObserver = Bloc.observer;
       Bloc.observer = observer = RecordingBlocObserver();
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -259,7 +259,7 @@ void main() {
 
         expect(find.byType(SwapExecutionView), findsNothing);
         expect(observer.eventsOf<SwapActivityStarted>(), hasLength(1));
-        expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
+        expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
       });
     });
   });

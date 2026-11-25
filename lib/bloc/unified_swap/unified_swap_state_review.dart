@@ -92,6 +92,13 @@ class SwapReview extends Equatable {
   /// not be confirmed, which decides whether asking again can help.
   final SwapQuoteFailure? revalidationFailure;
 
+  /// Whether the reviewed swap may be running, its start unanswered or lost.
+  /// Nothing that would change the swap is taken meanwhile.
+  bool get startInDoubt => switch (status) {
+    SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => true,
+    _ => false,
+  };
+
   /// Whether the start action is available.
   bool get canStart =>
       legalAllowed &&

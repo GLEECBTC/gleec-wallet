@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show RpcDispatchRejected;
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -30,7 +33,10 @@ void main() {
     test('refuses a quote without a routed offer as stale, sending '
         'nothing', () async {
       await expectLater(
-        executor.start(quoteOf(payload: 'not an offer')),
+        executor.start(
+          quoteOf(payload: 'not an offer'),
+          authorization: testSwapAuthorization(),
+        ),
         throwsA(
           isA<SwapStartRejectedException>().having(
             (e) => e.reason,
@@ -43,7 +49,10 @@ void main() {
     });
 
     test('starts the accepted offer and reports its first snapshot', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
 
       expect(manager.started.single, same(offer));
       expect(handle.id, 'r-1');
@@ -57,17 +66,105 @@ void main() {
 
     test('a lost start answer stays unconfirmed and keeps its cause', () async {
       final cause = StateError('socket closed');
-      manager.startError = RoutedSwapStartUnconfirmedException(cause);
+      manager.startError = RoutedSwapStartUnconfirmedException(
+        cause,
+        taskId: 42,
+      );
 
       await expectLater(
-        executor.start(quote),
+        executor.start(quote, authorization: testSwapAuthorization()),
         throwsA(
-          isA<SwapStartUnconfirmedException>().having(
-            (e) => e.cause,
-            'cause',
-            same(cause),
+          isA<SwapStartUnconfirmedException>()
+              .having((e) => e.cause, 'cause', same(cause))
+              .having((e) => e.taskId, 'taskId', 42),
+        ),
+      );
+    });
+
+    test('a wallet session that ended before the engine was asked is a '
+        'refusal, so the review can price again', () async {
+      manager.startError = const AuthSessionChangedException();
+
+      await expectLater(
+        executor.start(quote, authorization: testSwapAuthorization()),
+        throwsA(
+          isA<SwapStartRejectedException>().having(
+            (e) => e.reason,
+            'reason',
+            SwapStartRejection.quoteStale,
           ),
         ),
+      );
+    });
+
+    test('a wallet session that ended after the engine was asked stays '
+        'unconfirmed', () async {
+      manager.startError = RoutedSwapStartUnconfirmedException(
+        const AuthSessionChangedException(),
+      );
+
+      await expectLater(
+        executor.start(quote, authorization: testSwapAuthorization()),
+        throwsA(isA<SwapStartUnconfirmedException>()),
+      );
+    });
+
+    test('the app lock refusing on the way to the engine is a refusal, '
+        'sending nothing', () async {
+      const locked = WalletOperationDenied(WalletOperationDenial.locked);
+
+      await expectLater(
+        executor.start(
+          quote,
+          authorization: testSwapAuthorization(
+            beforeDispatch: () => throw locked,
+          ),
+        ),
+        throwsA(
+          isA<SwapStartRejectedException>().having(
+            (e) => e.reason,
+            'reason',
+            SwapStartRejection.notAvailable,
+          ),
+        ),
+      );
+      expect(manager.started, isEmpty);
+    });
+
+    test('a start the registry revokes at the dispatch boundary keeps that '
+        'refusal', () async {
+      const revoked = SwapStartRejectedException(SwapStartRejection.quoteStale);
+
+      await expectLater(
+        executor.start(
+          quote,
+          authorization: testSwapAuthorization(
+            beforeDispatch: () => throw revoked,
+          ),
+        ),
+        throwsA(same(revoked)),
+      );
+      expect(manager.started, isEmpty);
+    });
+
+    test('the transport refusing to send is a refusal, never a start in '
+        'doubt', () async {
+      manager.startError = const RpcDispatchRejected('session revoked');
+
+      await expectLater(
+        executor.start(quote, authorization: testSwapAuthorization()),
+        throwsA(isA<SwapStartRejectedException>()),
+      );
+    });
+
+    test('a lock error after the engine was asked stays in doubt', () async {
+      manager.startError = const WalletOperationDenied(
+        WalletOperationDenial.locked,
+      );
+
+      await expectLater(
+        executor.start(quote, authorization: testSwapAuthorization()),
+        throwsA(isA<SwapStartUnconfirmedException>()),
       );
     });
 
@@ -96,7 +193,7 @@ void main() {
       for (final refusal in refusals) {
         manager.startError = refusal;
         await expectLater(
-          executor.start(quote),
+          executor.start(quote, authorization: testSwapAuthorization()),
           throwsA(
             isA<SwapStartRejectedException>()
                 .having(
@@ -138,7 +235,7 @@ void main() {
         for (final refusal in refusals) {
           manager.startError = refusal;
           await expectLater(
-            executor.start(quote),
+            executor.start(quote, authorization: testSwapAuthorization()),
             throwsA(
               isA<SwapStartRejectedException>()
                   .having((e) => e.reason, 'reason', SwapStartRejection.unknown)
@@ -160,7 +257,7 @@ void main() {
         manager.startError = const FormatException('bad record');
 
         await expectLater(
-          executor.start(quote),
+          executor.start(quote, authorization: testSwapAuthorization()),
           throwsA(isA<FormatException>()),
         );
       },
@@ -178,7 +275,10 @@ void main() {
         guaranteed: '99',
       );
 
-      final handle = await executor.start(accepted);
+      final handle = await executor.start(
+        accepted,
+        authorization: testSwapAuthorization(),
+      );
 
       expect(handle.latest.from, btc);
       expect(handle.latest.to, gleec);
@@ -221,7 +321,10 @@ void main() {
 
   group('following', () {
     test('maps each engine snapshot until the swap finishes', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       final engine = manager.live['r-1']!;
       final seen = <SwapExecutionSnapshot>[];
       var done = false;
@@ -255,7 +358,10 @@ void main() {
     });
 
     test('closing stops following without touching the swap', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       final engine = manager.live['r-1']!;
 
       await handle.close();
@@ -273,7 +379,10 @@ void main() {
     late FakeRoutedHandle engine;
 
     setUp(() async {
-      handle = await executor.start(quote);
+      handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       engine = manager.live['r-1']!;
     });
 

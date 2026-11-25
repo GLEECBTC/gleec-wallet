@@ -114,6 +114,10 @@ class UnifiedSwapState extends Equatable {
   const UnifiedSwapState({
     this.view = UnifiedSwapView.form,
     this.loadingAssets = true,
+    this.preparingAssets = false,
+    this.preparationFailedAsset,
+    this.quotesPending = false,
+    this.pricingPending = false,
     this.catalog = SwapCatalog.empty,
     this.pay,
     this.receive,
@@ -124,6 +128,7 @@ class UnifiedSwapState extends Equatable {
     this.converted,
     this.balance,
     this.feeBalance,
+    this.fundingBalances = const {},
     this.maxApplied,
     this.checkingMax = false,
     this.maxRequested = false,
@@ -146,6 +151,7 @@ class UnifiedSwapState extends Equatable {
     this.clockValid = true,
     this.signedIn = true,
     this.hardwareWallet = false,
+    this.sessionReady = true,
     this.hints = const SwapOrderBookHints(),
   });
 
@@ -154,6 +160,18 @@ class UnifiedSwapState extends Equatable {
 
   /// Whether the tradable assets are still loading.
   final bool loadingAssets;
+
+  /// Whether activation, addresses, or funding are being prepared.
+  final bool preparingAssets;
+
+  /// The chosen asset whose preparation failed; retry keeps the intent.
+  final AssetId? preparationFailedAsset;
+
+  /// Other eligible sources are still checking this exact intent.
+  final bool quotesPending;
+
+  /// Fiat decoration/comparison is still loading; token quotes stay usable.
+  final bool pricingPending;
 
   /// What the sources can trade, active or not.
   final SwapCatalog catalog;
@@ -188,6 +206,9 @@ class UnifiedSwapState extends Equatable {
   /// Spendable balance of the coin that pays [pay]'s network fees, when that
   /// is not [pay] itself.
   final Decimal? feeBalance;
+
+  /// Spendable balances for every funding currency, including receiving SOL.
+  final Map<AssetId, Decimal?> fundingBalances;
 
   /// The Max last applied, so the form can say what was kept back.
   final SwapMaxAmount? maxApplied;
@@ -261,6 +282,10 @@ class UnifiedSwapState extends Equatable {
   /// false whatever the location allows.
   final bool hardwareWallet;
 
+  /// False while the wallet session a swap would start in is not ready yet,
+  /// as just after signing in: a review cannot open until it is.
+  final bool sessionReady;
+
   /// What the order book offers for the chosen assets.
   final SwapOrderBookHints hints;
 
@@ -290,10 +315,59 @@ class UnifiedSwapState extends Equatable {
     return null;
   }
 
+  /// Whether a reviewed swap may be running; see [SwapReview.startInDoubt].
+  bool get startInDoubt => review?.startInDoubt ?? false;
+
+  /// Missing or failed funding reads cannot authorize a trade.
+  bool get fundingReady =>
+      signedIn &&
+      !preparingAssets &&
+      !loadingAssets &&
+      preparationFailedAsset == null &&
+      inactiveAsset == null &&
+      hasPair &&
+      balance != null &&
+      (pay!.parentId == null || feeBalance != null) &&
+      (selectedQuote?.fundingAssets.every(
+            (asset) =>
+                asset == pay ||
+                asset == pay!.parentId ||
+                fundingBalances[asset] != null,
+          ) ??
+          true) &&
+      payAddress != null &&
+      receiveAddress != null;
+
+  /// A required currency whose latest balance lookup failed. A retry is
+  /// explicit so a failed endpoint cannot trigger an unbounded request loop.
+  AssetId? get fundingFailedAsset => !signedIn
+      ? null
+      : selectedQuote?.fundingAssets
+            .where(
+              (asset) =>
+                  fundingBalances.containsKey(asset) &&
+                  fundingBalances[asset] == null,
+            )
+            .firstOrNull;
+
+  /// The currency whose current funds cannot cover the quoted fees.
+  AssetId? get insufficientFeeAsset {
+    final quote = selectedQuote;
+    if (quote == null) return pay?.parentId;
+    for (final asset in quote.fundingAssets) {
+      if (asset == pay) continue;
+      final held = asset == pay?.parentId ? feeBalance : fundingBalances[asset];
+      if (held != null && held < quote.fundingOnTopIn(asset)) return asset;
+    }
+    return pay?.parentId;
+  }
+
   /// Whether the review may be opened.
   bool get canReview =>
       view == UnifiedSwapView.form &&
       tradingEnabled &&
+      sessionReady &&
+      fundingReady &&
       evaluation == SwapEvaluationStatus.ready &&
       issue == null &&
       selectedQuote != null;
@@ -302,6 +376,10 @@ class UnifiedSwapState extends Equatable {
   List<Object?> get props => [
     view,
     loadingAssets,
+    preparingAssets,
+    preparationFailedAsset,
+    quotesPending,
+    pricingPending,
     catalog,
     pay,
     receive,
@@ -312,6 +390,7 @@ class UnifiedSwapState extends Equatable {
     converted,
     balance,
     feeBalance,
+    fundingBalances,
     maxApplied,
     checkingMax,
     maxRequested,
@@ -334,6 +413,7 @@ class UnifiedSwapState extends Equatable {
     clockValid,
     signedIn,
     hardwareWallet,
+    sessionReady,
     hints,
   ];
 
@@ -343,6 +423,10 @@ class UnifiedSwapState extends Equatable {
   UnifiedSwapState copyWith({
     UnifiedSwapView? view,
     bool? loadingAssets,
+    bool? preparingAssets,
+    AssetId? preparationFailedAsset,
+    bool? quotesPending,
+    bool? pricingPending,
     SwapCatalog? catalog,
     AssetId? pay,
     AssetId? receive,
@@ -353,6 +437,7 @@ class UnifiedSwapState extends Equatable {
     ({AssetId asset, String text, Decimal amount})? converted,
     Decimal? balance,
     Decimal? feeBalance,
+    Map<AssetId, Decimal?>? fundingBalances,
     SwapMaxAmount? maxApplied,
     bool? checkingMax,
     bool? maxRequested,
@@ -375,7 +460,9 @@ class UnifiedSwapState extends Equatable {
     bool? clockValid,
     bool? signedIn,
     bool? hardwareWallet,
+    bool? sessionReady,
     SwapOrderBookHints? hints,
+    bool clearPreparationFailure = false,
     bool clearPay = false,
     bool clearReceive = false,
     bool clearPayAddress = false,
@@ -395,6 +482,14 @@ class UnifiedSwapState extends Equatable {
     return UnifiedSwapState(
       view: view ?? this.view,
       loadingAssets: loadingAssets ?? this.loadingAssets,
+      preparingAssets: preparingAssets ?? this.preparingAssets,
+      preparationFailedAsset: clearPreparationFailure
+          ? null
+          : (preparationFailedAsset ?? this.preparationFailedAsset),
+      quotesPending:
+          quotesPending ?? (clearQuotes ? false : this.quotesPending),
+      pricingPending:
+          pricingPending ?? (clearQuotes ? false : this.pricingPending),
       catalog: catalog ?? this.catalog,
       pay: clearPay ? null : (pay ?? this.pay),
       receive: clearReceive ? null : (receive ?? this.receive),
@@ -407,6 +502,14 @@ class UnifiedSwapState extends Equatable {
       converted: clearConverted ? null : (converted ?? this.converted),
       balance: clearBalance ? null : (balance ?? this.balance),
       feeBalance: clearFeeBalance ? null : (feeBalance ?? this.feeBalance),
+      fundingBalances:
+          fundingBalances ??
+          (clearBalance ||
+                  clearReceive ||
+                  (pay != null && pay != this.pay) ||
+                  (receive != null && receive != this.receive)
+              ? const {}
+              : this.fundingBalances),
       maxApplied: clearMaxApplied ? null : (maxApplied ?? this.maxApplied),
       checkingMax: checkingMax ?? this.checkingMax,
       maxRequested:
@@ -435,6 +538,7 @@ class UnifiedSwapState extends Equatable {
       clockValid: clockValid ?? this.clockValid,
       signedIn: signedIn ?? this.signedIn,
       hardwareWallet: hardwareWallet ?? this.hardwareWallet,
+      sessionReady: sessionReady ?? this.sessionReady,
       hints: hints ?? this.hints,
     );
   }

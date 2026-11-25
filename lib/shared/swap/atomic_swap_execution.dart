@@ -1,15 +1,18 @@
 import 'dart:async';
 
 import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_response.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -39,6 +42,7 @@ bool _answered(Object error, String words) =>
 class AtomicSwapExecutor implements SwapExecutor {
   /// Creates an executor over the DEX repository and order service.
   AtomicSwapExecutor({
+    required KomodoDefiLocalAuth auth,
     required DexRepository dexRepository,
     required MyOrdersService orders,
     required SwapNetworks Function() networks,
@@ -47,7 +51,8 @@ class AtomicSwapExecutor implements SwapExecutor {
     int missesBeforeNoMatch = 3,
     int delayedAfterFailures = 3,
     DateTime Function()? now,
-  }) : _dex = dexRepository,
+  }) : _auth = auth,
+       _dex = dexRepository,
        _orders = orders,
        _networks = networks,
        _resolveAsset = resolveAsset,
@@ -56,6 +61,7 @@ class AtomicSwapExecutor implements SwapExecutor {
        _delayedAfterFailures = delayedAfterFailures,
        _now = now ?? DateTime.now;
 
+  final KomodoDefiLocalAuth _auth;
   final DexRepository _dex;
   final MyOrdersService _orders;
   final SwapNetworks Function() _networks;
@@ -69,30 +75,66 @@ class AtomicSwapExecutor implements SwapExecutor {
   SwapLiquiditySource get source => SwapLiquiditySource.atomic;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
     final plan = quote.payload;
-    if (quote.permissionUnavailable ||
-        (plan is AtomicSwapPlan &&
-            atomicTokenPermissionUnavailable(plan.base))) {
-      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
-    }
     if (plan is! AtomicSwapPlan) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
     }
 
-    final response = await _dex
-        .sellOrThrow(
-          SellRequest(
-            base: plan.base.id,
-            rel: plan.rel.id,
-            volume: Rational.parse(plan.volume.toString()),
-            price: plan.orderPrice,
-            orderType: SellBuyOrderType.fillOrKill,
-          ),
-        )
-        .catchError(
-          (Object error) => throw SwapStartUnconfirmedException(error),
-        );
+    final receiveFees = <String, Rational>{};
+    for (final fee in quote.fees) {
+      if (fee.deductedFromReceive && fee.asset != null) {
+        final id = fee.asset!.id;
+        receiveFees[id] =
+            (receiveFees[id] ?? Rational.zero) +
+            Rational.parse(fee.amount.toString());
+      }
+    }
+    final request = SellRequest(
+      base: plan.base.id,
+      rel: plan.rel.id,
+      volume: Rational.parse(plan.volume.toString()),
+      price: plan.orderPrice,
+      orderType: SellBuyOrderType.fillOrKill,
+      reviewedFeeRequirements: {
+        for (final asset in quote.fundingAssets)
+          asset.id: Rational.parse(quote.fundingOnTopIn(asset).toString()),
+      },
+      isQuoteCurrent: () => !quote.isExpiredAt(_now()),
+      reviewedReceiveFees: receiveFees,
+    );
+    var dispatched = false;
+    final SellResponse response;
+    try {
+      WalletOperationGate.instance.capture().ensureCurrent();
+      response = await _auth.runWithSession(authorization.session, () {
+        authorization.beforeDispatch();
+        _auth.ensureSessionContextCurrent(authorization.session);
+        dispatched = true;
+        // Only the submission holds the lease, not polling or recovery.
+        return _dex.sellOrThrow(request);
+      });
+    } on WalletOperationDenied {
+      // Read by this start, the registry and the RPC layer alike only on the
+      // way to the request: nothing was sent.
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
+    } on RpcDispatchRejected {
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
+    } on TradePreflightRejected catch (error) {
+      throw SwapStartRejectedException(
+        SwapStartRejection.unknown,
+        detail: error.toString(),
+      );
+    } on AuthSessionChangedException catch (error) {
+      if (dispatched) throw SwapStartUnconfirmedException(error);
+      throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
+    } on Object catch (error) {
+      if (!dispatched) rethrow;
+      throw SwapStartUnconfirmedException(error);
+    }
 
     final error = response.error;
     if (error != null) {
@@ -100,6 +142,12 @@ class AtomicSwapExecutor implements SwapExecutor {
       throw SwapStartRejectedException(
         SwapStartRejection.unknown,
         detail: error.message,
+      );
+    }
+    if (!_auth.isSessionContextCurrent(authorization.session)) {
+      throw SwapStartUnconfirmedException(
+        const AuthSessionChangedException(),
+        executionId: response.result?.uuid,
       );
     }
     final uuid = response.result?.uuid;
@@ -340,6 +388,7 @@ class _AtomicSwapTracker {
   }
 
   Future<void> cancel() async {
+    WalletOperationGate.instance.capture().ensureCurrent();
     final last = _last;
     if (last != null && last.isTerminal) {
       throw const SwapCancelRefusedException(SwapCancelRefusal.alreadyFinished);
@@ -352,6 +401,10 @@ class _AtomicSwapTracker {
     final String? error;
     try {
       error = await _executor._orders.cancelOrder(uuid).timeout(_readTimeout);
+    } on WalletOperationDenied {
+      rethrow;
+    } on RpcDispatchRejected {
+      rethrow;
     } on Object catch (lost) {
       throw SwapCancelUnconfirmedException(lost);
     }

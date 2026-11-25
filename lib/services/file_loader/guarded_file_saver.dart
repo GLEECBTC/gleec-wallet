@@ -5,6 +5,11 @@ import 'guarded_file_saver_stub.dart'
 
 enum FileSaveOutcome { completed, cancelled, unconfirmed }
 
+/// Wraps destination selection in a purpose-bound app lifecycle ceremony.
+/// The selector receives no file contents and does not itself authorize writes.
+typedef GuardedDestinationSelector =
+    Future<String?> Function(Future<String?> Function() chooseDestination);
+
 /// Saves sensitive exports only after the caller revalidates its session.
 ///
 /// Unlike the general-purpose loader, destination selection does not receive
@@ -20,5 +25,6 @@ abstract class GuardedFileSaver {
     required String data,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   });
 }

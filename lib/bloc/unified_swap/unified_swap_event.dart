@@ -17,6 +17,11 @@ final class UnifiedSwapStarted extends UnifiedSwapEvent {
   const UnifiedSwapStarted();
 }
 
+/// The registry's wallet-session scope ended, even if signedIn stayed true.
+final class UnifiedSwapSessionInvalidated extends UnifiedSwapEvent {
+  const UnifiedSwapSessionInvalidated();
+}
+
 /// Prefill the form from a deep link, another screen, or across a sign-in.
 final class UnifiedSwapIntentApplied extends UnifiedSwapEvent {
   const UnifiedSwapIntentApplied({
@@ -343,4 +348,29 @@ final class UnifiedSwapLegalRequested extends UnifiedSwapEvent {
   final bool retry;
   @override
   List<Object?> get props => [retry];
+}
+
+/// Retry preparation of the current pair without losing the entered amount.
+final class UnifiedSwapPreparationRetried extends UnifiedSwapEvent {
+  const UnifiedSwapPreparationRetried();
+}
+
+/// Restores unsigned input after leaving Swap within the same wallet session.
+final class UnifiedSwapDraftRestored extends UnifiedSwapEvent {
+  const UnifiedSwapDraftRestored({
+    this.pay,
+    this.receive,
+    required this.input,
+    required this.amountMode,
+    required this.slippage,
+  });
+
+  final String? pay;
+  final String? receive;
+  final String input;
+  final SwapAmountMode amountMode;
+  final double slippage;
+
+  @override
+  List<Object?> get props => [pay, receive, input, amountMode, slippage];
 }

@@ -26,7 +26,7 @@ void main() {
 
   setUp(() {
     executor = _GatedExecutor();
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [executor],
       inFlight: () async => const [],
     );
@@ -139,7 +139,11 @@ class _GatedExecutor implements SwapExecutor {
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
+    authorization.beforeDispatch();
     await gate.future;
     throw StateError('unreachable');
   }

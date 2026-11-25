@@ -231,7 +231,6 @@ void main() {
         SwapQuoteFailureKind.pairUnsupported,
         SwapQuoteFailureKind.notConfigured,
         SwapQuoteFailureKind.tradingBlocked,
-        SwapQuoteFailureKind.permissionUnavailable,
       };
       for (final kind in SwapQuoteFailureKind.values) {
         expect(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
@@ -114,9 +115,61 @@ BalanceInfo balanceOf(String spendable) => BalanceInfo(
 );
 
 class SrcAuth implements KomodoDefiLocalAuth {
+  SrcAuth() {
+    users.stream.listen(
+      (user) {
+        current = user;
+      },
+      onError: (Object _) {},
+      onDone: sessions.dispose,
+    );
+  }
+
+  final sessions = AuthSessionTracker();
+  KdfUser? _current;
+  KdfUser? get current => _current;
+  set current(KdfUser? user) {
+    _current = user;
+    sessions.observe(user);
+  }
+
+  @override
+  Stream<AuthSessionContext?> watchSessionContext() => Stream.multi((sink) {
+    final subscription = sessions.changes.listen(
+      sink.add,
+      onError: sink.addError,
+      onDone: sink.close,
+    );
+    sink.add(sessions.current);
+    sink.onCancel = subscription.cancel;
+  });
+
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      sessions.isCurrent(context);
+
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Future<AuthSessionContext> captureSessionContext() async =>
+      sessions.current ?? (throw const AuthSessionChangedException());
+
+  @override
+  Future<T> runWithSession<T>(
+    AuthSessionContext expected,
+    Future<T> Function() dispatch,
+  ) async {
+    ensureSessionContextCurrent(expected);
+    return dispatch();
+  }
+
   final StreamController<KdfUser?> users =
       StreamController<KdfUser?>.broadcast();
-  KdfUser? current;
   int currentUserReads = 0;
 
   @override

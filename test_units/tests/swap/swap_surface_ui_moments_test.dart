@@ -30,7 +30,7 @@ void main() {
 
     setUp(() {
       routed = GatedExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -184,16 +184,15 @@ void main() {
       ),
     };
 
-    for (final MapEntry(key: name, value: (outcome, haptic))
-        in outcomes.entries) {
-      testWidgets('$name: one matching haptic and no ring', (tester) async {
+    for (final MapEntry(key: name, value: (outcome, _)) in outcomes.entries) {
+      testWidgets('$name: no routine haptic or ring', (tester) async {
         final played = recordHaptics(tester);
         final handle = await open(tester, snapshotOf());
         await tester.pumpAndSettle();
 
         await hear(tester, handle, snapshotOf(outcome: outcome));
         await tester.pump(SwapMotion.ring ~/ 2);
-        expect(played, [haptic]);
+        expect(played, isEmpty);
         expect(
           heroRing(tester),
           isNot(paints..rrect(style: PaintingStyle.stroke)),
@@ -202,42 +201,33 @@ void main() {
       });
     }
 
-    testWidgets('waiting on the user: a warning haptic, and the route button '
-        'pulses twice then stops', (tester) async {
-      final played = recordHaptics(tester);
-      final handle = await open(tester, snapshotOf());
-      await tester.pumpAndSettle();
+    testWidgets(
+      'waiting on the user: one warning haptic and an immediate action',
+      (tester) async {
+        final played = recordHaptics(tester);
+        final handle = await open(tester, snapshotOf());
+        await tester.pumpAndSettle();
 
-      await hear(
-        tester,
-        handle,
-        reshaped(
-          snapshotOf(stage: SwapProgressStage.actionRequired),
-          evidence: const SwapEvidence(
-            executionId: 'swap-1',
-            providerExplorerUrl: 'https://route.example/status/1',
+        await hear(
+          tester,
+          handle,
+          reshaped(
+            snapshotOf(stage: SwapProgressStage.actionRequired),
+            evidence: const SwapEvidence(
+              executionId: 'swap-1',
+              providerExplorerUrl: 'https://route.example/status/1',
+            ),
           ),
-        ),
-      );
-      expect(played, ['HapticFeedbackType.warningNotification']);
+        );
+        expect(played, ['HapticFeedbackType.warningNotification']);
 
-      final button = find.ancestor(
-        of: find.text('Open route page'),
-        matching: find.byType(SwapPulse),
-      );
-      expect(button, findsOneWidget);
-      await tester.pump(SwapMotion.screen + SwapMotion.beat ~/ 2);
-      expect(
-        tester.renderObject(
-          find.descendant(of: button, matching: find.byType(CustomPaint)).first,
-        ),
-        paints..rrect(style: PaintingStyle.stroke),
-      );
-      await tester.pumpAndSettle();
-      expect(played, hasLength(1));
-    });
+        expect(find.text('Open route page'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(played, hasLength(1));
+      },
+    );
 
-    testWidgets('a step completing plays one selection click', (tester) async {
+    testWidgets('a step completing does not vibrate', (tester) async {
       final played = recordHaptics(tester);
       final handle = await open(tester, snapshotOf());
       await tester.pumpAndSettle();
@@ -248,7 +238,7 @@ void main() {
         snapshotOf(stage: SwapProgressStage.awaitingDelivery),
       );
       await tester.pumpAndSettle();
-      expect(played, ['HapticFeedbackType.selectionClick']);
+      expect(played, isEmpty);
     });
 
     testWidgets('a peer-to-peer refund starting completes no step', (
@@ -310,6 +300,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await expandSurfaceDetails(tester);
       await hear(tester, handle, peerToPeer(SwapProgressStage.refunding));
       await expectCalm();
       expect(timeline(), contains('Cancelled: Exchanging asset.'));
@@ -322,14 +313,14 @@ void main() {
       );
       await expectCalm();
       expect(timeline(), contains('Refunded: Exchanging asset.'));
-      expect(played, ['HapticFeedbackType.lightImpact']);
+      expect(played, isEmpty);
     });
 
     for (final (name, source) in [
       ('an order-book', SwapLiquiditySource.atomic),
       ('a routed', SwapLiquiditySource.routed),
     ]) {
-      testWidgets('$name refund landing turns the hero icon back, once', (
+      testWidgets('$name refund landing stays calm without rotation', (
         tester,
       ) async {
         SwapExecutionSnapshot refund({bool landed = false, String? txHash}) =>
@@ -354,7 +345,7 @@ void main() {
         await tester.pumpAndSettle();
 
         await hear(tester, handle, refund(landed: true));
-        expect(await turns(), isTrue);
+        expect(await turns(), isFalse);
         await tester.pumpAndSettle();
 
         await hear(tester, handle, refund(landed: true, txHash: '0xsource'));
@@ -363,8 +354,9 @@ void main() {
       });
     }
 
-    testWidgets('with less motion, a refund lands at once and still plays '
-        'its haptic', (tester) async {
+    testWidgets('with less motion, a refund lands at once without a haptic', (
+      tester,
+    ) async {
       SwapExecutionSnapshot refund({bool landed = false}) => snapshotOf(
         source: SwapLiquiditySource.atomic,
         stage: SwapProgressStage.refunding,
@@ -379,7 +371,7 @@ void main() {
 
       await hear(tester, handle, refund(landed: true));
       expect(tester.hasRunningAnimations, isFalse);
-      expect(played, ['HapticFeedbackType.lightImpact']);
+      expect(played, isEmpty);
     });
 
     testWidgets('news that moves nothing on plays no haptic', (tester) async {

@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart' as rpc;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -24,6 +25,7 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_response.dart';
 import 'package:web_dex/model/stored_settings.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -132,7 +134,7 @@ SwapExecutionRegistry attentionRegistry({String id = 'swap-1'}) {
   executor.resumable[id] = FakeHandle(
     snapshotOf(id: id, stage: SwapProgressStage.actionRequired),
   );
-  return SwapExecutionRegistry(
+  return testSwapRegistry(
     executors: [executor],
     inFlight: () async => [(id: id, source: SwapLiquiditySource.routed)],
   );
@@ -140,10 +142,18 @@ SwapExecutionRegistry attentionRegistry({String id = 'swap-1'}) {
 
 /// The swap services the app provides, over a real registry.
 class FakeSwapServices implements SwapServices {
-  FakeSwapServices(this.registry);
+  FakeSwapServices(this.registry) {
+    addTearDown(() => presentation.dispose());
+  }
 
   @override
   final SwapExecutionRegistry registry;
+
+  @override
+  late final SwapPresentationSession presentation = SwapPresentationSession(
+    registry: registry,
+    refreshBalances: (_) async => true,
+  );
 
   @override
   final Set<String> viewing = {};
@@ -166,6 +176,9 @@ class FakeSwapServices implements SwapServices {
 
 /// KDF's legacy API: raw swap data and the recent-swaps page.
 class FakeMm2Api implements Mm2Api {
+  @override
+  Null get tradingPolicy => null;
+
   FakeMm2Api({this.rawSwapData = '{"result":{"swaps":[]}}'});
 
   String rawSwapData;
@@ -245,12 +258,53 @@ class FakeRoutedSwaps implements RoutedSwapManager {
 class FakeAuth implements KomodoDefiLocalAuth {
   late final StreamController<KdfUser?> users =
       StreamController<KdfUser?>.broadcast();
+  final _sessions = AuthSessionTracker();
+  KdfUser? _current;
+
+  @override
+  Stream<AuthSessionContext?> watchSessionContext() => Stream.multi((out) {
+    final subscription = users.stream.listen(
+      (user) {
+        _current = user;
+        _sessions.observe(user);
+        out.addSync(_sessions.current);
+      },
+      onError: out.addErrorSync,
+      onDone: out.closeSync,
+    );
+    out.addSync(_sessions.current);
+    out.onCancel = subscription.cancel;
+  });
+
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      _sessions.isCurrent(context);
+
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Future<AuthSessionContext> captureSessionContext() async =>
+      _sessions.current ?? (throw const AuthSessionChangedException());
+
+  @override
+  Future<T> runWithSession<T>(
+    AuthSessionContext expected,
+    Future<T> Function() dispatch,
+  ) async {
+    ensureSessionContextCurrent(expected);
+    return dispatch();
+  }
 
   @override
   Stream<KdfUser?> watchCurrentUser() => users.stream;
 
   @override
-  Future<KdfUser?> get currentUser async => null;
+  Future<KdfUser?> get currentUser async => _current;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

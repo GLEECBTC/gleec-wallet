@@ -28,7 +28,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -54,7 +54,7 @@ void main() {
     );
 
     Future<FakeHandle> start() async {
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       return routed.lastStarted!;
     }
 
@@ -73,6 +73,30 @@ void main() {
           receivedAmount: amount == null ? null : d(amount),
           receivedAsset: asset,
         );
+
+    testWidgets('a queued notice cannot cross a wallet session', (
+      tester,
+    ) async {
+      await show(tester);
+      final handle = await start();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      handle.push(snapshotOf(id: handle.id, outcome: completed()));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('Swap complete:'), findsNothing);
+      services.presentation.reset();
+      // The old registry entry can still be present while async handle cleanup
+      // runs. The wallet token alone must already invalidate the queued notice.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Swap complete:'), findsNothing);
+      expect(services.takePendingOpen(), isNull);
+    });
 
     testWidgets('says what arrived, and View opens the swap', (tester) async {
       await show(tester);

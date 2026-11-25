@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show GaslessServiceKomodoProxy, TronGaslessProviderConfig;
+    show GaslessServiceKomodoProxy, TronGaslessProviderConfig, RpcDispatchGuard;
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
+import 'package:web_dex/app_config/kdf_data_directory.dart';
+import 'package:web_dex/app_config/solana_build_config.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/swap/lifi_integrator_policy.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
@@ -26,25 +30,42 @@ TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
 }
 
 final class MM2 {
-  MM2() {
-    _kdfSdk = KomodoDefiSdk(
-      config: KomodoDefiSdkConfig(
-        initialActivationPolicy: ActivationPolicySnapshot(
-          status: ActivationPolicyStatus.loading,
-        ),
-        // Syncing pre-activation coin states is not yet implemented,
-        // so we disable it for now.
-        // TODO: sync pre-activation of coins (show activating coins in list)
-        preActivateHistoricalAssets: false,
-        preActivateDefaultAssets: false,
-        tronGaslessProvider: _tronGaslessProviderConfig(),
-        assetConfigTransform: applyGleecTronGaslessActivationConfig,
-        lifiProxyUrl: _lifiProxyUrl(),
-        lifiIntegrator: gleecLifiIntegratorConfig(),
-      ),
-      onLog: _handleSdkLog,
-    );
+  MM2({KomodoDefiSdk? sdk}) {
+    SolanaBuildConfig.environment.validate();
+    _kdfSdk =
+        sdk ??
+        createSdk(
+          config: KomodoDefiSdkConfig(
+            solanaCapabilities: SolanaBuildConfig.environment.capabilities,
+            assetsAutoUpdate: !SolanaBuildConfig.environment.enabled,
+            assetsStorageNamespace: SolanaBuildConfig.environment.enabled
+                ? SolanaBuildConfig.environment.storageNamespace
+                : null,
+            initialActivationPolicy: ActivationPolicySnapshot(
+              status: ActivationPolicyStatus.loading,
+            ),
+            // Syncing pre-activation coin states is not yet implemented,
+            // so we disable it for now.
+            // TODO: sync pre-activation of coins (show activating coins in list)
+            preActivateHistoricalAssets: false,
+            preActivateDefaultAssets: false,
+            tronGaslessProvider: _tronGaslessProviderConfig(),
+            assetConfigTransform: applyGleecTronGaslessActivationConfig,
+            lifiProxyUrl: _lifiProxyUrl(),
+            lifiIntegrator: gleecLifiIntegratorConfig(),
+            desktopDataDirectory: gleecKdfDesktopDataDirectory,
+          ),
+          onLog: _handleSdkLog,
+        );
   }
+
+  /// Builds the SDK. Tests swap it to see the configuration the app passes.
+  @visibleForTesting
+  static KomodoDefiSdk Function({
+    KomodoDefiSdkConfig? config,
+    void Function(String)? onLog,
+  })
+  createSdk = ({config, onLog}) => KomodoDefiSdk(config: config, onLog: onLog);
 
   String? _lifiProxyUrl() {
     final url = validatedLifiProxyUrl(lifiProxyUrl);
@@ -74,8 +95,7 @@ final class MM2 {
   }
 
   late final KomodoDefiSdk _kdfSdk;
-  bool _isInitializing = false;
-  final Completer<KomodoDefiSdk> _initCompleter = Completer<KomodoDefiSdk>();
+  Future<KomodoDefiSdk>? _initialization;
 
   Future<bool> isSignedIn() => _kdfSdk.auth.isSignedIn();
 
@@ -89,25 +109,24 @@ final class MM2 {
     }
   }
 
-  Future<KomodoDefiSdk> initialize() async {
-    if (_initCompleter.isCompleted) return _kdfSdk;
-    if (_isInitializing) return _initCompleter.future;
+  /// Every caller observes the same initialization, including its failure.
+  /// A failed catalog or engine check must never turn into a usable SDK on a
+  /// later call, and must not create a second unobserved error future.
+  Future<KomodoDefiSdk> initialize() => _initialization ??= _initialize();
 
-    try {
-      _isInitializing = true;
-
-      await _kdfSdk.initialize();
-      // Hack to ensure that kdf is running in noauth mode
-      await _kdfSdk.auth.getUsers();
-
-      _initCompleter.complete(_kdfSdk);
-      return _kdfSdk;
-    } catch (e) {
-      _initCompleter.completeError(e);
-      rethrow;
-    } finally {
-      _isInitializing = false;
+  Future<KomodoDefiSdk> _initialize() async {
+    if (kIsWeb) {
+      SolanaBuildConfig.environment.verifyPreviewOrigin(Uri.base);
     }
+    await SolanaBuildConfig.environment.verifyCatalog();
+    await _kdfSdk.initialize();
+    // Hack to ensure that kdf is running in noauth mode
+    await _kdfSdk.auth.getUsers();
+    if (SolanaBuildConfig.environment.enabled) {
+      SolanaBuildConfig.environment.verifyEngineVersion(await version());
+    }
+
+    return _kdfSdk;
   }
 
   Future<String> version() async {
@@ -134,12 +153,40 @@ final class MM2 {
                 ? requestWithUserpass.toJson() as JsonMap
                 : requestWithUserpass as JsonMap);
 
+      final method = jsonRequest['method'];
+      if (method is String && _userMutationMethods.contains(method)) {
+        final permit = WalletOperationGate.instance.capture();
+        return await RpcDispatchGuard.run(
+          permit.ensureCurrent,
+          () => _kdfSdk.client.executeRpc(jsonRequest),
+          methods: {method},
+        );
+      }
       return await _kdfSdk.client.executeRpc(jsonRequest);
     } catch (e) {
       log('RPC call error: $e', path: 'mm2 => call', isError: true).ignore();
       rethrow;
     }
   }
+
+  // These calls initiate user work. Status polling and work already accepted
+  // inside KDF deliberately stay outside the application lock authority.
+  static const _userMutationMethods = {
+    'withdraw',
+    'task::withdraw::init',
+    'withdraw_nft',
+    'send_raw_transaction',
+    'sell',
+    'buy',
+    'setprice',
+    'cancel_order',
+    'cancel_all_orders',
+    'recover_funds_of_swap',
+    'start_simple_market_maker_bot',
+    'stop_simple_market_maker_bot',
+    'task::routed_swap::init',
+    'task::routed_swap::cancel',
+  };
 
   // this is a necessary evil for now becuase of the RPC models that override
   // or use the `late String? userpass` field, which would require refactoring

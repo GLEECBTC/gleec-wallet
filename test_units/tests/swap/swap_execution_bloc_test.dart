@@ -17,7 +17,7 @@ void main() {
 
   setUp(() {
     routed = FakeExecutor(SwapLiquiditySource.routed);
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [routed],
       inFlight: () async => const [],
     );
@@ -32,7 +32,10 @@ void main() {
     test(
       'follows the swap, and marks a failure seen once it is shown',
       () async {
-        final started = await registry.start(quoteOf());
+        final started = await registry.start(
+          quoteOf(),
+          registry.beginSubmission(),
+        );
         final bloc = SwapExecutionBloc(registry: registry)
           ..add(SwapExecutionWatched(started.id))
           ..add(const SwapExecutionVisibilityChanged(visible: true));
@@ -48,7 +51,10 @@ void main() {
     );
 
     test('leaves a failure unseen while its screen is out of sight', () async {
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       final bloc = SwapExecutionBloc(registry: registry)
         ..add(SwapExecutionWatched(started.id))
         ..add(const SwapExecutionVisibilityChanged(visible: true))
@@ -68,7 +74,10 @@ void main() {
     test(
       'never marks a running swap seen, so its failure still counts',
       () async {
-        final started = await registry.start(quoteOf());
+        final started = await registry.start(
+          quoteOf(),
+          registry.beginSubmission(),
+        );
         final bloc = SwapExecutionBloc(registry: registry)
           ..add(SwapExecutionWatched(started.id))
           ..add(const SwapExecutionVisibilityChanged(visible: true));
@@ -115,7 +124,10 @@ void main() {
     });
 
     test('an already-sent swap refuses to cancel, gently', () async {
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       routed.lastStarted!.cancelError = const SwapCancelRefusedException(
         SwapCancelRefusal.alreadySent,
       );
@@ -129,7 +141,10 @@ void main() {
     });
 
     test('a lost cancel answer is reported as unconfirmed', () async {
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       routed.lastStarted!.cancelError = StateError('socket closed');
       final bloc = SwapExecutionBloc(registry: registry)
         ..add(SwapExecutionWatched(started.id))
@@ -152,7 +167,7 @@ void main() {
       )..add(const SwapActivityStarted());
       await pumpEventQueue();
 
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       await pumpEventQueue();
 
       expect(bloc.state.entries, hasLength(1));
@@ -165,7 +180,10 @@ void main() {
         history: historyOf(const []),
         registry: registry,
       )..add(const SwapActivityStarted());
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       await pumpEventQueue();
       expect(bloc.state.entries, hasLength(1));
 

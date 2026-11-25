@@ -99,11 +99,13 @@ void main() {
   });
 
   test(
-    'a coin refunded out of what it locked keeps no extra reserve',
+    'a token, or a coin refunded out of what it locked, keeps none',
     () async {
+      final token = await quote(from: usdc);
       trading.preimage = preimageOf(baseCoinFee: coinFeeOf('BTC', '0.0002'));
       final utxo = await quote(from: btc, to: eth);
 
+      expect(token.refundReserve, isNull);
       expect(utxo.refundReserve, isNull);
     },
   );
@@ -153,19 +155,17 @@ void main() {
   });
 
   test('its default gas limits are those of the KDF this build pins', () {
-    final config =
-        jsonDecode(
-              File(
-                'sdk/packages/komodo_defi_framework/app_build/'
-                'build_config.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File(
+        'sdk/packages/komodo_defi_framework/app_build/'
+        'build_config.json',
+      ).readAsStringSync(),
+    ) as Map<String, dynamic>;
     final pinned = (config['api'] as Map<String, dynamic>)['api_commit_hash'];
 
     expect(
       pinned,
-      'e40ac2fb4319d352bf9c93683eb2518ce9f939e0',
+      'fd8249c904ae1c75d66fce1c1e361686f13d723c',
       reason:
           'KDF was repinned. Check ETH_PAYMENT and ETH_SENDER_REFUND in '
           "eth.rs's gas_limit module at the new commit against the defaults "

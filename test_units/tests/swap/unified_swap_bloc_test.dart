@@ -14,6 +14,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
@@ -59,11 +60,11 @@ void main() {
       registry: registry,
       terms: SwapTermsRepository(
         legalDocuments: legalFixtureRepository(),
-        walletKey: () async => 'wallet',
+        walletKey: () async => testSwapAuth.currentSession!.walletId.compoundId,
         storage: storage,
       ),
       preferences: SwapPreferences(
-        walletKey: () async => 'wallet',
+        walletKey: () async => testSwapAuth.currentSession!.walletId.compoundId,
         storage: storage,
       ),
       spendableBalance: (asset) async => balances[asset],
@@ -99,7 +100,7 @@ void main() {
       ],
     );
     routedExecutor = FakeExecutor(SwapLiquiditySource.routed);
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [routedExecutor, FakeExecutor(SwapLiquiditySource.atomic)],
       inFlight: () async => const [],
     );
@@ -127,7 +128,7 @@ void main() {
   group('opening pair', () {
     test('opens on the pair last swapped', () async {
       await SwapPreferences(
-        walletKey: () async => 'wallet',
+        walletKey: () async => testSwapAuth.currentSession!.walletId.compoundId,
         storage: storage,
       ).rememberPair(btc, eth);
       final bloc = build()..add(const UnifiedSwapStarted());
@@ -167,10 +168,12 @@ void main() {
     Future<SwapFormIssue?> issueFor(String text, {AssetId? pay}) async {
       final bloc = build()
         ..add(
-          UnifiedSwapIntentApplied(pay: (pay ?? eth).id, receive: 'USDC-ERC20'),
+          UnifiedSwapIntentApplied(
+            pay: (pay ?? eth).id,
+            receive: 'USDC-ERC20',
+            amount: text,
+          ),
         );
-      await settle();
-      bloc.add(UnifiedSwapAmountChanged(text));
       await settle();
       final issue = bloc.state.issue;
       await bloc.close();
@@ -429,7 +432,8 @@ void main() {
       expect(
         await SwapTermsRepository(
           legalDocuments: legalFixtureRepository(),
-          walletKey: () async => 'wallet',
+          walletKey: () async =>
+              testSwapAuth.currentSession!.walletId.compoundId,
           storage: storage,
         ).hasAccepted(),
         isTrue,
@@ -527,7 +531,7 @@ void main() {
     test('a consented fresh quote starts without another review', () async {
       // The swap it replaces accepted the provider's terms.
       await SwapTermsRepository(
-        walletKey: () async => 'wallet',
+        walletKey: () async => testSwapAuth.currentSession!.walletId.compoundId,
         legalDocuments: legalFixtureRepository(),
         storage: storage,
       ).recordAcceptance();

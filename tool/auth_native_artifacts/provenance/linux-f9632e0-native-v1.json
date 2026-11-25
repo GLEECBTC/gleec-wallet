@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "artifact_revision": "native-v1",
+  "platform": "linux-x86-64",
+  "source_commit": "f9632e0ec771668a6f21b37aede01a30110141cb",
+  "source_archive_sha256": "86c8d10d6d6c7644de6011c65f5362baabb5c441539db6fe713d7b45b448e0bf",
+  "source_files_verified_unchanged": 1203,
+  "cargo_lock_sha256": "f160ec23242893eae6f65634eb10628b760fe1027ce11d801a253d9d6d1a428a",
+  "base_image": "sha256:12c3051c751b99c5c6cad08e1c4ab9298be213e1f9d58c6b8c18e21ef9d6a8e4",
+  "build_distribution": "Debian 11 (bullseye), glibc 2.31",
+  "rustc": "1.98.0 (88d9e12ae 2026-08-18)",
+  "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+  "clang": "16.0.6",
+  "protoc": "25.3",
+  "protoc_archive_sha256": "f853e691868d0557425ea290bf7ba6384eef2fa9b04c323afab49a770ba9da80",
+  "package": "mm2_bin_lib",
+  "crate_type": "cdylib",
+  "extra_features": [],
+  "profile": "release (unmodified source)",
+  "cargo_flags": [
+    "--offline",
+    "--locked",
+    "--release",
+    "--package",
+    "mm2_bin_lib",
+    "--lib",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--jobs",
+    "4"
+  ],
+  "KDF_BUILD_TAG": "f9632e0",
+  "network_during_build": "disconnected",
+  "library_sha256": "6c86d74567695361ae101b8892cb33076470d27a116d0488e22b9959f7b8f7f4",
+  "library_bytes": 76781752,
+  "elf": "ELF64 little-endian x86-64 shared library",
+  "required_exports": [
+    "mm2_main",
+    "mm2_main_status",
+    "mm2_stop"
+  ],
+  "dynamic_dependencies": [
+    "libudev.so.1",
+    "libgcc_s.so.1",
+    "libpthread.so.0",
+    "libm.so.6",
+    "libdl.so.2",
+    "libc.so.6",
+    "ld-linux-x86-64.so.2"
+  ],
+  "highest_required_glibc_symbol_version": "2.30",
+  "native_lifecycle_validation": {
+    "funds_used": false,
+    "network_required": false,
+    "passed": true,
+    "phases": [
+      "load",
+      "read_only_start_stop",
+      "generated_wallet_creation",
+      "fresh_password_verification",
+      "wrong_password_cold_start_preserves_wallet",
+      "password_rotation_and_cold_return",
+      "credential_transport_and_storage_canaries",
+      "read_only_deletion"
+    ]
+  },
+  "canary_scope": {
+    "linux_process_arguments": "passed",
+    "linux_process_environment": "passed",
+    "temporary_persisted_files": "passed"
+  },
+  "runtime_script_sha256": "33e6999fb5c02f4d0f16354eb78ffaa15d80c1323cb9c481773f79f220c9bd28",
+  "flutter_packaging": {
+    "passed": true,
+    "flutter": "3.41.4",
+    "dart": "3.11.1",
+    "platform": "Ubuntu 22.04 amd64, emulated under Docker on Apple Silicon",
+    "elapsed_seconds": 83.5,
+    "canonical_manifest_overlay": false,
+    "coordinator_sha256": "ca9fa0477176670f1d1d312028198cd458e30cf75a88a7b7c7856bc816e5dbcd",
+    "input_changes": [],
+    "coin_assets_checked": 449,
+    "coin_asset_changes": [],
+    "networking": "enabled for build dependency/public coin metadata; disconnected before runtime; all traffic not captured",
+    "credentials_injected": false,
+    "runner_sha256": "f090cd5e16435995bfb1afdccfeea05fd2280325e9afa319ca00a61898e1d60d",
+    "aot_sha256": "a309766f552a3e2deb858e970800b394e00fb3709f1c39c122f816d0b5714bbf",
+    "bundle_file_bytes": 152653765,
+    "artifact_privacy_scan": "passed",
+    "evidence_sha256": "db235b1ef420c7dc49cbfc97db124bab06dd9e68d1fa1e9c7416d1ab5fc4eb91"
+  },
+  "archive": {
+    "filename": "kdf_f9632e0ec771668a6f21b37aede01a30110141cb-linux-x86-64-native-v1.zip",
+    "sha256": "beb961fe98dbb3d0b1542fb530c749317ecd573b57f94d63b720f4908841d899",
+    "bytes": 61332510,
+    "files": [
+      "kdf",
+      "libkdflib.so"
+    ]
+  },
+  "companion_executable_archive_sha256": "dac943647d2f307204a6a01a6a5c34e33c00e8695b88e1ceaf2a7893eba50ff2",
+  "reproducibility_note": "Exact source and toolchain are pinned; upstream build.rs embeds its build time, so independent builds are not claimed to be byte-identical.",
+  "publication": {
+    "url": "https://devbuilds.gleec.com/main/kdf_f9632e0ec771668a6f21b37aede01a30110141cb-linux-x86-64-native-v1.zip",
+    "independent_full_https_verification": true,
+    "normal_shipped_dart_prefetch": true,
+    "download_credentials_used": false,
+    "sdk_http_client_changes": false,
+    "canonical_json_sha256": "038d8e8cc047aa1177feec0ee276b97353f65f90123b69f55cd0f8f570dbb3b8"
+  },
+  "bundled_application_startup": {
+    "passed": true,
+    "network": "disconnected",
+    "desktop": "Xvfb X11 software rendering",
+    "engine_library_digest_matches": true,
+    "rendered_screen": "Open your wallet onboarding",
+    "legal_documents": "unavailable while disconnected",
+    "wallet_created": false,
+    "funds_used": false,
+    "required_desktop_setup": "xdg-user-dirs and valid task-owned Documents mapping",
+    "host_profile_used": false
+  },
+  "secret_service_integration": {
+    "passed": true,
+    "provider": "GNOME Keyring 40.0-3ubuntu3",
+    "libsecret": "0.20.5-2",
+    "fresh_flutter_process_per_phase": true,
+    "phases": [
+      "write_read",
+      "reopen",
+      "provider_loss_without_downgrade",
+      "provider_restart_reopen",
+      "delete_readback"
+    ],
+    "production_backend_and_native_plugin": true,
+    "protection": "osAccountProtected",
+    "device_authentication": false,
+    "enrolled": false,
+    "network": "disconnected",
+    "process_argument_environment_canaries": true,
+    "persisted_file_canaries": true,
+    "diagnostic_canaries": true,
+    "physical_login_prompt_tested": false,
+    "test_assembly": "copy previously successful uninstrumented full bundle and replace only lib/libapp.so with successfully compiled test entrypoint AOT",
+    "test_aot_sha256": "fda5f5438f5e59f1395b84cc3ee77c1420f9523eda855d4d7961f1a21e8f2214",
+    "test_source_sha256": "d8765d7adb732cbd6780e870afb5d193ff1c537b04739602d20d22ee77b99c0f",
+    "assembly_reason": "Test AOT compilation passed; a repeated asset metadata request hit GitHub HTTP403. The uninstrumented full application bundle was preserved."
+  },
+  "previous_published_archive": {
+    "filename": "kdf_f9632e0-linux-x86-64.zip",
+    "sha256": "dac943647d2f307204a6a01a6a5c34e33c00e8695b88e1ceaf2a7893eba50ff2",
+    "bytes": 29708903,
+    "independent_full_https_verification_unchanged": true
+  }
+}

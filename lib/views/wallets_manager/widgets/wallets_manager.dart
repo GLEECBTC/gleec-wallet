@@ -13,23 +13,29 @@ class WalletsManager extends StatelessWidget {
     required this.close,
     required this.onSuccess,
     this.selectedWallet,
-    this.initialHdMode = false,
+    this.onSwitchWallet,
+    this.onRecover,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
     this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
+    this.confirmCreation = false,
   });
   final WalletsManagerEventType eventType;
   final WalletType walletType;
   final VoidCallback close;
   final Function(Wallet) onSuccess;
   final Wallet? selectedWallet;
-  final bool initialHdMode;
+  final VoidCallback? onSwitchWallet;
+  final VoidCallback? onRecover;
   final bool rememberMe;
 
   /// Which form the iguana branch should open on. Defaults to none so existing
   /// callers - and `wallets_manager_test` - compile unchanged.
   final WalletsManagerAction initialAction;
   final WalletsManagerExistWalletAction initialWalletAction;
+
+  /// See [IguanaWalletsManager.confirmCreation].
+  final bool confirmCreation;
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +46,13 @@ class WalletsManager extends StatelessWidget {
           close: close,
           onSuccess: onSuccess,
           eventType: eventType,
+          onSwitchWallet: onSwitchWallet,
+          onRecover: onRecover,
           initialWallet: selectedWallet,
-          initialHdMode: initialHdMode,
           rememberMe: rememberMe,
           initialAction: initialAction,
           initialWalletAction: initialWalletAction,
+          confirmCreation: confirmCreation,
         );
 
       case WalletType.trezor:

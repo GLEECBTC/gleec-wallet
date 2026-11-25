@@ -6,6 +6,7 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
 import 'swap_common_ui_fakes.dart';
+import 'swap_motion_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Token icons, copyable values and loading placeholders.
@@ -23,10 +24,18 @@ void main() {
 
     group('token icon', () {
       testWidgets('a wallet asset shows its logo, silently', (tester) async {
-        final semantics = tester.ensureSemantics();
+        const boundary = Key('token-icon-semantics');
         await pumpSwapUi(
           tester,
-          Center(child: SwapTokenIcon(asset: eth, size: 40)),
+          Center(
+            child: Semantics(
+              key: boundary,
+              container: true,
+              explicitChildNodes: true,
+              label: 'Icon region',
+              child: SwapTokenIcon(asset: eth, size: 40),
+            ),
+          ),
           settle: false,
         );
 
@@ -35,14 +44,12 @@ void main() {
           const Size.square(40),
         );
         expect(tester.widget<AssetLogo>(find.byType(AssetLogo)).size, 40);
-        expect(
-          find.descendant(
-            of: find.byType(SwapTokenIcon),
-            matching: find.byType(ExcludeSemantics),
-          ),
-          findsOneWidget,
-        );
-        semantics.dispose();
+        // Assert what a screen reader receives, independently of exclusions
+        // nested inside AssetLogo or Flutter's image implementation.
+        final semantics = tester.getSemantics(find.byKey(boundary));
+        expect(semantics.getSemanticsData().label, 'Icon region');
+        expect(semantics.getSemanticsData().flagsCollection.isImage, isFalse);
+        expect(semantics.childrenCount, 0);
       });
 
       testWidgets('an unknown asset shows its ticker, at most three letters', (
@@ -229,7 +236,9 @@ void main() {
         expect(tester.getSize(find.byType(SwapSkeleton)).height, 24);
       });
 
-      testWidgets('stops and restarts as the setting changes', (tester) async {
+      testWidgets('stops without replay when the setting changes', (
+        tester,
+      ) async {
         await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
         expect(tester.hasRunningAnimations, isTrue);
 
@@ -245,7 +254,44 @@ void main() {
         expect(tester.hasRunningAnimations, isFalse);
 
         await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
-        expect(tester.hasRunningAnimations, isTrue);
+        expect(tester.hasRunningAnimations, isFalse);
+      });
+
+      testWidgets(
+        'settles within three seconds and never restarts on rebuild',
+        (tester) async {
+          await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
+          expect(tester.hasRunningAnimations, isTrue);
+          await tester.pump(const Duration(seconds: 3));
+          expect(tester.hasRunningAnimations, isFalse);
+          await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
+          expect(tester.hasRunningAnimations, isFalse);
+        },
+      );
+
+      testWidgets('does not animate or replay after leaving the visible page', (
+        tester,
+      ) async {
+        Widget skeleton(bool visible) =>
+            TickerMode(enabled: visible, child: const SwapSkeleton());
+        await pumpSwapUi(tester, skeleton(true), settle: false);
+        await pumpSwapUi(tester, skeleton(false), settle: false);
+        expect(tester.hasRunningAnimations, isFalse);
+        await pumpSwapUi(tester, skeleton(true), settle: false);
+        expect(tester.hasRunningAnimations, isFalse);
+      });
+
+      testWidgets('stops in the background without replaying on resume', (
+        tester,
+      ) async {
+        addTearDown(() => resumeMotionApp(tester));
+        await pumpSwapUi(tester, const SwapSkeleton(), settle: false);
+        pauseMotionApp(tester);
+        await tester.pump();
+        expect(tester.hasRunningAnimations, isFalse);
+        resumeMotionApp(tester);
+        await tester.pump();
+        expect(tester.hasRunningAnimations, isFalse);
       });
     });
   });

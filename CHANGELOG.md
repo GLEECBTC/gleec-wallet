@@ -1,3 +1,29 @@
+# Unreleased
+
+## 🔒 Security
+
+- **Wallet Secrets Stay Out of iOS Backups** ([@CharlVS], [SDK#456](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/456)) — iCloud and computer backups of an iPhone no longer include the wallet's encrypted recovery phrase, as on Android. A new or restored iPhone starts without the wallet; restore it with the recovery phrase.
+  - Copies that earlier exports left inside the app are removed at start-up: "Download all keys" files from 0.9.5 and 0.9.6, which held the keys unencrypted, and "Download as file" wallet files. The copy you shared or saved at the time is not affected.
+  - macOS is unchanged: Time Machine backups stay on disks you hold.
+- **Desktop Wallet Data Leaves Documents** ([@CharlVS], [SDK#458](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/458)) — On Windows and Linux the wallet's encrypted recovery phrase and swap data moved from `Documents\.kdf` to `%LOCALAPPDATA%\Gleec\kdf` on Windows and `~/.local/share/com.gleec.GleecDEX/kdf` on Linux. Windows often backs Documents up to OneDrive, which copied that data to the cloud and synced its databases while they were being written.
+  - The first start after the update puts the old folder aside as `.kdf.moved`, copies the data, checks every file, and leaves a `README.txt` in `Documents\.kdf` saying where it went. If the copy can't finish, for example because OneDrive is offline, the old folder goes back, the wallet keeps working from Documents, and the next start tries again.
+  - After a successful wallet open from the new folder and a seven-day grace period, cleanup removes unchanged files from `.kdf.moved`. A running wallet engine defers cleanup.
+  - If you back up `Documents\.kdf` yourself, back up the new folder or your recovery phrase instead. To use one wallet on several computers that share OneDrive, update each of them within that week.
+
+## 🐛 Bug Fixes
+
+- **Price History Retries** ([@CharlVS], [SDK#443](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/443)) — Coins priced only by CoinPaprika, such as BTCZ, LCC and DINGO, no longer request a year of price history again every minute.
+  - The first request starts on a day the free plan serves.
+  - A failed or rate-limited history is reported as a failure, so other price sources and backoff apply.
+  - Past days' prices stay cached.
+  - Profit/loss stays unavailable when acquisition or sale prices are missing, instead of inventing a historical cost basis.
+  - A coin whose profit/loss still fails is retried after 1, 1, 2, 2, 4… minutes, up to hourly, instead of every minute.
+  - The wallet overview no longer starts a refresh while the previous one is still running.
+- **Restored Wallets at Sign-in** ([@CharlVS]) — A wallet whose files came back from a backup or a move to a new device, without this device's unlock, now says so instead of showing a bare password field.
+  - A wallet whose password was created for it leads with its recovery phrase, and offers the password when a password manager may have saved it.
+  - A password you chose is still asked for.
+  - A failed unlock no longer suggests a password the owner never saw.
+
 # Gleec Wallet v0.10.0 Release Notes
 
 This candidate brings Swap, Activity and Advanced trading into one surface,
@@ -20,6 +46,8 @@ are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
 This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
+- Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support.
+
 - Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
   durable UUID recovery, required/locked balances and separate measured versus
   provider-reported payouts ([SDK#389](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/389), [SDK#407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)).
@@ -33,13 +61,21 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
+- **First Trezor Sign-In** — Save the default coin selection after device
+  authentication finishes, and prevent session restoration from publishing the
+  wallet before setup completes.
+
+- **Swap Start Ownership** ([@CharlVS]) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching for at most 10 seconds, so a request the engine never answers cannot hold off sign-out; SDK offers cannot be rebound to another session. While a start may be running, its amount, Max and unit switch are locked, and Review stays off until a just-signed-in wallet's session is ready. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
+
+- **Trezor Sign-In** ([@CharlVS], [SDK#424](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/424)) — Sign in when a "My Trezor" wallet file has no saved record, instead of failing with "Wallet already exists". A wallet file the app cannot open, such as another app's in a shared folder, stays untouched and a new local wallet is used. The error dialog now says sign-in failed and mentions Trezor Suite only as a possible cause.
+
 - **Cold-Start Swap Recovery** ([@CharlVS], [SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417)) — Recover active routed swaps across every history page instead of silently stopping at page 20. A wallet change during later pagination rejects the entire read.
 
 - **Wallet History** ([@CharlVS], [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572), [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
 
 - **Transfer Review and Precision** ([@CharlVS], [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570), [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571), [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
 
-- **Atomic Token Permission** ([@CharlVS], [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
+- **Atomic Token Trading** ([@CharlVS], [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Restore atomic EVM-token trading, Advanced orders and bot starts to the previous release's behavior. The existing review row describes engine-managed allowance, including possible unlimited approval, instead of claiming none is needed. No extra confirmation or feature gate is added; LI.FI keeps its separate approval flow.
 
 - **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
 - **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
@@ -56,13 +92,31 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 ## Compatibility and Known Limits
 
 SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
-and adopters of interim routed-swap APIs. External recipients, new routed
-chains/providers and hardware signing are not certified by this candidate.
-New atomic EVM-token sells are unavailable until authoritative permission
-preflight is supported; no unlimited approval is inferred from a quoted amount.
-Legal availability, Safari, signed packaging and upstream review/CI items remain
-explicit gates. Five-person usability and live fiat testing were deferred for the earlier
-integration RC; final distribution requires their recorded disposition.
+and adopters of interim routed-swap APIs.
+
+- **LI.FI defaults:** supported same-chain/cross-chain quotes, cheapest/fastest
+  selection, exact and Max amounts, approval handling, Activity, recovery and
+  eligible cancellation are available without a feature opt-in. Asset activation,
+  trading policy, funding, reviewed minimums and execution checks still apply.
+  `LIFI_INTEGRATOR_ENABLED` controls commission configuration, not availability.
+- **Terms availability:** ordinary builds require available wallet and LI.FI
+  documents before routed Start. `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false.
+  Only the isolated, manually dispatched RC preview bypasses availability,
+  retaining its warning and never recording unavailable terms as accepted.
+- **Capability scope:** the pinned routed contract supports LI.FI and eligible
+  EVM assets; it has no external-recipient parameter. Additional provider
+  backends and routed hardware signing are not established by this candidate.
+  Hardware wallets remain wallet-only, as in app 0.9.7-1.
+- **Atomic EVM tokens:** trading follows app 0.9.7-1 behavior. The engine may
+  reuse an allowance or grant unlimited permission when the trade matches.
+  The existing review describes that behavior without inventing a spender,
+  exact amount or reset requirement. Start, Advanced orders and bot starts keep
+  their previous interaction flow; existing recovery/cancellation stays usable.
+- **Release qualification:** approved hosted legal text, Safari, signed packaging
+  and upstream review/CI still need their checklist evidence or disposition.
+  The owner accepted documented KDF failures for RC testing only. Five-person
+  usability and live fiat testing were explicitly deferred; Banxa #3559 is after
+  0.10.0. These deferrals are recorded, not passing test results.
 
 **Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
 

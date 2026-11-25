@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -7,6 +7,7 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -15,7 +16,6 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'swap_exec_atomic_fakes.dart';
 import 'swap_exec_fakes.dart';
 import 'swap_test_fixtures.dart';
-import 'swap_src_sdk_fakes.dart';
 
 /// Covers how an atomic start tells KDF refusing the order from a request
 /// that got no answer, at every layer down to the RPC call: only a refusal
@@ -25,19 +25,7 @@ void main() {
     // Never initialised, so every call throws before reaching KDF, as a call
     // whose answer was lost does.
     late Mm2Api api;
-    setUp(() {
-      final sdk = SrcSdk()
-        ..assets.add(
-          Asset(
-            id: eth,
-            protocol: SrcProtocol(),
-            isWalletOnly: false,
-            signMessagePrefix: null,
-          ),
-        );
-      api = Mm2Api(mm2: MM2(), sdk: sdk);
-    });
-    tearDown(() => api.dispose());
+    setUp(() => api = Mm2Api(mm2: MM2(), sdk: KomodoDefiSdk()));
 
     SellRequest request() => SellRequest(
       base: 'ETH',
@@ -48,9 +36,25 @@ void main() {
     );
 
     test('the strict sell throws what the call threw, where the legacy one '
-        'answers with it', () async {
+        'answers with it as text', () async {
       await expectLater(api.sellOrThrow(request()), throwsStateError);
-      expect((await api.sell(request()))['error'], isStateError);
+      expect((await api.sell(request()))['error'], startsWith('Bad state'));
+    });
+
+    test('the legacy form is told why a sell was refused before it was '
+        'sent', () async {
+      final locked = Mm2Api(
+        mm2: MM2(),
+        sdk: KomodoDefiSdk(),
+        operationGate: WalletOperationGate()
+          ..attachWallet('wallet', allowOperations: true)
+          ..block(),
+      );
+
+      final response = await DexRepository(locked).sell(request());
+
+      expect(response.result, isNull);
+      expect(response.error!.message, 'WalletOperationDenied(locked)');
     });
 
     test('the strict order status read throws what the call threw', () async {
@@ -65,6 +69,7 @@ void main() {
     setUp(() {
       rpc = _SellRpc();
       executor = AtomicSwapExecutor(
+        auth: testSwapAuth,
         dexRepository: DexRepository(rpc),
         orders: MyOrdersService(rpc),
         networks: () => execNetworks,
@@ -74,7 +79,10 @@ void main() {
 
     Future<Object> startError([SwapQuote? quote]) async {
       try {
-        await executor.start(quote ?? atomicQuoteOf());
+        await executor.start(
+          quote ?? atomicQuoteOf(),
+          authorization: testSwapAuthorization(),
+        );
       } on Object catch (error) {
         return error;
       }

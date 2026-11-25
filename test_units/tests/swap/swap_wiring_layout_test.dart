@@ -53,7 +53,7 @@ void main() {
       handle = FakeHandle(snapshotOf());
       final executor = FakeExecutor(SwapLiquiditySource.routed);
       executor.resumable['swap-1'] = handle;
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [executor],
         inFlight: () async => [
           (id: 'swap-1', source: SwapLiquiditySource.routed),

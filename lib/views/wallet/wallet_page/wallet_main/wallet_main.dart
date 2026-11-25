@@ -1,3 +1,6 @@
+import 'package:web_dex/bloc/wallet_protection/wallet_protection_bloc.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_protection_panel.dart';
+
 import 'dart:async';
 
 import 'package:app_theme/app_theme.dart';
@@ -29,6 +32,9 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_setup_card.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/security_settings_entry.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -38,6 +44,7 @@ import 'package:web_dex/views/dex/dex_helpers.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_swap_status.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/assets_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_handler.dart'
     show ZhtlcConfigurationHandler;
@@ -54,6 +61,41 @@ class WalletMain extends StatefulWidget {
   State<WalletMain> createState() => _WalletMainState();
 }
 
+/// Publishes wallet data only for the view and session that requested it.
+class WalletDataLoader {
+  WalletDataLoader(this._sdk, {Future<List<Coin>> Function()? loadCoins})
+    : _loadCoins = loadCoins ?? _sdk.getWalletCoins;
+
+  final KomodoDefiSdk _sdk;
+  final Future<List<Coin>> Function() _loadCoins;
+  int _generation = 0;
+
+  void invalidate() => _generation++;
+
+  Future<void> load({
+    required WalletId walletId,
+    required bool Function() isViewCurrent,
+    required void Function(List<Coin>) publish,
+  }) async {
+    final generation = ++_generation;
+    try {
+      final session = await _sdk.auth.captureSessionContext();
+      bool isCurrent() =>
+          generation == _generation &&
+          isViewCurrent() &&
+          session.walletId == walletId &&
+          _sdk.auth.isSessionContextCurrent(session);
+      if (!isCurrent()) return;
+      final coins = await _loadCoins();
+      if (!isCurrent()) return;
+      // No await between the final check and all three BLoC publications.
+      publish(coins);
+    } on AuthSessionChangedException {
+      // Signing out or replacing the session cancels the pending publication.
+    }
+  }
+}
+
 class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   final ValueNotifier<String> _searchPhraseNotifier = ValueNotifier<String>('');
   PopupDispatcher? _popupDispatcher;
@@ -64,6 +106,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   late final Stopwatch _walletListStopwatch;
+  late final WalletDataLoader _walletDataLoader;
   bool _walletHalfLogged = false;
 
   void _initTabController(bool authenticated) {
@@ -91,10 +134,11 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
     _walletListStopwatch = Stopwatch()..start();
     _scrollController.addListener(_onScroll);
+    _walletDataLoader = WalletDataLoader(context.read<KomodoDefiSdk>());
 
     final authBloc = context.read<AuthBloc>();
     if (authBloc.state.currentUser != null) {
-      _loadWalletData(authBloc.state.currentUser!.wallet.id).ignore();
+      _loadWalletData(authBloc.state.currentUser!.walletId).ignore();
     }
 
     _initTabController(authBloc.state.currentUser != null);
@@ -102,6 +146,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _walletDataLoader.invalidate();
     _walletSubscription?.cancel();
     _popupDispatcher?.close();
     _popupDispatcher = null;
@@ -121,7 +166,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
           previous.currentUser != current.currentUser,
       listener: (context, state) {
         if (state.currentUser?.wallet != null) {
-          _loadWalletData(state.currentUser!.wallet.id).ignore();
+          _loadWalletData(state.currentUser!.walletId).ignore();
           _updateTabController(true);
         } else {
           _clearWalletData();
@@ -141,6 +186,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
         return ZhtlcConfigurationHandler(
           child: PageLayout(
+            showBackupNotice: false,
             noBackground: true,
             header: (isMobile && !isLoggedIn)
                 ? PageHeader(title: LocaleKeys.wallet.tr())
@@ -172,6 +218,13 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                             onAssetsPressed: () => _tabController.animateTo(0),
                           ),
                         ),
+                        const SliverToBoxAdapter(child: WalletSwapStatus()),
+                        if (authState.currentUser?.wallet.isHW == false)
+                          SliverToBoxAdapter(
+                            child: _WalletSetupReminder(
+                              wallet: authState.currentUser!.wallet,
+                            ),
+                          ),
                         const SliverToBoxAdapter(child: Gap(24)),
                         if (showMultiAddressNotice) ...[
                           const SliverToBoxAdapter(
@@ -210,11 +263,11 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _loadWalletData(String walletId) async {
+  Future<void> _loadWalletData(WalletId walletId) async {
     final portfolioGrowthBloc = context.read<PortfolioGrowthBloc>();
     final profitLossBloc = context.read<ProfitLossBloc>();
     final assetOverviewBloc = context.read<AssetOverviewBloc>();
-    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+    final authBloc = context.read<AuthBloc>();
 
     // Use the historical (previously activated) wallet coins here, as the
     // [CoinsBloc] state might not be updated yet if the user signs in on this
@@ -223,37 +276,43 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     // balance updated.
     // TODO: update to event-based approach based on soon-to-be-implemented
     // balance events from the SDK
-    final walletCoins = await sdk.getWalletCoins();
+    await _walletDataLoader.load(
+      walletId: walletId,
+      isViewCurrent: () =>
+          mounted && authBloc.state.currentUser?.walletId == walletId,
+      publish: (walletCoins) {
+        portfolioGrowthBloc.add(
+          PortfolioGrowthLoadRequested(
+            coins: walletCoins,
+            fiatCoinId: 'USDT',
+            selectedPeriod: portfolioGrowthBloc.state.selectedPeriod,
+            walletId: walletId.name,
+          ),
+        );
 
-    portfolioGrowthBloc.add(
-      PortfolioGrowthLoadRequested(
-        coins: walletCoins,
-        fiatCoinId: 'USDT',
-        selectedPeriod: portfolioGrowthBloc.state.selectedPeriod,
-        walletId: walletId,
-      ),
-    );
+        profitLossBloc.add(
+          ProfitLossPortfolioChartLoadRequested(
+            coins: walletCoins,
+            selectedPeriod: profitLossBloc.state.selectedPeriod,
+            fiatCoinId: 'USDT',
+            walletId: walletId.name,
+          ),
+        );
 
-    profitLossBloc.add(
-      ProfitLossPortfolioChartLoadRequested(
-        coins: walletCoins,
-        selectedPeriod: profitLossBloc.state.selectedPeriod,
-        fiatCoinId: 'USDT',
-        walletId: walletId,
-      ),
-    );
-
-    // Subscribe fires an immediate load event, so no need to also call load
-    assetOverviewBloc.add(
-      PortfolioAssetsOverviewSubscriptionRequested(
-        coins: walletCoins,
-        walletId: walletId,
-        updateFrequency: const Duration(minutes: 1),
-      ),
+        // Subscribe fires an immediate load event, so no need to also call load
+        assetOverviewBloc.add(
+          PortfolioAssetsOverviewSubscriptionRequested(
+            coins: walletCoins,
+            walletId: walletId.name,
+            updateFrequency: const Duration(minutes: 1),
+          ),
+        );
+      },
     );
   }
 
   void _clearWalletData() {
+    _walletDataLoader.invalidate();
     final portfolioGrowthBloc = context.read<PortfolioGrowthBloc>();
     final profitLossBloc = context.read<ProfitLossBloc>();
     final assetOverviewBloc = context.read<AssetOverviewBloc>();
@@ -516,7 +575,7 @@ class _MultiAddressWalletNotice extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  LocaleKeys.multiAddressWalletNoticeDescription.tr(),
+                  LocaleKeys.authImportDerivationHint.tr(),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -621,5 +680,80 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _SliverTabBarDelegate oldDelegate) {
     return tabBar != oldDelegate.tabBar;
+  }
+}
+
+/// Recovery and local protection are independent and never gate transactions.
+class _WalletSetupReminder extends StatelessWidget {
+  const _WalletSetupReminder({required this.wallet});
+  final Wallet wallet;
+
+  @override
+  Widget build(BuildContext context) {
+    final access = context.read<WalletAccessService?>();
+    if (access == null) return const SizedBox.shrink();
+    final id = context.select(
+      (AuthBloc bloc) => bloc.state.currentUser?.walletId,
+    );
+    if (id == null) return const SizedBox.shrink();
+    return BlocProvider(
+      key: ValueKey((
+        id,
+        context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.metadata['_wallet_entry_id'],
+      )),
+      create: (_) => WalletProtectionBloc(access: access, walletId: id),
+      child: BlocConsumer<WalletProtectionBloc, WalletProtectionState>(
+        listenWhen: (previous, current) =>
+            previous.completed != current.completed &&
+            current.completed != null,
+        listener: (context, state) =>
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(
+                content: Text(
+                  (state.status?.protection == CredentialProtection.passkey
+                          ? 'authPasskeyReadyTitle'
+                          : 'authProtectionEnabled')
+                      .tr(),
+                ),
+              ),
+            ),
+        builder: (context, state) {
+          // A wallet marked as backed up before confirmation existed, or one
+          // with only a file export, is asked to confirm rather than told it
+          // has no backup.
+          final unconfirmed = switch (wallet.config.recoveryEvidence) {
+            RecoveryEvidence.legacyUnknown => 'authRecoveryLegacyUnconfirmed',
+            RecoveryEvidence.encryptedFileExported => 'authRecoveryFileOnly',
+            _ => null,
+          };
+          return WalletSetupCard(
+            hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
+            hasDeviceProtection: state.status?.requiresAuthentication ?? false,
+            // Straight to the phrase, not to the list it is offered in.
+            onBackup: () => openSecuritySettings(
+              entry: SecuritySettingsEntry.recoveryPhrase,
+            ),
+            onProtect: openSecuritySettings,
+            recoveryDescription: unconfirmed?.tr(),
+            backupActionLabel: unconfirmed == null
+                ? null
+                : 'authConfirmRecoveryPhrase'.tr(),
+            // Where the lock cannot be turned on in one step, backing up is
+            // the main thing left to do.
+            backupLeads: !(state.canCreatePasskey || state.canEnableDevice),
+            protectionSetup: WalletProtectionPanel(
+              onOpenSettings: openSecuritySettings,
+              onSetPassword: () => openSecuritySettings(
+                entry: SecuritySettingsEntry.walletPassword,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

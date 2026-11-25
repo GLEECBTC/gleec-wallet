@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_common_ui_fakes.dart';
@@ -159,6 +160,10 @@ void main() {
         tester.getSemantics(find.text('One')),
         isSemantics(label: 'One', isHeader: true, namesRoute: true),
       );
+      expect(
+        tester.getSemantics(find.text('One')).getSemanticsData().headingLevel,
+        1,
+      );
     });
 
     testWidgets('leaves a dialog above it the keyboard', (tester) async {
@@ -188,7 +193,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -211,6 +216,8 @@ void main() {
       loadingAssets: false,
       pay: eth,
       receive: usdc,
+      payAddress: '0xpay',
+      receiveAddress: '0xreceive',
       inputText: '1',
       balance: d('2'),
       evaluation: SwapEvaluationStatus.ready,
@@ -294,6 +301,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(_focusedHeading(), isNull);
+      final tabFocus = FocusManager.instance.primaryFocus;
+      await moveTo(tester, form);
+      expect(FocusManager.instance.primaryFocus, same(tabFocus));
+      expect(_focusedHeading(), isNull);
     });
   });
 
@@ -309,7 +320,7 @@ void main() {
 
     setUp(() {
       routed = GatedExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );

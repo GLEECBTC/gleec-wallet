@@ -3,24 +3,53 @@ part of 'unified_swap_bloc.dart';
 /// The review and the start, which re-prices before committing.
 extension _UnifiedSwapReview on UnifiedSwapBloc {
   /// Whether the reviewed swap may be running, its start unanswered or lost.
-  bool get _startInDoubt => switch (state.review?.status) {
-    SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => true,
-    _ => false,
-  };
+  bool get _startInDoubt => state.startInDoubt;
 
   Future<void> _onReviewOpened(
     UnifiedSwapReviewOpened event,
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (!state.canReview) return;
-    final quote = state.selectedQuote!;
-    final routed = quote.source == SwapLiquiditySource.routed;
-    final snapshot = routed ? await _terms.loadSnapshot() : null;
-    final termsRequired =
-        routed && !await _terms.hasAccepted(snapshot: snapshot);
-    if (state.selectedQuote != quote || state.view != UnifiedSwapView.form) {
+    final tapped = state.selectedQuote!;
+    final SwapSubmission reviewedIn;
+    try {
+      reviewedIn = _registry.beginSubmission();
+    } on SwapStartRejectedException {
+      // The session lapsed since this form was built: Review stays off until
+      // the registry announces the next one.
+      emit(state.copyWith(sessionReady: false));
+      return;
+    } on WalletOperationDenied {
+      // Locked, which no session change will lift: Review stays as it was,
+      // to be asked for again once unlocked.
       return;
     }
+    final version = ++_startVersion;
+    final epoch = _walletEpoch;
+    // Each arriving source prices the options again as new instances. The
+    // tap stands while the selected one is the offer tapped, on its terms;
+    // anything else is a price the user has not asked to review.
+    bool current() =>
+        !_closing &&
+        !isClosed &&
+        !emit.isDone &&
+        version == _startVersion &&
+        epoch == _walletEpoch &&
+        _registry.isCurrent(reviewedIn) &&
+        (state.selectedQuote?.isSameOfferAs(tapped) ?? false) &&
+        state.view == UnifiedSwapView.form;
+    final routed = tapped.source == SwapLiquiditySource.routed;
+    final snapshot = routed ? await _terms.loadSnapshot() : null;
+    if (!current()) return;
+    final termsRequired =
+        routed &&
+        !await _terms.hasAccepted(
+          snapshot: snapshot,
+          walletKey: reviewedIn.walletKey,
+        );
+    if (!current()) return;
+    final quote = state.selectedQuote!;
+    _reviewSubmission = reviewedIn;
     // Freeze the selected snapshot and ignore form requests already in flight.
     _invalidate();
     _startVersion++;
@@ -28,6 +57,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       state.copyWith(
         view: UnifiedSwapView.review,
         structuralNotice: false,
+        quotesPending: false,
+        pricingPending: false,
         review: SwapReview(
           quote: quote,
           status: quote.isExpiredAt(_now())
@@ -67,19 +98,32 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       );
     }
+    final reviewedIn = _reviewSubmission;
+    if (reviewedIn == null || !_registry.isCurrent(reviewedIn)) return;
     final version = ++_legalVersion;
+    final reviewVersion = _startVersion;
+    final epoch = _walletEpoch;
+    bool currentRead() =>
+        !_closing &&
+        !isClosed &&
+        !emit.isDone &&
+        version == _legalVersion &&
+        reviewVersion == _startVersion &&
+        epoch == _walletEpoch &&
+        _registry.isCurrent(reviewedIn) &&
+        identical(state.review?.quote, review.quote) &&
+        !_startInDoubt &&
+        state.review?.status != SwapReviewStatus.revalidating;
     await _terms.refresh(force: event.retry);
+    if (!currentRead()) return;
     final snapshot = await _terms.loadSnapshot();
-    final accepted = await _terms.hasAccepted(snapshot: snapshot);
-    final current = state.review;
-    if (emit.isDone ||
-        version != _legalVersion ||
-        current == null ||
-        current.quote != review.quote ||
-        _startInDoubt ||
-        current.status == SwapReviewStatus.revalidating) {
-      return;
-    }
+    if (!currentRead()) return;
+    final accepted = await _terms.hasAccepted(
+      snapshot: snapshot,
+      walletKey: reviewedIn.walletKey,
+    );
+    if (!currentRead()) return;
+    final current = state.review!;
     emit(
       state.copyWith(
         review: current.copyWith(
@@ -121,28 +165,40 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) async {
     var review = state.review;
     if (review == null || state.view != UnifiedSwapView.review) return;
-    if (!state.tradingEnabled) return;
-    if (_waitingForLegalSubmission) return;
+    if (!_visible || !state.tradingEnabled) return;
+    if (_waitingForLegalSubmission ||
+        _startInDoubt ||
+        review.status == SwapReviewStatus.revalidating) {
+      return;
+    }
+    final reviewedIn = _reviewSubmission;
+    if (reviewedIn == null || !_registry.isCurrent(reviewedIn)) {
+      _startVersion++;
+      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
+      return;
+    }
+    final confirmation = _confirm(
+      review.quote,
+      legalSnapshot: review.legalSnapshot,
+      reviewedIn: reviewedIn,
+    );
+    if (confirmation == null) return;
     if (review.legalLoading &&
         !_terms.canSubmit(review.legalSnapshot) &&
         !review.isRecovery &&
         review.quote.source == SwapLiquiditySource.routed) {
-      _waitingForLegalSubmission = true;
-      final version = _startVersion;
-      final walletEpoch = _walletEpoch;
-      final quote = review.quote;
+      _legalSubmissionVersion = confirmation.version;
       ++_legalVersion;
       try {
         await _terms.refresh();
+        if (!_continuePreparation(emit, confirmation)) return;
         final snapshot = await _terms.loadSnapshot();
-        final accepted = await _terms.hasAccepted(snapshot: snapshot);
-        if (emit.isDone ||
-            version != _startVersion ||
-            walletEpoch != _walletEpoch ||
-            state.view != UnifiedSwapView.review ||
-            state.review?.quote != quote) {
-          return;
-        }
+        if (!_continuePreparation(emit, confirmation)) return;
+        final accepted = await _terms.hasAccepted(
+          snapshot: snapshot,
+          walletKey: confirmation.submission.walletKey,
+        );
+        if (!_continuePreparation(emit, confirmation)) return;
         review = state.review!.copyWith(
           legalSnapshot: snapshot,
           legalLoading: false,
@@ -152,7 +208,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         emit(state.copyWith(review: review));
         if (!_terms.canSubmit(snapshot)) return;
       } finally {
-        _waitingForLegalSubmission = false;
+        if (_legalSubmissionVersion == confirmation.version) {
+          _legalSubmissionVersion = null;
+        }
         // A different review may have opened while this request was pending.
         // Refresh its display without replaying the abandoned start action.
         if (!isClosed &&
@@ -167,7 +225,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         review.status == SwapReviewStatus.revalidationFailed ||
         review.status == SwapReviewStatus.rejected) {
       // "Refresh quote" / "Try again": re-price the same route in place.
-      final fresh = await _revalidate(emit, review);
+      final fresh = await _revalidate(emit, review, confirmation);
       if (fresh == null) return;
       emit(
         state.copyWith(
@@ -190,13 +248,30 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
 
     if (review.status == SwapReviewStatus.materialUpdate &&
         !review.quote.isExpiredAt(_now())) {
-      // The user has seen the updated numbers side by side and accepted them.
-      await _start(emit, review.quote, termsRequired: review.termsRequired);
+      // Acceptance is bound to the displayed update, but funding and the
+      // executable quote must be refreshed again before dispatch.
+      final fresh = await _revalidate(
+        emit,
+        review.copyWith(clearPrevious: true),
+        confirmation,
+      );
+      if (fresh == null) return;
+      await _start(
+        emit,
+        fresh,
+        termsRequired: review.termsRequired,
+        confirmation: confirmation,
+      );
       return;
     }
-    final fresh = await _revalidate(emit, review);
+    final fresh = await _revalidate(emit, review, confirmation);
     if (fresh == null) return;
-    await _start(emit, fresh, termsRequired: review.termsRequired);
+    await _start(
+      emit,
+      fresh,
+      termsRequired: review.termsRequired,
+      confirmation: confirmation,
+    );
   }
 
   /// Re-prices [review]'s route. Returns the quote to start with when the
@@ -205,9 +280,10 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   Future<SwapQuote?> _revalidate(
     Emitter<UnifiedSwapState> emit,
     SwapReview review,
+    _Confirmation confirmation,
   ) async {
-    final version = ++_startVersion;
-    final accepted = review.previous ?? review.quote;
+    if (!_continuePreparation(emit, confirmation)) return null;
+    final accepted = review.previous ?? confirmation.quote;
     emit(
       state.copyWith(
         review: review.copyWith(status: SwapReviewStatus.revalidating),
@@ -217,7 +293,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     // Read alongside the price, for the quote's own asset, which need not be
     // the form's.
     final epoch = _walletEpoch;
-    final reading = _heldOf(accepted.from);
+    final reading = _heldOf(accepted.from, quote: accepted);
     SwapQuoteResult result;
     try {
       result = await _repository.requote(accepted).timeout(_evaluationTimeout);
@@ -229,12 +305,10 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       );
     }
-    final held = await reading;
+    if (!_continuePreparation(emit, confirmation)) return null;
+    var held = await reading;
+    if (!_continuePreparation(emit, confirmation)) return null;
     _showHeld(emit, accepted.from, epoch, held);
-    // Back was pressed while this ran: never start behind the user's back.
-    if (version != _startVersion || state.view != UnifiedSwapView.review) {
-      return null;
-    }
 
     switch (result) {
       case SwapQuoteRejected(:final failure):
@@ -252,6 +326,13 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         }
         return null;
       case SwapQuoteAvailable(quote: final fresh):
+        if (fresh.fundingAssets.any(
+          (asset) => !held.fundingBalances.containsKey(asset),
+        )) {
+          held = await _heldOf(fresh.from, quote: fresh);
+          if (!_continuePreparation(emit, confirmation)) return null;
+          _showHeld(emit, fresh.from, epoch, held);
+        }
         if (_isStructuralChange(accepted, fresh)) {
           // The steps themselves changed; consent to the old ones means
           // nothing. Evaluate afresh from the form.
@@ -264,6 +345,26 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             ),
           );
           add(const UnifiedSwapEvaluationRequested());
+          return null;
+        }
+        // Unknown funding is not an affordable balance. Final confirmation
+        // must not start after a failed balance read, even with a valid quote.
+        if (held.balance == null ||
+            (fresh.from.parentId != null && held.feeBalance == null) ||
+            fresh.fundingAssets.any(
+              (asset) => held.fundingBalances[asset] == null,
+            )) {
+          emit(
+            state.copyWith(
+              review: review.copyWith(
+                status: SwapReviewStatus.revalidationFailed,
+                revalidationFailure: SwapQuoteFailure(
+                  source: fresh.source,
+                  kind: SwapQuoteFailureKind.serviceError,
+                ),
+              ),
+            ),
+          );
           return null;
         }
         // KDF's checks at the start leave out the gas to refund the payment,
@@ -284,7 +385,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
                   source: fresh.source,
                   kind: SwapQuoteFailureKind.insufficientFunds,
                   asset: short == SwapFormIssue.insufficientForFees
-                      ? fresh.from.parentId
+                      ? _shortFundingAsset(checked, held)
                       : fresh.from,
                 ),
               ),
@@ -292,7 +393,11 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           );
           return null;
         }
-        if (_isMaterialChange(accepted, fresh)) {
+        if (_isMaterialChange(
+          accepted,
+          fresh,
+          usdPrice: _repository.pricing.prices.usdPrice,
+        )) {
           emit(
             state.copyWith(
               review: SwapReview(
@@ -315,74 +420,6 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     }
   }
 
-  Future<void> _start(
-    Emitter<UnifiedSwapState> emit,
-    SwapQuote quote, {
-    required bool termsRequired,
-  }) async {
-    final review = state.review;
-    if (review == null) return;
-    if (quote.source == SwapLiquiditySource.routed &&
-        !review.isRecovery &&
-        !_terms.canSubmit(review.legalSnapshot)) {
-      return;
-    }
-    emit(
-      state.copyWith(
-        review: review.copyWith(
-          quote: quote,
-          status: SwapReviewStatus.starting,
-          clearPrevious: true,
-        ),
-      ),
-    );
-    _refresh?.cancel();
-    _expiry?.cancel();
-
-    if (termsRequired) {
-      // Starting a routed swap after being shown the provider's terms is the
-      // acceptance; it is recorded before anything is sent.
-      await _terms.recordAcceptance(at: _now(), snapshot: review.legalSnapshot);
-    }
-    // Checked again: trading can be turned off during that write, and a
-    // review already starting is kept open through it.
-    if (!state.tradingEnabled) {
-      _startVersion++;
-      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
-      return;
-    }
-
-    try {
-      final execution = await _registry.start(quote);
-      unawaited(_preferences.rememberPair(quote.from, quote.to));
-      _startVersion++;
-      emit(
-        state.copyWith(
-          view: UnifiedSwapView.progress,
-          activeExecutionId: execution.id,
-          clearReview: true,
-        ),
-      );
-    } on SwapStartRejectedException catch (error) {
-      emit(
-        state.copyWith(
-          review: state.review?.copyWith(
-            status: SwapReviewStatus.rejected,
-            rejectionDetail: error.detail,
-          ),
-        ),
-      );
-    } on Object {
-      // The engine may already have the swap. Another tap here could start a
-      // second real swap, so the review stays blocked and says where to look.
-      emit(
-        state.copyWith(
-          review: state.review?.copyWith(status: SwapReviewStatus.unconfirmed),
-        ),
-      );
-    }
-  }
-
   Future<void> _onFreshQuoteAccepted(
     UnifiedSwapFreshQuoteAccepted event,
     Emitter<UnifiedSwapState> emit,
@@ -395,14 +432,21 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         !state.tradingEnabled;
     if (refused()) return;
     final quote = event.quote;
+    final confirmation = _confirm(quote);
+    if (confirmation == null) return;
     final routed = quote.source == SwapLiquiditySource.routed;
     final snapshot = routed ? await _terms.loadSnapshot() : null;
+    if (!_continuePreparation(emit, confirmation)) return;
     final termsRequired =
-        routed && !await _terms.hasAccepted(snapshot: snapshot);
-    if (refused()) return;
+        routed &&
+        !await _terms.hasAccepted(
+          snapshot: snapshot,
+          walletKey: confirmation.submission.walletKey,
+        );
+    if (!_continuePreparation(emit, confirmation)) return;
+    _reviewSubmission = confirmation.submission;
     // Freeze the selected snapshot and ignore form requests already in flight.
     _invalidate();
-    _startVersion++;
     final review = SwapReview(
       quote: quote,
       status: quote.isExpiredAt(_now())
@@ -429,62 +473,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       if (routed) add(const UnifiedSwapLegalRequested());
       return;
     }
-    final fresh = await _revalidate(emit, review);
+    final fresh = await _revalidate(emit, review, confirmation);
     if (fresh == null) return;
-    await _start(emit, fresh, termsRequired: false);
-  }
-
-  void _onProgressLeft(
-    UnifiedSwapProgressLeft event,
-    Emitter<UnifiedSwapState> emit,
-  ) => _resetForm(emit, keepPair: true);
-
-  void _onResetRequested(
-    UnifiedSwapResetRequested event,
-    Emitter<UnifiedSwapState> emit,
-  ) => _resetForm(emit, keepPair: event.keepPair);
-
-  void _resetForm(Emitter<UnifiedSwapState> emit, {required bool keepPair}) {
-    if (state.review?.status == SwapReviewStatus.starting) return;
-    _invalidate();
-    _startVersion++;
-    emit(
-      _validated(
-        state.copyWith(
-          view: UnifiedSwapView.form,
-          inputText: '',
-          amountMode: SwapAmountMode.token,
-          clearActiveExecution: true,
-          clearReview: true,
-          clearQuotes: true,
-          clearSelectedId: true,
-          clearFailure: true,
-          clearMaxApplied: true,
-          checkingMax: false,
-          clearPay: !keepPair,
-          clearReceive: !keepPair,
-          evaluation: SwapEvaluationStatus.idle,
-          structuralNotice: false,
-        ),
-      ),
-    );
-    add(const UnifiedSwapBalancesRefreshed());
-    // The swap just made may have taken the last offer.
-    if (keepPair) add(const UnifiedSwapOffersRequested(recount: true));
-  }
-
-  Future<void> _onFollowUpRequested(
-    UnifiedSwapFollowUpRequested event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    if (_startInDoubt) return;
-    _startVersion++;
-    emit(state.copyWith(clearActiveExecution: true, clearReview: true));
-    await _setPair(
-      emit,
-      pay: event.pay,
-      receive: event.receive == event.pay ? null : event.receive,
-      amount: event.amount ?? '',
-    );
+    await _start(emit, fresh, termsRequired: false, confirmation: confirmation);
   }
 }

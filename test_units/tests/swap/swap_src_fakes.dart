@@ -276,7 +276,11 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   RoutedSwapHandle Function(RoutedSwapOffer offer)? starts;
 
   @override
-  Future<RoutedSwapHandle> start(RoutedSwapOffer offer) async {
+  Future<RoutedSwapHandle> start(
+    RoutedSwapOffer offer, {
+    void Function()? beforeDispatch,
+  }) async {
+    beforeDispatch?.call();
     final starts = this.starts;
     if (starts == null) throw StateError('unexpected start');
     return starts(offer);

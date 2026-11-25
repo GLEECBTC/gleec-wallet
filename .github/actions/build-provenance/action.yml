@@ -1,0 +1,26 @@
+name: Record build provenance
+description: Attach the public LI.FI profile, engine pins, dependency locks and artifact hashes
+inputs:
+  environment:
+    description: Validated LI.FI profile
+    required: true
+  artifact_path:
+    description: Artifact path or glob under build/
+    required: true
+  artifact_name:
+    description: Name of the corresponding binary artifact
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LIFI_ENVIRONMENT: ${{ inputs.environment }}
+        ARTIFACT_PATH: ${{ inputs.artifact_path }}
+      run: python3 tool/lifi_build_provenance.py "$LIFI_ENVIRONMENT" --artifact "$ARTIFACT_PATH"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.artifact_name }}-provenance
+        path: build-provenance/
+        if-no-files-found: error
+        retention-days: 30

@@ -17,7 +17,8 @@ contract at specs `7c388ea`.
 - The quoted minimum is shown unchanged. KDF handles tighter-slippage retries;
   a worse quote needs fresh acceptance. Execution always sends a concrete amount.
 - KDF receives the confirmed commission policy at every startup: integrator
-  `gleec-dex-staging`, 178 bps commission and 22 bps LI.FI share. The combined
+  `gleec-dex-production` (`gleec-dex-staging` before 6 November), 178 bps
+  commission and 22 bps LI.FI share. The combined
   included fee is shown once. Build overrides and explicit disable are documented
   in [BUILD_RUN_APP.md](BUILD_RUN_APP.md); invalid policy is rejected.
 - Missing native fee models for Base, Mantle, Monad and Avalanche are normalized

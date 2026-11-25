@@ -10,14 +10,15 @@ import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
+
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:rational/rational.dart';
-import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
+import 'swap_test_fixtures.dart';
 
 import 'swap_exec_atomic_fakes.dart';
 import 'swap_exec_fakes.dart';
-import 'swap_test_fixtures.dart';
 
 /// Covers the atomic executor over the real DEX repository and order service,
 /// with only the RPC layer scripted: what a lost or failed engine call turns
@@ -29,6 +30,7 @@ void main() {
   setUp(() {
     rpc = _Rpc();
     executor = AtomicSwapExecutor(
+      auth: testSwapAuth,
       dexRepository: DexRepository(rpc),
       orders: MyOrdersService(rpc),
       networks: () => execNetworks,
@@ -36,44 +38,11 @@ void main() {
     );
   });
 
-  test(
-    'an old or forged token plan cannot bypass permission validation',
-    () async {
-      final plan = AtomicSwapPlan(
-        base: usdc,
-        rel: btc,
-        volume: d('1'),
-        price: d('1'),
-        orderPrice: Rational.one,
-      );
-      for (final shownAsset in [usdc, eth]) {
-        await expectLater(
-          executor.start(
-            quoteOf(
-              source: SwapLiquiditySource.atomic,
-              from: shownAsset,
-              to: btc,
-              payload: plan,
-            ),
-          ),
-          throwsA(
-            isA<SwapStartRejectedException>().having(
-              (error) => error.reason,
-              'reason',
-              SwapStartRejection.notAvailable,
-            ),
-          ),
-        );
-      }
-      expect(rpc.sells, isEmpty);
-    },
-  );
-
   test('an order the engine refused is a refusal with its words', () async {
     rpc.sellAnswer = {'error': 'Not enough ETH for the swap'};
 
     await expectLater(
-      executor.start(atomicQuoteOf()),
+      executor.start(atomicQuoteOf(), authorization: testSwapAuthorization()),
       throwsA(
         isA<SwapStartRejectedException>().having(
           (e) => e.detail,
@@ -84,10 +53,38 @@ void main() {
     );
   });
 
+  test('an atomic token order reaches KDF and tracks the accepted order', () {
+    fakeAsync((async) {
+      SwapExecutionHandle? handle;
+      final quote = quoteOf(
+        source: SwapLiquiditySource.atomic,
+        from: usdc,
+        to: btc,
+        payload: AtomicSwapPlan(
+          base: usdc,
+          rel: btc,
+          volume: d('1'),
+          price: d('1'),
+          orderPrice: Rational.one,
+        ),
+      );
+      executor
+          .start(quote, authorization: testSwapAuthorization())
+          .then((value) => handle = value);
+      async.flushMicrotasks();
+      expect(rpc.sells.single.base, usdc.id);
+      expect(rpc.sells.single.orderType, SellBuyOrderType.fillOrKill);
+      expect(handle!.id, 'a-1');
+      expect(handle!.latest.stage, SwapProgressStage.matching);
+    });
+  });
+
   test('an order the engine placed is followed from matching', () {
     fakeAsync((async) {
       SwapExecutionHandle? handle;
-      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      executor
+          .start(atomicQuoteOf(), authorization: testSwapAuthorization())
+          .then((h) => handle = h);
       async.flushMicrotasks();
 
       expect(rpc.sells.single.orderType, SellBuyOrderType.fillOrKill);
@@ -102,7 +99,7 @@ void main() {
       rpc.sellError = TimeoutException('no answer from KDF');
 
       await expectLater(
-        executor.start(atomicQuoteOf()),
+        executor.start(atomicQuoteOf(), authorization: testSwapAuthorization()),
         throwsA(isA<SwapStartUnconfirmedException>()),
       );
     },
@@ -112,7 +109,9 @@ void main() {
       'but its status is delayed', () {
     fakeAsync((async) {
       SwapExecutionHandle? handle;
-      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      executor
+          .start(atomicQuoteOf(), authorization: testSwapAuthorization())
+          .then((h) => handle = h);
       async.flushMicrotasks();
       async.elapse(const Duration(seconds: 30));
 
