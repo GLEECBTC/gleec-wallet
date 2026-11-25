@@ -316,8 +316,14 @@ To install on Ubuntu 20.04 or later, run:
 ```bash
 sudo apt-get install -y clang cmake git ninja-build pkg-config \
     libgtk-3-dev liblzma-dev libstdc++-12-dev webkit2gtk-4.1 \
-    curl git unzip xz-utils zip libglu1-mesa
+    curl git unzip xz-utils zip libglu1-mesa libfido2-dev
 ```
+
+`libfido2-dev` supplies only headers: the app loads `libfido2.so.1` when a
+security key is first used, so users need `libfido2-1` (which `openssh-client`
+already installs on Ubuntu, Debian and Fedora). Without the headers the build
+still succeeds, with a CMake warning, but cannot unlock wallets with a
+security key, and `tool/verify_linux_runtime.py` refuses such a bundle.
 
 Users of Ubuntu 24.04 (Noble) or later, might need to install additional dependencies, and add `PKG_CONFIG_PATH` to their bash configuration. If that doesn't work, then try adding it to `/etc/environment` as well.
 

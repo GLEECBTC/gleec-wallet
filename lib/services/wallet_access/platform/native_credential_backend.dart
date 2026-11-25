@@ -11,20 +11,21 @@ import '../wallet_access_types.dart';
 import 'credential_backend.dart';
 import 'passkey/passkey_authenticator.dart';
 import 'passkey/passkey_credential_backend.dart';
+import 'passkey/security_key/linux_security_key_authenticator.dart';
 
-/// Linux has no passkey bridge, so no envelope can exist there to be read.
-/// A test build may name a staging relying party; envelopes record theirs,
-/// so one build never opens another's.
-CredentialBackend createCredentialBackend() => Platform.isLinux
-    ? NativeCredentialBackend()
-    : PasskeyCredentialBackend(
-        base: NativeCredentialBackend(),
-        authenticator: MethodChannelPasskeyAuthenticator(),
-        rpId: const String.fromEnvironment(
-          'WALLET_PASSKEY_RP_ID',
-          defaultValue: PasskeyCredentialBackend.relyingParty,
-        ),
-      );
+/// Linux reaches passkeys only on FIDO2 security keys, through libfido2 and
+/// the app's own PIN prompt. A test build may name a staging relying party;
+/// envelopes record theirs, so one build never opens another's.
+CredentialBackend createCredentialBackend() => PasskeyCredentialBackend(
+  base: NativeCredentialBackend(),
+  authenticator: Platform.isLinux
+      ? LinuxSecurityKeyAuthenticator()
+      : MethodChannelPasskeyAuthenticator(),
+  rpId: const String.fromEnvironment(
+    'WALLET_PASSKEY_RP_ID',
+    defaultValue: PasskeyCredentialBackend.relyingParty,
+  ),
+);
 
 /// Maps a native channel error code. `interrupted` means the OS dismissed the
 /// prompt (a call, an app switch, the device locking): the user declined
@@ -143,6 +144,7 @@ class NativeCredentialBackend extends CredentialBackend {
         protection: _linuxSecretService == _LinuxSecretService.absent
             ? CredentialProtection.appLocal
             : CredentialProtection.osAccountProtected,
+        unattendedReturn: true,
       );
     }
     final result = await _invoke<Map>('capabilities');

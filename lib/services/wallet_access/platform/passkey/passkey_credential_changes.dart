@@ -161,11 +161,20 @@ extension _PasskeyChanges on PasskeyCredentialBackend {
   Future<void> _replaceWithDevice(
     String key,
     String value,
-    int expectedRevision,
-  ) => _exclusive((token) async {
+    int expectedRevision, {
+    bool requireAuthentication = true,
+  }) => _exclusive((token) async {
+    // Only where the vault has no protected tier: never a way around one
+    // that can protect the record, or will once device unlock is set up.
+    if (!requireAuthentication) {
+      final capabilities = await _base.capabilities();
+      if (!capabilities.unattendedReturn || capabilities.deviceAuthentication) {
+        throw const WalletAccessException(WalletAccessFailure.unavailable);
+      }
+    }
     await _passkeySlot(key, expectedRevision);
     _ensureCurrent(token);
-    await _base.write(key, value, requireAuthentication: true);
+    await _base.write(key, value, requireAuthentication: requireAuthentication);
     // The device record governs the wallet from here; the envelope is inert.
     try {
       await _removeSlot(key);
