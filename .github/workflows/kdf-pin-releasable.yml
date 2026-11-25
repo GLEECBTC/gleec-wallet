@@ -1,4 +1,7 @@
-# Keeps temporary KDF builds with local/... or charl-temp/... labels on dev.
+# Keeps temporary KDF builds off release branches. Such a build (a KDF branch
+# named local/... or charl-temp/...) may be pinned on dev, as the combined
+# Solana and TRON/BTC LI.FI build is until kdf-internal merges that work, but
+# never merged into main or a release.
 name: KDF pin can ship
 run-name: ${{ github.actor }} is checking the KDF pin
 
