@@ -8,10 +8,11 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'swap_bloc_fakes.dart';
 import 'swap_test_fixtures.dart';
 
-/// Covers Max when a source never answers: once Max stops waiting, at three
-/// pricing timeouts, whatever the others answered is applied.
+/// Covers Max when the order book never answers: beside another source it
+/// is given the form's 25 s for one price, then whatever the other answered
+/// is applied.
 void main() {
-  const limit = Duration(seconds: 75);
+  const budget = Duration(seconds: 25);
 
   SwapMaxAmount maxOf(String amount) =>
       SwapMaxAmount(amount: d(amount), reservedForFees: d('0.01'));
@@ -28,7 +29,7 @@ void main() {
     expect(bloc.state.selectedQuote, isNull);
 
     bloc.add(const UnifiedSwapMaxRequested());
-    h.elapse(limit);
+    h.elapse(budget);
 
     expect(bloc.state.checkingMax, isFalse);
     expect(bloc.state.inputText, '1.99');
@@ -59,7 +60,7 @@ void main() {
     expect(bloc.state.selectedQuote!.source, SwapLiquiditySource.atomic);
 
     bloc.add(const UnifiedSwapMaxRequested());
-    h.elapse(limit);
+    h.elapse(budget);
 
     expect(bloc.state.checkingMax, isFalse);
     expect(bloc.state.inputText, '1.99');

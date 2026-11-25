@@ -112,10 +112,16 @@ void main() {
 
   group('max amounts', () {
     const tick = Duration(milliseconds: 1);
-    // Given the ordinary 25 s pricing budget, a preferred source is asked
-    // alone for half of it, and Max stops waiting at three times it.
+    // The ordinary 25 s pricing budget: a preferred source is asked alone
+    // for half of it, the order book beside another source has all of it,
+    // and Max stops waiting at three times it.
+    const budget = Duration(seconds: 25);
     const halfway = Duration(milliseconds: 12500);
     const limit = Duration(seconds: 75);
+    Duration limitOf(SwapLiquiditySource source) =>
+        source == SwapLiquiditySource.atomic ? budget : limit;
+    SwapLiquiditySource otherThan(SwapLiquiditySource source) =>
+        SwapLiquiditySource.values.singleWhere((other) => other != source);
 
     ScriptedQuoteSource held(SwapLiquiditySource source, [String? amount]) =>
         ScriptedQuoteSource(source)
@@ -128,15 +134,13 @@ void main() {
     for (final stalled in SwapLiquiditySource.values) {
       test('a stalled ${stalled.name} Max times out, the other is kept', () {
         fakeAsync((async) {
-          final working = SwapLiquiditySource.values.singleWhere(
-            (source) => source != stalled,
-          );
+          final working = otherThan(stalled);
           final max = _askMax(pricing, [
             held(stalled, '1.995'),
             answering(working),
           ]);
 
-          async.elapse(limit - tick);
+          async.elapse(limitOf(stalled) - tick);
           expect(max.answer, isNull);
           async.elapse(tick);
 
@@ -145,26 +149,29 @@ void main() {
       });
     }
 
-    test('a preferred source silent halfway has the others asked too', () {
-      fakeAsync((async) {
-        final routed = answering(SwapLiquiditySource.routed);
-        final max = _askMax(pricing, [
-          routed,
-          held(SwapLiquiditySource.atomic, '1.995'),
-        ], preferred: SwapLiquiditySource.atomic);
+    for (final silent in SwapLiquiditySource.values) {
+      test('a preferred ${silent.name} source silent halfway has the other '
+          'asked too', () {
+        fakeAsync((async) {
+          final other = answering(otherThan(silent));
+          final max = _askMax(pricing, [
+            other,
+            held(silent, '1.995'),
+          ], preferred: silent);
 
-        async.elapse(halfway - tick);
-        expect(routed.maxCalls, 0);
-        async.elapse(tick);
-        expect(routed.maxCalls, 1);
-        // The preferred source may still answer until Max stops waiting.
-        async.elapse(limit - halfway - tick);
-        expect(max.answer, isNull);
-        async.elapse(tick);
+          async.elapse(halfway - tick);
+          expect(other.maxCalls, 0);
+          async.elapse(tick);
+          expect(other.maxCalls, 1);
+          // The preferred source may still answer until it times out.
+          async.elapse(limitOf(silent) - halfway - tick);
+          expect(max.answer, isNull);
+          async.elapse(tick);
 
-        expect(max.answer, {SwapLiquiditySource.routed: _maxOf('1.99')});
+          expect(max.answer, {other.source: _maxOf('1.99')});
+        });
       });
-    });
+    }
 
     test('a preferred source that answers after halfway is still used', () {
       fakeAsync((async) {

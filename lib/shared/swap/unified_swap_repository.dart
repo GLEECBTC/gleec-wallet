@@ -302,8 +302,10 @@ class UnifiedSwapRepository {
   ///
   /// [timeout] is the ordinary-operation budget, tripled for Max as in
   /// [watchQuotes]. A source still silent then has timed out, and the others'
-  /// answers are returned. With none, the most useful reason a source gave is
-  /// thrown as a [SwapMaxUnavailableException].
+  /// answers are returned. The order book, whose Max has no limit of its own,
+  /// times out after one budget when another source could answer instead.
+  /// With none, the most useful reason a source gave is thrown as a
+  /// [SwapMaxUnavailableException].
   Future<Map<SwapLiquiditySource, SwapMaxAmount>> maxAmounts({
     required AssetId from,
     required AssetId to,
@@ -313,6 +315,7 @@ class UnifiedSwapRepository {
     double? slippage,
     Duration timeout = const Duration(seconds: 25),
   }) async {
+    final able = _sourcesFor(from, to);
     final limit = timeout * 3;
     final failures = <SwapQuoteFailure>[];
     final expired = Completer<void>();
@@ -324,14 +327,20 @@ class UnifiedSwapRepository {
 
     Future<SwapMaxAmount?> askOne(SwapQuoteSource source) async {
       try {
+        var answer = source.maxAmount(
+          from: from,
+          to: to,
+          balance: balance,
+          order: order,
+          slippage: slippage,
+        );
+        // The order book's own Max has no limit. Beside another source it
+        // gets one budget; alone, as for GLEEC, all of Max's time.
+        if (source.source == SwapLiquiditySource.atomic && able.length > 1) {
+          answer = answer.timeout(timeout);
+        }
         return await Future.any([
-          source.maxAmount(
-            from: from,
-            to: to,
-            balance: balance,
-            order: order,
-            slippage: slippage,
-          ),
+          answer,
           expired.future.then<SwapMaxAmount?>(
             (_) => throw TimeoutException('No Max answer', limit),
           ),
@@ -370,7 +379,6 @@ class UnifiedSwapRepository {
       };
     }
 
-    final able = _sourcesFor(from, to);
     final own = [
       for (final source in able)
         if (source.source == preferred) source,
