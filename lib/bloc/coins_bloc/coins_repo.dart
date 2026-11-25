@@ -838,8 +838,14 @@ class CoinsRepo {
         await walletScope.refresh();
         walletScope.check();
         final isDeferred = e is ActivationDeferredException;
-        if (isDeferred) {
-          _log.info('Activation of ${asset.id.id} deferred: $e');
+        if (e is ActivationDeferredException) {
+          // Metadata only: the KDF error text would get the record dropped
+          // from diagnostics.
+          _log.info(
+            'Activation of ${asset.id.id} deferred until '
+            '${e.retryAfter.toIso8601String()} after '
+            '${e.consecutiveFailures} identical failures',
+          );
         } else {
           _log.shout(
             'Error activating asset after retries: ${asset.id.id}',
