@@ -432,6 +432,8 @@ import 'tests/swap/swap_entry_ui_failures_test.dart'
 import 'tests/swap/swap_entry_ui_fee_shortfall_test.dart'
     as swap_entry_ui_fee_shortfall_test;
 import 'tests/swap/swap_entry_ui_form_test.dart' as swap_entry_ui_form_test;
+import 'tests/swap/swap_entry_ui_max_announce_test.dart'
+    as swap_entry_ui_max_announce_test;
 import 'tests/swap/swap_entry_ui_messages_test.dart'
     as swap_entry_ui_messages_test;
 import 'tests/swap/swap_entry_ui_offers_test.dart' as swap_entry_ui_offers_test;
@@ -1008,6 +1010,7 @@ void main() {
   swap_entry_ui_failures_test.main();
   swap_entry_ui_fee_shortfall_test.main();
   swap_entry_ui_form_test.main();
+  swap_entry_ui_max_announce_test.main();
   swap_entry_ui_messages_test.main();
   swap_entry_ui_offers_test.main();
   swap_entry_ui_options_test.main();
