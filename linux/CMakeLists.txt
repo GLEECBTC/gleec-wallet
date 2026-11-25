@@ -55,6 +55,16 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 find_package(PkgConfig REQUIRED)
 find_package(X11 REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+# Security keys: libfido2 is loaded at runtime, so only its headers are used.
+# Release CI checks the bundle for the bridge (tool/verify_linux_runtime.py).
+pkg_check_modules(FIDO2 libfido2>=1.10)
+set(SECURITY_KEY_SOURCES "security_key_channel.cc")
+if(FIDO2_FOUND)
+  list(APPEND SECURITY_KEY_SOURCES "security_key_channel_jobs.cc")
+else()
+  message(WARNING "libfido2 headers not found (apt install libfido2-dev): "
+                  "this build cannot unlock wallets with a security key.")
+endif()
 
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
@@ -65,6 +75,7 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
+  ${SECURITY_KEY_SOURCES}
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )
 
@@ -76,6 +87,12 @@ apply_standard_settings(${BINARY_NAME})
 target_link_libraries(${BINARY_NAME} PRIVATE X11)
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
+if(FIDO2_FOUND)
+  target_include_directories(${BINARY_NAME} PRIVATE ${FIDO2_INCLUDE_DIRS})
+  target_link_libraries(${BINARY_NAME} PRIVATE ${CMAKE_DL_LIBS})
+else()
+  target_compile_definitions(${BINARY_NAME} PRIVATE GLEEC_SECURITY_KEY_STUB)
+endif()
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)

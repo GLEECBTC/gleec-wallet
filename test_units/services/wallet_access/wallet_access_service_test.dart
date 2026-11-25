@@ -29,6 +29,7 @@ part 'wallet_access_rotation_cases.dart';
 part 'wallet_access_session_cases.dart';
 part 'wallet_access_sign_in_status_cases.dart';
 part 'wallet_access_test_harness.dart';
+part 'wallet_access_unattended_return_cases.dart';
 
 const _password = 'Synthetic-password-123456!';
 const _entry = 'test-wallet-entry-0001';
@@ -560,6 +561,7 @@ class _NoPendingTransfers extends Fake
 
 void main() {
   _passkeyReuseCases();
+  _unattendedReturnCases();
   _rotationCases();
   _sessionCases();
   _reviewCases();

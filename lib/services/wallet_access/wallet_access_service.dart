@@ -27,6 +27,7 @@ part 'wallet_access_sign_in_status.dart';
 part 'wallet_engine_session.dart';
 part 'wallet_password_recovery.dart';
 part 'wallet_password_rotation.dart';
+part 'wallet_unattended_return.dart';
 
 /// Coordinates the wallet engine, credential vault and non-secret journal.
 /// The engine session remains independent of the app's interaction lock.
@@ -148,6 +149,7 @@ class WalletAccessService {
       passkeyCandidate: passkeyEnrollmentEnabled && actual.passkeyCandidate,
       existingPasskeyCandidate:
           _existingPasskeyEnrollment && actual.existingPasskeyCandidate,
+      unattendedReturn: actual.unattendedReturn,
     );
   }
 
@@ -1265,6 +1267,11 @@ class WalletAccessService {
     required WalletId walletId,
     String? password,
   }) => _enroll(walletId, password, lock: _WalletLock.existingPasskey);
+
+  /// Where the device has no protected tier (Linux), the way off a passkey
+  /// that still works: it authorizes the switch back to unattended storage.
+  Future<void> useDeviceStorageInstead({required WalletId walletId}) =>
+      _returnToUnattended(walletId);
 
   Future<void> replacePasskeyUsingPassword({
     required WalletId walletId,

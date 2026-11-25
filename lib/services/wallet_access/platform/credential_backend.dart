@@ -64,6 +64,16 @@ abstract class CredentialBackend {
   }) async =>
       throw const WalletAccessException(WalletAccessFailure.unavailable);
 
+  /// Where the vault has no protected tier, replaces passkey protection with
+  /// the vault's unattended record. The caller authorized it with the
+  /// passkey; the envelope is inert from the moment that record exists.
+  Future<void> replacePasskeyWithUnattended(
+    String key,
+    String value, {
+    required int expectedRevision,
+  }) async =>
+      throw const WalletAccessException(WalletAccessFailure.unavailable);
+
   /// Explicit recovery after the coordinator has freshly verified the supplied
   /// password with the same wallet engine/session. This never decrypts the old
   /// envelope: it stages new verified PRF protection and atomically replaces

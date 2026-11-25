@@ -73,10 +73,17 @@ class CredentialCapabilities {
     this.deviceAuthentication = false,
     this.passkeyCandidate = false,
     this.existingPasskeyCandidate = false,
+    this.unattendedReturn = false,
   });
   final bool available;
   final CredentialProtection protection;
   final bool deviceAuthentication;
+
+  /// The vault has no protected tier at all (Linux), so a passkey wallet's
+  /// way back is its unattended storage, authorized by the passkey. Not set
+  /// where device unlock merely isn't set up yet. Never masked by a rollout
+  /// flag: it is a way out.
+  final bool unattendedReturn;
 
   /// A new passkey can be created here (browsers).
   final bool passkeyCandidate;

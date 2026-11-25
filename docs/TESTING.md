@@ -40,6 +40,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | SDK — `komodo_defi_sdk` | `sdk/packages/komodo_defi_sdk` | `KDF_HARNESS="" flutter test` | `sdk-unit-tests-on-pr.yml` | Yes |
 | SDK — other packages | `sdk/packages/*` | `flutter test` per package | — | No |
 | Browser-only unit | `test/` | `flutter test --platform chrome test/…` | — | No |
+| Linux security-key bridge | `linux/test/` | `bash linux/test/check_security_key_bridge.sh` (Linux with `libfido2-dev`; a scripted `libfido2.so.1`, no key) | `desktop-builds.yml` (Linux) | Yes |
 | Skyvern QA | `automated_testing/` | `python -m runner.runner` | — | No |
 | Frame timing | `test_integration/tests/perf_tests/` | `-t perf_tests/perf_tests.dart -D macos -m profile` | — | No |
 | Live swaps with funds | the PR's Firebase preview | manual: [SWAP_LIVE_TEST_BRIEF.md](SWAP_LIVE_TEST_BRIEF.md), "How a round runs" | `firebase-hosting-pull-request.yml` deploys the preview | Release checklist only |
@@ -441,6 +442,7 @@ fortnight. The chart flow additionally needs keys added to
 | An RPC request/response type | SDK + harness replay | serialisation bugs surface only on transports that `jsonEncode` |
 | An `sdk/packages/*` package other than `komodo_defi_sdk` | that package's own `flutter test` | not gated — run it or it ships unverified |
 | Login / wallet-manager / DEX / fiat UI flows | integration | `-t` a single suite while iterating |
+| `linux/security_key_channel*` | the Linux security-key bridge check (§1), as a non-root user so the no-access case runs | the acceptance round in [AUTH_PASSKEY_REUSE.md](AUTH_PASSKEY_REUSE.md) with a real key |
 | List, chart, or animation rendering | frame timing (§7) | unit for the logic underneath |
 | Full regression on a deployed build | Skyvern | needs the rig; not CI |
 | Docs, comments, CI YAML only | none | `flutter analyze` still gates |

@@ -156,7 +156,6 @@ abstract class LocaleKeys {
   static const swapAllTime = 'swapAllTime';
   static const seed = 'seed';
   static const wallet = 'wallet';
-  static const logIn = 'logIn';
   static const logOut = 'logOut';
   static const logOutGo = 'logOutGo';
   static const delete = 'delete';
@@ -189,7 +188,6 @@ abstract class LocaleKeys {
   static const walletImportCreatePasswordTitle =
       'walletImportCreatePasswordTitle';
   static const walletImportByFileDescription = 'walletImportByFileDescription';
-  static const walletLogInTitle = 'walletLogInTitle';
   static const walletCreationNameHint = 'walletCreationNameHint';
   static const walletCreationPasswordHint = 'walletCreationPasswordHint';
   static const walletCreationConfirmPasswordHint =
@@ -475,8 +473,6 @@ abstract class LocaleKeys {
   static const fiatExchange = 'fiatExchange';
   static const bridgeExchange = 'bridgeExchange';
   static const noTxSupportHidden = 'noTxSupportHidden';
-  static const deleteWalletTitle = 'deleteWalletTitle';
-  static const deleteWalletInfo = 'deleteWalletInfo';
   static const trezorEnterPinTitle = 'trezorEnterPinTitle';
   static const trezorEnterPinHint = 'trezorEnterPinHint';
   static const trezorInProgressTitle = 'trezorInProgressTitle';
@@ -1400,8 +1396,6 @@ abstract class LocaleKeys {
   static const swapYouPay = 'swapYouPay';
   static const swapYouReceive = 'swapYouReceive';
   static const swapBalanceValue = 'swapBalanceValue';
-  static const swapFromAddress = 'swapFromAddress';
-  static const swapToAddress = 'swapToAddress';
   static const swapYourAddress = 'swapYourAddress';
   static const swapSelectAsset = 'swapSelectAsset';
   static const swapNetworkSegwit = 'swapNetworkSegwit';
@@ -1412,8 +1406,6 @@ abstract class LocaleKeys {
   static const swapEnterInUsd = 'swapEnterInUsd';
   static const swapEnterInToken = 'swapEnterInToken';
   static const swapApproxToken = 'swapApproxToken';
-  static const swapCopyAddress = 'swapCopyAddress';
-  static const swapAddressCopied = 'swapAddressCopied';
   static const swapCtaEnterAmount = 'swapCtaEnterAmount';
   static const swapCtaSelectAsset = 'swapCtaSelectAsset';
   static const swapCtaChecking = 'swapCtaChecking';
@@ -1421,7 +1413,6 @@ abstract class LocaleKeys {
   static const swapCtaReview = 'swapCtaReview';
   static const swapCtaRefresh = 'swapCtaRefresh';
   static const swapCtaChooseAnother = 'swapCtaChooseAnother';
-  static const swapCtaActivateAsset = 'swapCtaActivateAsset';
   static const swapCtaConnectWallet = 'swapCtaConnectWallet';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
   static const swapCtaBackToSwap = 'swapCtaBackToSwap';
@@ -1459,7 +1450,6 @@ abstract class LocaleKeys {
   static const swapErrorNoOrderBookFit = 'swapErrorNoOrderBookFit';
   static const swapErrorNoRouteSignedOut = 'swapErrorNoRouteSignedOut';
   static const swapErrorSignedOutRoutes = 'swapErrorSignedOutRoutes';
-  static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
   static const swapErrorRateLimited = 'swapErrorRateLimited';
   static const swapErrorRateLimitedBookUnchecked =
@@ -1481,7 +1471,6 @@ abstract class LocaleKeys {
   static const swapHelperSignedOutPriced = 'swapHelperSignedOutPriced';
   static const swapHelperBalance = 'swapHelperBalance';
   static const swapHelperHeldElsewhere = 'swapHelperHeldElsewhere';
-  static const swapHelperFeeHeld = 'swapHelperFeeHeld';
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxNetworkAndProviderFees =
       'swapHelperMaxNetworkAndProviderFees';
@@ -1577,9 +1566,7 @@ abstract class LocaleKeys {
   static const swapReviewTitle = 'swapReviewTitle';
   static const swapReviewReady = 'swapReviewReady';
   static const swapReviewChecking = 'swapReviewChecking';
-  static const swapReviewCouldNotRefresh = 'swapReviewCouldNotRefresh';
   static const swapReviewExpiredBadge = 'swapReviewExpiredBadge';
-  static const swapReviewUpdatedBadge = 'swapReviewUpdatedBadge';
   static const swapReviewStartingBadge = 'swapReviewStartingBadge';
   static const swapReviewAtLeast = 'swapReviewAtLeast';
   static const swapReviewEstimatedCompletion = 'swapReviewEstimatedCompletion';
@@ -1612,8 +1599,6 @@ abstract class LocaleKeys {
   static const swapMultiStepTitle = 'swapMultiStepTitle';
   static const swapMultiStepBody = 'swapMultiStepBody';
   static const swapReviewUpdatedTitle = 'swapReviewUpdatedTitle';
-  static const swapReviewUpdatedMinimum = 'swapReviewUpdatedMinimum';
-  static const swapReviewUpdatedCost = 'swapReviewUpdatedCost';
   static const swapReviewUpdatedCostKnown = 'swapReviewUpdatedCostKnown';
   static const swapReviewExpiredTitle = 'swapReviewExpiredTitle';
   static const swapReviewExpiredBody = 'swapReviewExpiredBody';
@@ -1639,7 +1624,6 @@ abstract class LocaleKeys {
   static const swapReviewPriceUnavailableBody =
       'swapReviewPriceUnavailableBody';
   static const swapReviewPanelNote = 'swapReviewPanelNote';
-  static const swapStartSwap = 'swapStartSwap';
   static const swapStartApprove = 'swapStartApprove';
   static const swapStartReset = 'swapStartReset';
   static const swapAcceptUpdated = 'swapAcceptUpdated';
@@ -1859,9 +1843,6 @@ abstract class LocaleKeys {
   static const swapPickerTabAll = 'swapPickerTabAll';
   static const swapPickerSameTicker = 'swapPickerSameTicker';
   static const swapPickerSelected = 'swapPickerSelected';
-  static const swapPickerInactive = 'swapPickerInactive';
-  static const swapPickerActivate = 'swapPickerActivate';
-  static const swapPickerActivating = 'swapPickerActivating';
   static const swapPickerUnavailable = 'swapPickerUnavailable';
   static const swapPickerNoResultsTitle = 'swapPickerNoResultsTitle';
   static const swapPickerNoAssetsTitle = 'swapPickerNoAssetsTitle';
@@ -1870,7 +1851,6 @@ abstract class LocaleKeys {
   static const swapPickerLoading = 'swapPickerLoading';
   static const swapPickerErrorTitle = 'swapPickerErrorTitle';
   static const swapPickerErrorBody = 'swapPickerErrorBody';
-  static const swapPickerActivationFailed = 'swapPickerActivationFailed';
   static const swapPickerIdentity = 'swapPickerIdentity';
   static const swapA11yQuoteSummary = 'swapA11yQuoteSummary';
   static const swapAnnounceChecking = 'swapAnnounceChecking';
@@ -2201,7 +2181,8 @@ abstract class LocaleKeys {
   static const authExistingPasskeyNotFound = 'authExistingPasskeyNotFound';
   static const authExistingPasskeyUnsupported =
       'authExistingPasskeyUnsupported';
-  static const authExistingPasskeyProviderError = 'authExistingPasskeyProviderError';
+  static const authExistingPasskeyProviderError =
+      'authExistingPasskeyProviderError';
   static const authPasskeySetupInterrupted = 'authPasskeySetupInterrupted';
   static const authExistingPasskeyReady = 'authExistingPasskeyReady';
   static const authExistingPasskeyOffDescription =
@@ -2222,6 +2203,37 @@ abstract class LocaleKeys {
   static const authPasskeyRemoved = 'authPasskeyRemoved';
   static const authPasswordChangedDevicePasskeyOff =
       'authPasswordChangedDevicePasskeyOff';
+  static const authSecurityKeyInsertTitle = 'authSecurityKeyInsertTitle';
+  static const authSecurityKeyInsert = 'authSecurityKeyInsert';
+  static const authSecurityKeyNoAccessTitle = 'authSecurityKeyNoAccessTitle';
+  static const authSecurityKeyNoAccess = 'authSecurityKeyNoAccess';
+  static const authSecurityKeyReinsertTitle = 'authSecurityKeyReinsertTitle';
+  static const authSecurityKeyReinsert = 'authSecurityKeyReinsert';
+  static const authSecurityKeyChooseKeyTitle = 'authSecurityKeyChooseKeyTitle';
+  static const authSecurityKeyChooseKey = 'authSecurityKeyChooseKey';
+  static const authSecurityKeyPinTitle = 'authSecurityKeyPinTitle';
+  static const authSecurityKeyPinLabel = 'authSecurityKeyPinLabel';
+  static const authSecurityKeyPinWrong = 'authSecurityKeyPinWrong';
+  static const authSecurityKeyPinTries = 'authSecurityKeyPinTries';
+  static const authSecurityKeyPinLastTry = 'authSecurityKeyPinLastTry';
+  static const authSecurityKeyPinTooShort = 'authSecurityKeyPinTooShort';
+  static const authSecurityKeyPinTooLong = 'authSecurityKeyPinTooLong';
+  static const authSecurityKeyTouchTitle = 'authSecurityKeyTouchTitle';
+  static const authSecurityKeyTouch = 'authSecurityKeyTouch';
+  static const authSecurityKeyTimedOutTitle = 'authSecurityKeyTimedOutTitle';
+  static const authSecurityKeyTimedOut = 'authSecurityKeyTimedOut';
+  static const authSecurityKeyChooseAccountTitle =
+      'authSecurityKeyChooseAccountTitle';
+  static const authSecurityKeyChooseAccount = 'authSecurityKeyChooseAccount';
+  static const authSecurityKeyUnnamedPasskey = 'authSecurityKeyUnnamedPasskey';
+  static const authSecurityKeyPasskeyUnusable =
+      'authSecurityKeyPasskeyUnusable';
+  static const authSecurityKeyPasskeyNotFound =
+      'authSecurityKeyPasskeyNotFound';
+  static const authSecurityKeyUnsupported = 'authSecurityKeyUnsupported';
+  static const authOpenWithoutPasskey = 'authOpenWithoutPasskey';
+  static const authOpenWithoutPasskeyPending = 'authOpenWithoutPasskeyPending';
+  static const authOpenedWithoutPasskey = 'authOpenedWithoutPasskey';
   static const swapAssetPreparationUnavailable =
       'swapAssetPreparationUnavailable';
   static const swapAvailabilityChecking = 'swapAvailabilityChecking';

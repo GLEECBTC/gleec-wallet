@@ -123,6 +123,15 @@ extension on _WalletProtectionPanelState {
               ? null
               : () => _request(WalletProtectionAction.device),
         ),
+      if (state.canUseDeviceStorage)
+        SecuritySecondaryButton(
+          key: const Key('use-device-storage'),
+          icon: const Icon(Icons.key_off_outlined),
+          text: 'authOpenWithoutPasskey'.tr(),
+          onPressed: view.blocked
+              ? null
+              : () => _request(WalletProtectionAction.deviceStorage),
+        ),
     ];
     if (primary == null && alternatives.isEmpty) return null;
     return SizedBox(
