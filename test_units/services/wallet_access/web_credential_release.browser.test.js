@@ -319,8 +319,10 @@ async function main() {
       window.__walletKey=await new Promise(resolve=>{const request=db.transaction('credentials').objectStore('credentials').getAll();request.onsuccess=()=>resolve(request.result.find(row=>row.slot.startsWith('active:')).walletKey);});db.close();return true;
     })()`);
     await page.send('WebAuthn.setAutomaticPresenceSimulation',{authenticatorId:virtual.authenticatorId,enabled:false});
+    const challengesBeforePendingRead=await page.evaluate('__gleecReleaseProbe.metrics().challenges');
     await page.evaluate("window.__pendingRead=gleecWalletCredentials.read({key:window.__walletKey}).then(()=> 'unexpectedSuccess',error=>error.code);true");
-    await delay(100);
+    await browser.wait(page,`__gleecReleaseProbe.metrics().challenges===${challengesBeforePendingRead+1}`,
+      {label:'the test read has reached an outstanding passkey assertion'});
     // An external revision notification must invalidate an in-flight result,
     // even if it arrives while the browser's system ceremony is outstanding.
     const revisionKey=await page.evaluate('window.__walletKey');

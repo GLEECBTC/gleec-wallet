@@ -11,8 +11,10 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_import_type_dropdown.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
 import '../../../support/legal_onboarding_harness.dart';
@@ -172,6 +174,40 @@ void main() {
       expect(imports, ['test']);
     },
   );
+
+  for (final chooseLegacy in [false, true]) {
+    testWidgets(
+      'finishing a valid phrase preserves the intended wallet type (explicit Legacy: $chooseLegacy)',
+      (tester) async {
+        await pumpImport(tester);
+        final seed = find.byKey(const Key('import-seed-field'));
+        final dropdown = find.byType(WalletImportTypeDropdown);
+        WalletImportTypeDropdown selector() => tester.widget(dropdown);
+
+        await tester.enterText(seed, legalTestSeed);
+        await tester.pumpAndSettle();
+        expect(selector().selectedType, WalletType.hdwallet);
+        if (chooseLegacy) {
+          selector().onChanged(WalletType.iguana);
+          await tester.pumpAndSettle();
+        }
+
+        await tester.enterText(
+          seed,
+          legalTestSeed.substring(0, legalTestSeed.length - 1),
+        );
+        await tester.pumpAndSettle();
+        expect(selector().isHdOptionEnabled, isFalse);
+        await tester.enterText(seed, legalTestSeed);
+        await tester.pumpAndSettle();
+        expect(selector().isHdOptionEnabled, isTrue);
+        expect(
+          selector().selectedType,
+          chooseLegacy ? WalletType.iguana : WalletType.hdwallet,
+        );
+      },
+    );
+  }
 
   testWidgets('a taken name is reported beside the name field', (tester) async {
     final (harness, imports, _) = await pumpImport(tester);

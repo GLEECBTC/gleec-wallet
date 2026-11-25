@@ -17,6 +17,11 @@ class Wallet {
     this.legacyWalletExtras,
   });
 
+  /// Matches the catalog entry even when a caller holds an older projection.
+  bool matchesKdfUser(KdfUser user) =>
+      name == user.walletId.name &&
+      (config.pubKey == null || config.pubKey == user.walletId.pubkeyHash);
+
   factory Wallet.fromJson(Map<String, dynamic> json) => Wallet(
     id: json['id'] as String? ?? '',
     name: json['name'] as String? ?? '',
@@ -354,6 +359,18 @@ enum WalletProvenance {
 }
 
 extension KdfUserWalletExtension on KdfUser {
+  AuthOptions walletSignInOptions({
+    DerivationMethod? verifiedDerivation,
+    bool? allowWeakPassword,
+  }) {
+    final stored = walletId.authOptions;
+    return AuthOptions(
+      derivationMethod: verifiedDerivation ?? stored.derivationMethod,
+      privKeyPolicy: stored.privKeyPolicy,
+      allowWeakPassword: allowWeakPassword ?? stored.allowWeakPassword,
+    );
+  }
+
   Wallet get wallet {
     final walletType = _walletTypeFromMetadataOrAuth(this);
     final provenance = _walletProvenanceFromMetadata(this);
@@ -392,8 +409,14 @@ extension KdfSdkWalletExtension on KomodoDefiSdk {
 
 WalletType _walletTypeFromMetadataOrAuth(KdfUser user) {
   final metadataType = user.metadata['type'];
-  if (metadataType is String && metadataType.isNotEmpty) {
-    return WalletType.fromJson(metadataType);
+  // Software addresses follow the derivation in the SDK identity. An older
+  // wallet may have authenticated in another mode since its initial import.
+  for (final type in WalletType.values) {
+    if (type.name == metadataType &&
+        type != WalletType.hdwallet &&
+        type != WalletType.iguana) {
+      return type;
+    }
   }
 
   return user.walletId.isHd ? WalletType.hdwallet : WalletType.iguana;

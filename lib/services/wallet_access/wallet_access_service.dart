@@ -184,19 +184,48 @@ class WalletAccessService {
     throw const WalletAccessException(WalletAccessFailure.walletUnavailable);
   }
 
-  /// Name and verified identity select the wallet. Its derivation mode does
-  /// not: the type a [Wallet] carries comes from metadata or a login toggle,
-  /// and need not be the mode the engine last opened it in.
+  /// Resolve the selected wallet against the current engine catalog.
   Future<KdfUser> _resolveWallet(Wallet wallet) async {
     final users = await _sdk.auth.getUsers();
     for (final user in users) {
-      if (user.walletId.name == wallet.name &&
-          (wallet.config.pubKey == null ||
-              wallet.config.pubKey == user.walletId.pubkeyHash)) {
+      if (wallet.matchesKdfUser(user)) {
         return user;
       }
     }
     throw const WalletAccessException(WalletAccessFailure.walletUnavailable);
+  }
+
+  /// An older login screen could overwrite the SDK options before its
+  /// password was checked. Prefer the last authenticated derivation only
+  /// when its record identifies the exact same wallet entry and public key.
+  Future<AuthOptions> signInOptionsFor(
+    KdfUser user, {
+    bool? allowWeakPassword,
+  }) async {
+    DerivationMethod? verifiedDerivation;
+    if (user.walletId.hasFullIdentity) {
+      try {
+        final last = await _storage.read(_lastKey);
+        if (last is Map &&
+            last['entryId'] == entryId(user) &&
+            last['walletId'] is Map) {
+          final verified = WalletId.fromJson(
+            Map<String, dynamic>.from(last['walletId'] as Map),
+          );
+          if (verified.isSameAs(user.walletId) &&
+              verified.authOptions.privKeyPolicy ==
+                  user.walletId.authOptions.privKeyPolicy) {
+            verifiedDerivation = verified.authOptions.derivationMethod;
+          }
+        }
+      } on Object {
+        // If the previous entry is unreadable, use the SDK catalog.
+      }
+    }
+    return user.walletSignInOptions(
+      verifiedDerivation: verifiedDerivation,
+      allowWeakPassword: allowWeakPassword,
+    );
   }
 
   /// Unlike [status], reports a missing or unusable stored unlock in
@@ -295,7 +324,6 @@ class WalletAccessService {
   /// One pending operation survives process death. No seed is generated here:
   /// the SDK reserves the ID and safely resumes its persisted engine wallet.
   Future<KdfUser> createWallet({
-    required WalletType walletType,
     required Map<String, dynamic> initialMetadata,
     bool useDeviceProtection = true,
   }) => _runAccessOperation((revision) async {
@@ -390,7 +418,7 @@ class WalletAccessService {
       record = WalletAccessRecord(
         entryId: id,
         walletName: name,
-        isHd: walletType == WalletType.hdwallet,
+        isHd: true,
         protection: info.protection,
         requiresAuthentication: info.enrolled,
       );
@@ -441,6 +469,7 @@ class WalletAccessService {
     final completedRecord = record!;
     _ensureRevision(revision);
     if (entryId(user) != completedRecord.entryId ||
+        user.walletId.isHd != completedRecord.isHd ||
         !user.walletId.hasFullIdentity) {
       throw const WalletAccessException(WalletAccessFailure.invalidResponse);
     }
@@ -569,9 +598,12 @@ class WalletAccessService {
           revision: revision,
         );
         _ensureRevision(revision);
+        final options = await signInOptionsFor(user);
+        _ensureRevision(revision);
+        final expectedId = user.walletId.copyWith(authOptions: options);
         final KdfUser signedIn;
         try {
-          signedIn = await _openEngineSession(user, password);
+          signedIn = await _openEngineSession(expectedId, password);
         } on AuthException catch (error) {
           // The stored credential predates a password change the engine did
           // complete. Only the new password can finish that change.
@@ -589,7 +621,7 @@ class WalletAccessService {
             expectedWalletId: signedIn.walletId,
           );
           if (entryId(signedIn) != record.entryId ||
-              signedIn.walletId != user.walletId) {
+              signedIn.walletId != expectedId) {
             return false;
           }
           _ensureRevision(revision);
@@ -1507,13 +1539,13 @@ class WalletAccessService {
   /// interrupted rotation even if KDF still uses the former generated one.
   ///
   /// Returns the user it signed in, or null when there was nothing to recover
-  /// and ordinary sign-in should proceed. [options] is the derivation mode
-  /// the user asked for; it defaults to the one last used.
+  /// and ordinary sign-in should proceed. Recovery uses the same stored
+  /// derivation as ordinary sign-in.
   Future<KdfUser?> recoverPasswordRotation(
     Wallet wallet,
     String password, {
-    AuthOptions? options,
-  }) => _recoverPasswordRotation(wallet, password, options);
+    bool? allowWeakPassword,
+  }) => _recoverPasswordRotation(wallet, password, allowWeakPassword);
 
   Future<PasswordManagerOutcome> saveToPasswordManager({
     required WalletId walletId,

@@ -60,7 +60,6 @@ Future<RollbackFixture> _write(String scenario) async {
       ? scenario.substring('recovery-'.length)
       : 'none';
   final creating = fixture.service.createWallet(
-    walletType: WalletType.hdwallet,
     useDeviceProtection: protected,
     initialMetadata: {
       'type': 'hdwallet',
@@ -168,7 +167,6 @@ Future<void> _read(RollbackFixture fixture, String scenario) async {
     if (_phase != 'upgrade') {
       expect(fixture.storage.values['wallet_access_pending_v1'], id);
       final created = await fixture.service.createWallet(
-        walletType: WalletType.hdwallet,
         initialMetadata: const {'type': 'hdwallet'},
       );
       expect(WalletAccessService.entryId(created), id);

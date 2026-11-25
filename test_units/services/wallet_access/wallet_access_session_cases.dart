@@ -176,7 +176,7 @@ void _sessionCases() {
           otherHash,
         ),
         isBip39Seed: true,
-        // As in the app, the type in metadata keeps naming the first mode.
+        // Old catalog metadata can still describe the original registration.
         metadata: hd.metadata,
       );
       h.auth.users[0] = iguana;
@@ -193,10 +193,9 @@ void _sessionCases() {
         final status = await h.service.status();
         expect(status.hasManagedCredential, isTrue);
         expect(status.protection, CredentialProtection.authenticationBound);
-        // The stored credential keeps opening the wallet in this mode, also
-        // from a wallet list that still names the first one.
+        // An older wallet opened in Iguana keeps its authenticated addresses.
         await h.restart();
-        expect(iguana.wallet.config.type, WalletType.hdwallet);
+        expect(iguana.wallet.config.type, WalletType.iguana);
         expect(
           (await h.service.statusForWallet(iguana.wallet)).hasManagedCredential,
           isTrue,

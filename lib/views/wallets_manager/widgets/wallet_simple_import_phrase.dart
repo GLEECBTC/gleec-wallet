@@ -7,7 +7,8 @@ mixin _RecoveryPhraseEntry on State<WalletSimpleImport> {
   final TextEditingController _seedController = TextEditingController(text: '');
   bool _isSeedHidden = true;
   bool _allowCustomSeed = false;
-  bool _isHdMode = true;
+  bool _legacyModeSelected = false;
+  bool get _isHdMode => !_legacyModeSelected && _isHdCompatibleWithCurrentSeed;
   List<String> _bip39Words = const [];
   List<String> _seedWordSuggestions = const [];
   int _activeWordStart = -1;
@@ -204,13 +205,6 @@ mixin _RecoveryPhraseEntry on State<WalletSimpleImport> {
     final validator = context.read<KomodoDefiSdk>().mnemonicValidator;
     final isBip39 = validator.validateBip39(seed);
     return !isBip39;
-  }
-
-  void _syncWalletTypeWithSeedCompatibility() {
-    if (_isHdMode && !_isHdCompatibleWithCurrentSeed) {
-      _isHdMode = false;
-      _allowCustomSeed = false;
-    }
   }
 
   bool get _isHdCompatibleWithCurrentSeed {
