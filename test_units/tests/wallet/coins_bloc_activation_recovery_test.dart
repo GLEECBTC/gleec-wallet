@@ -327,6 +327,77 @@ void testCoinsBlocActivationRecovery() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(repo.activateCalls.single.single.id, asset.id);
       expect(auth.metadataWrites, 1);
+      expect(
+        sdk.backoffResets,
+        [
+          [asset.id],
+        ],
+        reason: 'the selection clears the backoff before policy resumes it',
+      );
+    });
+
+    group('activation backoff', () {
+      late Asset deferred;
+
+      setUp(() {
+        deferred = _assetFromConfig(_utxoConfig(coin: 'CLC'));
+      });
+
+      Future<(_FakeCoinsRepo, _FakeTradingStatusService)> signInWithoutPolicy(
+        _FakeSdk Function(_FakeAuth auth) buildSdk,
+      ) async {
+        final auth = _FakeAuth(
+          _user('Original').copyWith(
+            metadata: const {
+              'activated_coins': ['KMD', 'CLC'],
+            },
+          ),
+        );
+        final repo = _FakeCoinsRepo()
+          ..catalogue = {
+            asset.id.id: _coin(asset, CoinState.inactive),
+            deferred.id.id: _coin(deferred, CoinState.inactive),
+          };
+        final policy = _FakeTradingStatusService()..ready = false;
+        final sdk = buildSdk(auth);
+        final bloc = CoinsBloc(sdk, repo, policy);
+        addTearDown(bloc.close);
+        addTearDown(sdk.walletAssets.dispose);
+        addTearDown(policy.changes.close);
+        bloc.add(CoinsSessionStarted(auth.user!));
+        await bloc.stream.firstWhere(
+          (state) => state.coins[asset.id.id]?.isSuspended ?? false,
+        );
+        return (repo, policy);
+      }
+
+      test('policy updates skip coins the SDK is backing off', () async {
+        late _FakeSdk sdk;
+        final (repo, policy) = await signInWithoutPolicy(
+          (auth) => sdk = _FakeSdk(
+            assets: _FakeAssetManager({asset.id: asset, deferred.id: deferred}),
+            pubkeys: _FakePubkeyManager(),
+            auth: auth,
+          )..deferred.add(deferred.id),
+        );
+
+        policy.ready = true;
+        policy.changes.add(const AppGeoStatus());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repo.activateCalls.single.map((a) => a.id), [asset.id]);
+        expect(
+          repo.respectedBackoff.single,
+          isTrue,
+          reason: 'automatic re-activation must not override the backoff',
+        );
+
+        // Once the backoff expires, the next policy update retries it.
+        sdk.deferred.clear();
+        policy.changes.add(const AppGeoStatus());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.activateCalls.last.map((a) => a.id), contains(deferred.id));
+      });
     });
   });
 }
@@ -404,6 +475,25 @@ class _FakeSdk implements KomodoDefiSdk {
     Duration timeout = const Duration(seconds: 30),
   }) async => false;
 
+  /// Assets the SDK's activation backoff is currently holding back.
+  final Set<AssetId> deferred = {};
+  final List<List<AssetId>> backoffResets = [];
+
+  @override
+  void resetActivationBackoff([Iterable<AssetId>? assetIds]) =>
+      backoffResets.add(assetIds?.toList() ?? const []);
+
+  @override
+  ActivationDeferredException? activationDeferral(AssetId assetId) =>
+      deferred.contains(assetId)
+      ? ActivationDeferredException(
+          assetId: assetId,
+          retryAfter: DateTime.now().add(const Duration(minutes: 1)),
+          consecutiveFailures: 3,
+          lastError: 'servers list is empty',
+        )
+      : null;
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -413,6 +503,7 @@ class _FakeCoinsRepo implements CoinsRepo {
   Map<String, Coin> catalogue = {};
   Future<void> Function(WalletId expectedWalletId)? writeMetadata;
   final List<List<Asset>> activateCalls = [];
+  final List<bool> respectedBackoff = [];
   Future<void>? activationCompletion;
 
   @override
@@ -430,11 +521,13 @@ class _FakeCoinsRepo implements CoinsRepo {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
     bool useSharedActivationCache = false,
+    bool respectActivationBackoff = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
   }) async {
     activateCalls.add(assets);
+    respectedBackoff.add(respectActivationBackoff);
     await activationCompletion;
   }
 

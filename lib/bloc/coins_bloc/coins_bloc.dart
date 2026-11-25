@@ -62,6 +62,10 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     on<CoinsBalanceMonitoringStopped>(_onCoinsBalanceMonitoringStopped);
     on<CoinsBalancesRefreshed>(_onCoinsRefreshed, transformer: droppable());
     on<CoinsActivated>(_onCoinsActivated, transformer: concurrent());
+    on<_CoinsReactivationRequested>(
+      _onReactivationRequested,
+      transformer: concurrent(),
+    );
     on<CoinsDeactivated>(_onCoinsDeactivated, transformer: concurrent());
     on<CoinsPricesUpdated>(_onPricesUpdated, transformer: droppable());
     on<CoinsSessionStarted>(_onLogin, transformer: restartable());
@@ -256,15 +260,17 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     try {
       final selected = await _kdfSdk.walletAssets.load();
       if (isClosed || generation != _walletSessionGeneration) return;
-      final pending = selected
-          .where(
-            (id) =>
-                known.containsKey(id) &&
-                !(state.walletCoins[id]?.isActive ?? false) &&
-                !(state.walletCoins[id]?.isActivating ?? false),
-          )
-          .toList();
-      if (pending.isNotEmpty) add(CoinsActivated(pending));
+      // Policy updates arrive about once a minute. A coin whose activation
+      // keeps failing the same way waits out the SDK's backoff instead of
+      // being retried, and re-shown as activating, on every one of them.
+      final pending = selected.where((id) {
+        final coin = known[id];
+        return coin != null &&
+            !(state.walletCoins[id]?.isActive ?? false) &&
+            !(state.walletCoins[id]?.isActivating ?? false) &&
+            _kdfSdk.activationDeferral(coin.id) == null;
+      }).toList();
+      if (pending.isNotEmpty) add(_CoinsReactivationRequested(pending));
     } on AuthException {
       // A policy result can arrive before any wallet has signed in.
     } on WalletChangedDisconnectException {
@@ -520,7 +526,18 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   Future<void> _onCoinsActivated(
     CoinsActivated event,
     Emitter<CoinsState> emit,
-  ) async {
+  ) => _activateRequestedCoins(event.coinIds, emit, isAutomatic: false);
+
+  Future<void> _onReactivationRequested(
+    _CoinsReactivationRequested event,
+    Emitter<CoinsState> emit,
+  ) => _activateRequestedCoins(event.coinIds, emit, isAutomatic: true);
+
+  Future<void> _activateRequestedCoins(
+    Iterable<String> coinIds,
+    Emitter<CoinsState> emit, {
+    required bool isAutomatic,
+  }) async {
     final generation = _walletSessionGeneration;
     final user = await _kdfSdk.auth.currentUser;
     if (user == null || emit.isDone || generation != _walletSessionGeneration) {
@@ -528,8 +545,13 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     }
     // Start off by emitting the newly activated coins so that they all appear
     // in the list at once, rather than one at a time as they are activated
-    emit(_prePopulateListWithActivatingCoins(event.coinIds));
-    await _activateCoins(event.coinIds, emit, expectedWalletId: user.walletId);
+    emit(_prePopulateListWithActivatingCoins(coinIds));
+    await _activateCoins(
+      coinIds,
+      emit,
+      expectedWalletId: user.walletId,
+      isAutomatic: isAutomatic,
+    );
     if (isClosed || emit.isDone || generation != _walletSessionGeneration) {
       return;
     }
@@ -845,11 +867,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   /// activated-assets refresh. User-initiated activation (coins manager, DEX)
   /// keeps the patient per-call defaults - there the user is explicitly waiting
   /// on one coin and would rather it eventually succeed than fail fast.
+  ///
+  /// Only user-initiated activation overrides the SDK's backoff for coins that
+  /// keep failing; the login fan-out and [isAutomatic] re-activation respect it.
   Future<void> _activateCoins(
     Iterable<String> coins,
     Emitter<CoinsState> emit, {
     required WalletId expectedWalletId,
     bool isInitialLogin = false,
+    bool isAutomatic = false,
   }) async {
     final generation = _walletSessionGeneration;
     void cancelPendingActivation() {
@@ -891,6 +917,11 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         expectedSession: session,
       );
       _kdfSdk.auth.ensureSessionContextCurrent(session);
+    }
+    // Cleared before the policy check: a request made while policy is still
+    // loading is carried out later by the automatic re-activation.
+    if (!isInitialLogin && !isAutomatic) {
+      _kdfSdk.resetActivationBackoff(availableAssets.map((asset) => asset.id));
     }
     if (!_tradingStatusService.isActivationReady) {
       cancelPendingActivation();
@@ -946,6 +977,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
             [asset],
             addToWalletMetadata: false,
             useSharedActivationCache: isInitialLogin,
+            respectActivationBackoff: isInitialLogin || isAutomatic,
             maxRetryAttempts: isInitialLogin
                 ? _loginActivationRetryAttempts
                 : _defaultActivationRetryAttempts,
