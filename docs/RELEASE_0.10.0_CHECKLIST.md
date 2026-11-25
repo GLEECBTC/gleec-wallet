@@ -1,21 +1,144 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current RC inputs: 3 November 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current draft-finalization record: 13 November 2026; dated earlier records follow.
+App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Draft finalization — 13 November 2026
+
+The owner authorized completing preparation, merging #3575 with a merge commit
+and an override for missing approval only after current checks pass, then
+creating tag `0.10.0` and a **draft** GitHub release. The public latest release
+stays `0.9.7-1`; production deployment and publication remain separate.
+
+- [x] Selected official KDF main `f9632e0ec771668a6f21b37aede01a30110141cb`
+  (`v3.2.0-beta`). Only KDF's changelog differs from `a51d69a`.
+- [x] SDK #446 carries #433's reviewed JSON/YAML pin and seven checksum changes
+  onto SDK main. App pins accepted main `554087ee7401c8ea019494273134d92aea6f767a`;
+  the SDK version remains 0.9.0 and coins remain `cc8249e8`.
+- [x] Independently checked all seven release archive digests, mirror sidecars,
+  archive integrity/contents, compiled commit markers and the native version.
+  The current input manifest and SDK's 13 November artifact record retain proof.
+- [x] Reused app #3588's exact engine-pin regression, audited unchanged payment/
+  refund gas defaults, and corrected iOS setup to use the installed device SDK.
+- [x] Recorded local SDK/app checks and the unchanged enforced lockfile in the
+  current input manifest. Earlier a51 results are historical qualification.
+- [x] Prepared the complete [GitHub draft notes](RELEASE_0.10.0.md), production
+  build guide and new 13-file served hash list before app promotion.
+- [x] Retrieved hosted LI.FI terms version 1.0, effective 6 November, on
+  13 November; SHA-256 `343d3565d8d4a42cb7623bb616677bbdbd4b721a7782aaa1b87fb88bc89c4104`.
+  Retrieval confirms availability, separately from the legal owner's approval.
+
+The initial 13 November carry GUI run failed `failure_taker_order` on Chrome
+and Safari after the swap's success/payment assertions passed: its history
+check waited a fixed five seconds for a subscription refreshed every ten
+seconds. The focused test repair waits for the row with a 60-second bound,
+then keeps the same exactly-one-row assertion. It changes no app runtime or
+settlement assertion. Preserve run `43461084482` and require fresh current-head
+browser qualification; the initial unit/coverage job passed separately.
+
+Before merging, the focused carry and #3575 must pass every current hosted
+check, including native builds, both browser suites and the refreshed preview.
+Record accepted SHAs and check/preview evidence in the PR metadata. Verify the
+SDK tag preflight before promotion and again against the app main merge.
+
+Signed packaging, installation/upgrade tests, Charl's fee-collection check and
+production provider/legal approval remain distribution gates. A draft does
+not mark them complete. Keep the RC testing channel and update endpoint until
+actual publication. The older dated records below retain their original
+revisions and authorization statements; this section is the current instruction.
+
+## LI.FI production-default carry — 6 November 2026
+
+Wallet #3585 adds public profiles, compiled-profile checks and artifact records.
+The 6 November follow-up supports production only, including GitHub previews,
+because staging has no separately verified KDP integration/key route.
+This carry changes the app's default integrator to production; the rest of the
+accepted runtime is retained. SDK `09bde8c6978433d509ffabe6696d495fe5923745`
+remains pinned from #3603, with KDF `a51d69a1` and coins `cc8249e8`.
+The current PR head, hosted checks and refreshed preview are recorded in #3575.
+Older dated preview and test records below do not certify this changed default.
+
+## Accepted snapshot — 4 November 2026 (historical)
+
+- Runtime: app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
+  `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge
+  `bb5b4187bf49f844c01672799b451b50a5b08808` (SDK `release-0.9.0`
+  `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release
+  docs); coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
+  [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
+  accepted change after #3575 opened at `ffcac834`. The docs-only merges after
+  it, #3591 (`4d52eb0e`) and this handover update, change no runtime input.
+  Unchecked boxes in the dated sections below are historical; this list and
+  the required dispositions further down are current.
+- [x] Actual source/carry acceptance recorded in the input manifest: app
+  #3586 squash / #3587 normal merge and SDK #430 squash / #431 normal merge.
+  Accepted trees matched tested candidates; current hosted source/carry/main
+  app checks passed **14/9/17** and SDK main checks passed **5**.
+- [x] Session follow-ups: app #3592 squash `d7c369cef` / #3593 normal merge
+  `62d6ded1e`, and SDK #437 squash `34dd5feb` / #438 normal merge `ad179927`.
+  Accepted trees matched tested candidates. The full app unit gate passed
+  **4,004 / 4 skipped** on both branches; the SDK suites are in SDK #436.
+- [x] Final coins roll: app #3594 squash `30e71b79a` / #3595 normal merge
+  `42be44e92`, and SDK #439 squash `ab29d57a` / #440 normal merge `7636f554`.
+  Accepted trees matched tested candidates; app gate **4,004 / 4 skipped** on
+  both branches. The frozen-coins item below records the evidence.
+- [x] Refreshed the ordinary main-RC preview at `3f2058c8` (run 41870423603)
+  and at the docs-only head `4d52eb0e` (run 41878902785). Each build's source
+  tree equals its head, the SDK is `caab72b9`, legal bypass and production
+  approval are **false**, the JavaScript matches its identity, and all 13
+  served config/coin/engine files are byte-identical across both builds. The
+  JavaScript hash changes with every head because the build embeds the short
+  commit and a timestamp, so compare the served files, not that hash.
+- [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
+  JavaScript and all 13 served config/coin/engine files. The
+  [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
+  and production approval **false**. Recheck live identity after later carries;
+  this is not a signed-installer or production approval record.
+- [x] Accepted SDK #435 (normal merge `bb5b4187`, carrying #434 squash
+  `1205d305`) and app #3590 squash `5b2e21962` / #3589 normal merge
+  `3f2058c80`, which pins SDK `caab72b9`. Accepted trees matched tested
+  candidates; the app gate passed **4,008 / 4 skipped** on both branches.
+  Hosted checks passed apart from macOS jobs that GitHub cancelled because no
+  runner picked them up.
+- [x] Owner disposition (4 November): the native Trezor restart
+  health-check/sign-out observation and device-lock `Unexpected message`
+  attempts ship as a known limit, with a follow-up after release. After a
+  restart a failed health check can restart the engine signed out; a locked
+  device answers `Unexpected message` until a fresh reconnect and unlock. The
+  successful default-selection reconnect round does not certify automatic
+  session recovery or a complete native balance view.
+- [x] Owner decision (6 November), superseding the 4 November deferral:
+  carry wallet #3585 into this RC. Production (`gleec-dex-production`) is the
+  compiled default and the default for shared actions, Docker and GitHub
+  workflows. The subsequent 6 November instruction removes staging entirely
+  from supported build profiles and preview choices. The production profile preserves the
+  proxy, enabled integrator and 178 + 22 bps fee allocation. SDK #432 remains
+  deferred; this wallet carry does not change the accepted SDK/KDF/coins pins.
+  Use the [production build guide](RELEASE_0.10.0_PRODUCTION_BUILD.md) and
+  verify every artifact's integrator; the profile/dependency/hash records are
+  optional.
+- [ ] Retain final promotion review, approved legal text, signed packaging,
+  install/upgrade evidence and Charl's LI.FI fee-collection test on the signed
+  builds as separate distribution gates. SDK #416 merged into `main` as
+  `09bde8c6`, which #3603 pinned into this RC. App #3575 remains open with no
+  automatic merge. No main promotion, tag, publication or production deploy
+  is authorized by this preparation update.
+
 ## Validated KDF and coins roll — 3 November
 
-This development candidate pins accepted SDK `db73613cd34a2c0779da024a71338052e4bbb030`.
+That candidate pinned accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
 SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
 squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
 [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
 `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. Both accepted trees match their validated sources.
-App #3586 and #3587 acceptance remains gated on current hosted checks. Main
-release PRs SDK #416 and app #3575 stay open.
+App #3586 was squash accepted as `1249c500c96a7dc139ae7b86d8667e8304bd6a1b`;
+normal carry #3587 is `da3214d80f3c75aa0cc6fe718f75403226df6f30`. Main release
+PRs SDK #416 and app #3575 stay open.
 
 - [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
   builds and all 17 test jobs passed. Original failures and their passing retries
@@ -38,10 +161,11 @@ release PRs SDK #416 and app #3575 stay open.
   in exact a51 source; updated the source comment and exact-pin regression.
 - [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
   checks passed, using only the owner-authorized approval override.
-- [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
-  checks pass with the named Banxa deferral, then record accepted heads and
-  refreshed final preview identity. The Windows runner disconnect before
-  compilation remains an infrastructure failure requiring a passing current run.
+- [x] App #3586 dev squash and #3587 normal RC carry accepted after current
+  checks passed with the named Banxa deferral. Final current-head Windows
+  validation passed; the earlier runner disconnect remains historical evidence.
+  iOS simulator setup exit 70 occurred before compilation and passed on its
+  single actual retry. Accepted heads and ordinary preview identity are recorded.
 - [x] The owner explicitly deferred `Banxa on-ramp quotes and selection` for
   0.10.0. It is visibly skipped in the integration aggregator, not reported as
   a quote pass; existing Ramp deferral remains separate. Original Chrome/Safari
@@ -52,10 +176,12 @@ release PRs SDK #416 and app #3575 stay open.
 The first final RC Chrome run stopped at `Run wallet tests` /
 `failure_withdraw`: a global animation settle timed out after MARTY activated.
 The focused test repair waits for the balance view, followed by the unchanged
-actual funded-balance and withdrawal assertions. Read-only probes reached the
-funded balance; current full browser validation remains required.
+actual funded-balance and withdrawal assertions. Both Chrome/Safari source and
+carry GUI suites subsequently passed the repaired path. The two separate
+read-only receive/copy probes remained incomplete and are not full passes.
 
-Historical sections below retain their original revisions and dispositions.
+Historical sections below retain their original revisions and dispositions;
+their older pending/passing statements do not replace the current snapshot.
 
 ## Opsec swap authorization — 3 November
 
@@ -89,6 +215,28 @@ for their recorded revisions.
   moved it to `7ce3962d`. The "SDK pin is merged" check now runs on every pull
   request and goes red when the pin is on none of the SDK's `dev`, `main`,
   `release-X.Y.Z` or `release/X.Y.Z` branches. It is not a required check.
+
+## Atomic token restoration — 29 October
+
+App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) was squash
+merged into dev as `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c`. Its complete tree equals tested source
+`34bad84020e68bf4fe4547ea7990287d050c3aa0`. The focused release carry includes that accepted squash and these
+validation records; later dev work must not enter the candidate automatically.
+
+- [x] Restore the previous release's atomic EVM-token trading, Advanced orders
+  and bot starts. The existing review describes engine-managed allowance with
+  no new modal, acknowledgement or client-imposed approval limit.
+- [x] 95 focused quote/execution/review/option regressions pass, including
+  unresolved token parents, pricing metadata and phone layout at 200% text.
+- [x] Full app aggregator: **3,922 passed / four skipped**, with all four
+  production GasFree defines. Analysis: zero errors, existing 55 warnings and
+  2,144 infos. Enforced offline lockfile, generated localization, changed-file
+  formatting and diff checks pass. No new funded settlement is claimed.
+- [x] SDK `da20524e`, KDF `e40ac2f`, configuration, lockfile and prior SDK/Melos
+  validation inputs are unchanged. Subsequent edits here update release
+  evidence only; they do not change the tested runtime.
+- [ ] Record the focused release carry, its required checks/review and refreshed
+  tester preview identity on #3575. Keep both main RCs open.
 
 ## Merged-dev KDF roll — 29 October
 
@@ -212,7 +360,7 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
   validation remains outside the watcher-reward branch, retaining the fix from
   KDF `2023112`. Diverged ancestry alone was not treated as evidence of removal.
 
-## Fresh validation of the prepared runtime
+## Earlier validation before the atomic restoration
 
 Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
 app source `f94e5072` plus the checked gas-source reference/regression from
@@ -269,20 +417,28 @@ its final preparation adds documentation and the immutable SDK candidate pin.
   Synthetic/native/browser regressions and the public-address CORS probe pass.
   Private chain evidence remains local; this is not an unbounded internal-call
   history or new funded-settlement certification.
-- [ ] Approved LI.FI text must replace the hosted placeholder before production.
-  The owner-authorized manual RC legal-testing bypass keeps the notice and
-  cannot record missing terms as accepted. Ordinary builds remain gated.
-- [ ] Explicit disposition of optional X06/X07 liquidity and stalled DOC/MARTY
-  testnet refund cases. They are blocked, not successful execution evidence.
-- [ ] KDF review: status-polling rate-limit backoff and native bridge-fee
-  restriction remain open. Specs review still needs the history-method question
-  and stale-thread disposition. Already implemented envelope fixes are not
+- [ ] Publish Ilya's approved LI.FI text at
+  `https://privacy.gleec.com/tos_lifi_gleec_wallet.md` before the release is
+  published; the owner expects it to be live by then. On 4 November the hosted
+  file was still the placeholder, with its marker removed for RC testing, so
+  ordinary builds, including the RC preview, accept it like final terms.
+  Confirm the hosted text is final immediately before publishing.
+- [x] Explicit disposition of optional X06/X07 liquidity and stalled DOC/MARTY
+  testnet refund cases: the owner accepted them as known limits on 4 November,
+  with a follow-up. They are blocked, not successful execution evidence.
+- [x] KDF review: status-polling rate-limit backoff and the native bridge-fee
+  restriction remain open upstream. On 4 November the owner accepted them, with
+  the specs-review history-method question and stale-thread disposition, as
+  known limits with a follow-up. Already implemented envelope fixes are not
   reported as current schema defects.
-- [ ] Proxy/backend deployment provenance, capacity/recovery and upstream failed
-  tests `validate_dex_fee_invalid_sender_erc`, `firo_lelantus_tx_details`,
-  `test_block_header_utxo_loop` (run `39776341104`) need concrete disposition.
-  Pinned source consumption does not require a mechanical KDF/spec branch merge;
-  a changed KDF source requires seven new archives and renewed validation.
+- [x] Upstream failed tests `validate_dex_fee_invalid_sender_erc`,
+  `firo_lelantus_tx_details` and `test_block_header_utxo_loop` (run
+  `39776341104`): the owner accepted them as known limits on 4 November, with a
+  follow-up. Pinned source consumption does not require a mechanical KDF/spec
+  branch merge; a changed KDF source requires seven new archives and renewed
+  validation.
+- [ ] Proxy/backend deployment provenance and capacity/recovery evidence for
+  the production KDP routes (Decker).
 - [ ] Supported signed platforms: Safari/device behavior, fresh install, upgrade,
   signing/notarization/store evidence. Compilation alone does not satisfy these.
 
@@ -308,18 +464,19 @@ make each repair on a focused branch, squash it into dev, carry only that
 reviewed fix into the release branch and repeat affected validation. Do not
 advance release branches to unrelated dev work.
 
-1. Complete SDK release gates, then merge [SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)
-   (`release-0.9.0` → `main`) using a **merge commit**. Record its actual
-   immutable main SHA. Tags/publication follow the approved release process.
-2. Open and **squash merge** an app dev PR pinning that SDK main SHA. Carry
-   that reviewed bookkeeping commit into `release-0.10.0`, reconcile the
-   manifest/checklists and repeat consumer checks as appropriate. Prove that
-   the promoted SDK runtime matches the frozen candidate; investigate any diff.
+1. **Done:** [SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)
+   (`release-0.9.0` → `main`) merged with a **merge commit** as
+   `09bde8c6978433d509ffabe6696d495fe5923745`. Tags/publication follow the
+   approved release process.
+2. **Done for this RC:** #3603 pinned that SDK main SHA into `release-0.10.0`
+   with a merge commit, and its preview showed the runtime unchanged. App dev
+   was deliberately not repinned (see #3575).
 3. Complete app release gates and review the final diff/checks. Merge the app
    release PR (`release-0.10.0` → `main`) using a **merge commit**. Reconcile
    release changes back into dev through a focused **squash** PR as needed.
    No automatic merge is enabled and no main admin bypass is assumed.
-4. Before app tagging/publication, run the SDK tag/version/ancestry preflight in
+4. Build as in the [production build](RELEASE_0.10.0_PRODUCTION_BUILD.md).
+   Before app tagging/publication, run the SDK tag/version/ancestry preflight in
    [BUILD_RELEASE.md](BUILD_RELEASE.md#github-release-preflight). Build/publish
    from the recorded main commits. Record output and generated coin hashes,
    configuration/defines and signing identity. Preserve at least the prior
@@ -329,8 +486,8 @@ advance release branches to unrelated dev work.
    hosted legal text and clean-profile consent verification. The marker-free
    local LI.FI draft is not evidence that hosting or legal approval changed.
    Retire the manual RC exception/channel after testing. Web deployment and
-   GitHub publication are separate operations; inspect legacy `release: created`
-   native triggers.
+   GitHub publication are separate operations. Native validation artifacts now
+   build on `release: published` with the production LI.FI profile.
 
 Code freeze does not certify a public release. The outstanding operational,
 legal, reviewer and signed-platform items above remain distribution gates.
