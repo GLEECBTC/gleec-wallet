@@ -4,6 +4,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/motion/swap_motion_tokens.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_asset_picker_sheet.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_assets.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_style.dart';
 
 /// The parts of the wallet home under the balance.
@@ -33,6 +34,8 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
     required this.onSearchChanged,
     required this.textScaler,
     this.inlineSearch = false,
+    this.addAssets = false,
+    this.inset = 0,
   });
 
   final WalletHomeSection section;
@@ -51,6 +54,16 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
   /// it, rather than behind a button.
   final bool inlineSearch;
 
+  /// Puts Add assets beside the search, since at the foot of a long list it
+  /// is out of sight.
+  final bool addAssets;
+
+  /// Keeps the toolbar to the page's centred column. The header takes it
+  /// rather than sitting in a padding sliver, as a viewport only allows for
+  /// pinned headers it holds directly: a row scrolled into view would land
+  /// under the toolbar.
+  final double inset;
+
   double get _extent => 48 + textScaler.scale(16);
 
   @override
@@ -67,42 +80,50 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
   ) {
     final palette = SwapPalette.of(context);
     final pinned = shrinkOffset > 0 || overlapsContent;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.canvas,
-        border: Border(
-          bottom: BorderSide(color: pinned ? palette.border : palette.canvas),
-        ),
-      ),
+    return ColoredBox(
+      color: palette.canvas,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: WalletHomeGeometry.gutter,
-          vertical: 8,
-        ),
-        child: AnimatedSwitcher(
-          duration: SwapMotion.of(context, SwapMotion.selection),
-          child: searchOpen
-              ? _SearchRow(
-                  key: const ValueKey('search'),
-                  controller: searchController,
-                  focusNode: searchFocusNode,
-                  onChanged: onSearchChanged,
-                  onClose: onSearchClose,
-                )
-              : _SectionRow(
-                  key: const ValueKey('sections'),
-                  section: section,
-                  onSection: onSection,
-                  onSearchOpen: onSearchOpen,
-                  search: inlineSearch
-                      ? WalletHomeSearchField(
-                          fieldKey: const Key('wallet-page-search-field'),
-                          controller: searchController,
-                          focusNode: searchFocusNode,
-                          onChanged: onSearchChanged,
-                        )
-                      : null,
-                ),
+        padding: EdgeInsets.symmetric(horizontal: inset),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: pinned ? palette.border : palette.canvas,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: WalletHomeGeometry.gutter,
+              vertical: 8,
+            ),
+            child: AnimatedSwitcher(
+              duration: SwapMotion.of(context, SwapMotion.selection),
+              child: searchOpen
+                  ? _SearchRow(
+                      key: const ValueKey('search'),
+                      controller: searchController,
+                      focusNode: searchFocusNode,
+                      onChanged: onSearchChanged,
+                      onClose: onSearchClose,
+                    )
+                  : _SectionRow(
+                      key: const ValueKey('sections'),
+                      section: section,
+                      onSection: onSection,
+                      onSearchOpen: onSearchOpen,
+                      addAssets: addAssets,
+                      search: inlineSearch
+                          ? WalletHomeSearchField(
+                              fieldKey: const Key('wallet-page-search-field'),
+                              controller: searchController,
+                              focusNode: searchFocusNode,
+                              onChanged: onSearchChanged,
+                            )
+                          : null,
+                    ),
+            ),
+          ),
         ),
       ),
     );
@@ -114,7 +135,9 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
       searchOpen != oldDelegate.searchOpen ||
       textScaler != oldDelegate.textScaler ||
       searchController != oldDelegate.searchController ||
-      inlineSearch != oldDelegate.inlineSearch;
+      inlineSearch != oldDelegate.inlineSearch ||
+      addAssets != oldDelegate.addAssets ||
+      inset != oldDelegate.inset;
 }
 
 class _SectionRow extends StatelessWidget {
@@ -122,13 +145,18 @@ class _SectionRow extends StatelessWidget {
     required this.section,
     required this.onSection,
     required this.onSearchOpen,
+    required this.addAssets,
     this.search,
     super.key,
   });
 
+  /// Below this width Add assets drops its label, so the pills keep room.
+  static const _labelledAddFrom = 720.0;
+
   final WalletHomeSection section;
   final ValueChanged<WalletHomeSection> onSection;
   final VoidCallback onSearchOpen;
+  final bool addAssets;
 
   /// The search field, in place of the button that opens it.
   final Widget? search;
@@ -136,35 +164,45 @@ class _SectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: _FadingScroll(
-            child: Row(
-              spacing: 4,
-              children: [
-                for (final item in WalletHomeSection.values)
-                  _Segment(
-                    section: item,
-                    selected: item == section,
-                    onTap: () => onSection(item),
-                  ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) => Row(
+        children: [
+          Expanded(
+            child: _FadingScroll(
+              child: Row(
+                spacing: 4,
+                children: [
+                  for (final item in WalletHomeSection.values)
+                    _Segment(
+                      section: item,
+                      selected: item == section,
+                      onTap: () => onSection(item),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-        if (section == WalletHomeSection.assets)
-          if (search case final search?)
-            SizedBox(width: 280, child: search)
-          else
-            IconButton(
-              key: const Key('wallet-home-search-button'),
-              tooltip: LocaleKeys.searchAssets.tr(),
-              color: palette.textSecondary,
-              onPressed: onSearchOpen,
-              icon: const Icon(Icons.search_rounded),
-            ),
-      ],
+          if (section == WalletHomeSection.assets) ...[
+            if (search case final search?)
+              SizedBox(width: 280, child: search)
+            else
+              IconButton(
+                key: const Key('wallet-home-search-button'),
+                tooltip: LocaleKeys.searchAssets.tr(),
+                color: palette.textSecondary,
+                onPressed: onSearchOpen,
+                icon: const Icon(Icons.search_rounded),
+              ),
+            if (addAssets) ...[
+              const SizedBox(width: 8),
+              WalletAddAssetsButton(
+                compact: true,
+                iconOnly: constraints.maxWidth < _labelledAddFrom,
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }

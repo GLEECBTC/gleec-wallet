@@ -16,6 +16,8 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/coin_
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/asset_display_name.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_style.dart';
 
+part 'wallet_asset_row_price.dart';
+
 /// One asset in the wallet: its logo, name and network, and market price
 /// with the 24h change; on the right, what is held, in dollars and in coins.
 ///
@@ -41,6 +43,14 @@ class WalletAssetRow extends StatefulWidget {
 
   /// Clips the press highlight to the group's corners.
   final BorderRadius? borderRadius;
+
+  /// The market price on a row, a dash until there is one.
+  static const priceKey = Key('wallet-asset-price');
+
+  /// The amount held on the row for [abbr], under the key the older wallet
+  /// list gave it.
+  static Key amountKey(String abbr) =>
+      Key('coin-balance-asset-${abbr.toLowerCase()}');
 
   @override
   State<WalletAssetRow> createState() => _WalletAssetRowState();
@@ -142,6 +152,9 @@ class _WalletAssetRowState extends State<WalletAssetRow> {
                                   price: price,
                                   symbol: coin.id.symbol.configSymbol,
                                   hidden: hidden,
+                                  amountKey: WalletAssetRow.amountKey(
+                                    coin.abbr,
+                                  ),
                                 ),
                               ),
                             ],
@@ -271,99 +284,10 @@ class _WideRow extends StatelessWidget {
             price: price,
             symbol: coin.id.symbol.configSymbol,
             hidden: hidden,
+            amountKey: WalletAssetRow.amountKey(coin.abbr),
           ),
         ),
       ],
-    );
-  }
-}
-
-/// [_PriceLine] as a column: the price over its 24h change.
-class _PriceColumn extends StatelessWidget {
-  const _PriceColumn({required this.price, required this.change});
-
-  final double? price;
-  final double? change;
-
-  @override
-  Widget build(BuildContext context) {
-    final price = this.price;
-    final change = this.change;
-    final detail = WalletHomeText.detail(context);
-    if (price == null) {
-      return Text('—', style: detail, textAlign: TextAlign.end);
-    }
-    return Semantics(
-      label: [
-        FiatFormat.spokenPrice(price),
-        if (change != null) FiatFormat.percent(change),
-      ].join(', '),
-      excludeSemantics: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: AlignmentDirectional.centerEnd,
-            child: Text(
-              FiatFormat.price(price),
-              maxLines: 1,
-              style: WalletHomeText.value(context),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            change == null ? '—' : FiatFormat.percent(change),
-            maxLines: 1,
-            style: change == null
-                ? detail
-                : detail.copyWith(color: trendColor(context, change)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The market price and its 24h change, which stay visible when balances
-/// are hidden: they are public, not the user's.
-class _PriceLine extends StatelessWidget {
-  const _PriceLine({required this.price, required this.change});
-
-  final double? price;
-  final double? change;
-
-  @override
-  Widget build(BuildContext context) {
-    final price = this.price;
-    final change = this.change;
-    final style = WalletHomeText.detail(context);
-    if (price == null) return Text('—', style: style);
-    return Semantics(
-      label: [
-        FiatFormat.spokenPrice(price),
-        if (change != null) FiatFormat.percent(change),
-      ].join(', '),
-      excludeSemantics: true,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: AlignmentDirectional.centerStart,
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: FiatFormat.price(price)),
-              if (change != null)
-                TextSpan(
-                  text: '  ${FiatFormat.percent(change)}',
-                  style: TextStyle(color: trendColor(context, change)),
-                ),
-            ],
-          ),
-          style: style,
-          maxLines: 1,
-        ),
-      ),
     );
   }
 }
@@ -374,12 +298,14 @@ class _Holding extends StatelessWidget {
     required this.price,
     required this.symbol,
     required this.hidden,
+    required this.amountKey,
   });
 
   final double? balance;
   final double? price;
   final String symbol;
   final bool hidden;
+  final Key amountKey;
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +349,14 @@ class _Holding extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        _fit(Text(amount, maxLines: 1, style: WalletHomeText.detail(context))),
+        _fit(
+          Text(
+            amount,
+            key: amountKey,
+            maxLines: 1,
+            style: WalletHomeText.detail(context),
+          ),
+        ),
       ],
     );
   }

@@ -1,9 +1,10 @@
 // ignore_for_file: avoid_print
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/main.dart' as app;
+import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_asset_row.dart';
 
 import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
@@ -44,32 +45,45 @@ Future<void> testCexPrices(WidgetTester tester) async {
 
   expect(hasTrx, isTrue, reason: 'TRX must appear in the restored wallet');
 
-  // Prices on the current wallet list use TrendPercentageText. The old
-  // fiat-price key belongs to coin details, which this test has not opened.
+  // The wallet row keys its market price, a dash until the ticker feed has
+  // one. The old fiat-price key belongs to coin details, which this test has
+  // not opened.
   final price = find.descendant(
     of: trxRow,
-    matching: find.byType(TrendPercentageText),
+    matching: find.byKey(WalletAssetRow.priceKey),
   );
   expect(price, findsOneWidget);
   final deadline = DateTime.now().add(const Duration(seconds: 30));
-  while ((tester.widget<TrendPercentageText>(price).value ?? 0) <= 0 &&
-      DateTime.now().isBefore(deadline)) {
+  while (_shownPrice(tester, price) <= 0 && DateTime.now().isBefore(deadline)) {
     await tester.pumpNFrames(10);
   }
   expect(
-    tester.widget<TrendPercentageText>(price).value,
+    _shownPrice(tester, price),
     greaterThan(0),
     reason: 'TRX must show an available positive market price',
   );
   await tester.pumpAndSettle();
   expect(
-    find.descendant(of: price, matching: find.textContaining(r'$')),
-    findsOneWidget,
+    _priceText(tester, price),
+    startsWith(r'$'),
     reason: 'The market price must be rendered in the wallet row',
   );
   print('🔍 CEX PRICES: TRX wallet row displays a positive USD price');
   await enterText(tester, finder: searchCoinsField, text: '');
   await pause(msg: '🔍 CEX PRICES: Test completed');
+}
+
+/// A row's price text: the price alone on a wide row, followed by its 24h
+/// change on a phone.
+String _priceText(WidgetTester tester, Finder price) {
+  final text = tester.widget<Text>(price);
+  return text.data ?? text.textSpan?.toPlainText() ?? '';
+}
+
+/// The dollar price a row shows, or 0 while it shows a dash.
+double _shownPrice(WidgetTester tester, Finder price) {
+  final shown = _priceText(tester, price).trim().split(RegExp(r'\s+')).first;
+  return double.tryParse(shown.replaceAll(RegExp(r'[$,]'), '')) ?? 0;
 }
 
 void main() {

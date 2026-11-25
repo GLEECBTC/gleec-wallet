@@ -160,26 +160,26 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                 column(SliverToBoxAdapter(child: _OnPalette(child: notice))),
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
               SliverToBoxAdapter(child: SizedBox(key: _toolbarAnchor)),
-              column(
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: WalletAssetsToolbarDelegate(
-                    section: _section,
-                    onSection: _selectSection,
-                    // A phrase carried over from the wide layout stays in
-                    // view, so a filtered list never looks short of assets.
-                    searchOpen:
-                        _searchOpen || (!wide && _searchPhrase.isNotEmpty),
-                    onSearchOpen: _openSearch,
-                    onSearchClose: _closeSearch,
-                    searchController: _searchController,
-                    searchFocusNode: _searchFocusNode,
-                    onSearchChanged: (value) => setState(
-                      () => _searchPhrase = value.trim().toLowerCase(),
-                    ),
-                    textScaler: MediaQuery.textScalerOf(context),
-                    inlineSearch: wide,
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: WalletAssetsToolbarDelegate(
+                  section: _section,
+                  onSection: _selectSection,
+                  // A phrase carried over from the wide layout stays in
+                  // view, so a filtered list never looks short of assets.
+                  searchOpen:
+                      _searchOpen || (!wide && _searchPhrase.isNotEmpty),
+                  onSearchOpen: _openSearch,
+                  onSearchClose: _closeSearch,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onSearchChanged: (value) => setState(
+                    () => _searchPhrase = value.trim().toLowerCase(),
                   ),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  inlineSearch: wide,
+                  addAssets: wide,
+                  inset: inset,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 4)),
@@ -211,6 +211,8 @@ class _WalletHomeViewState extends State<WalletHomeView> {
           );
         },
         arrrActivationService: widget.arrrActivationService,
+        // Off a phone the toolbar offers it.
+        showAddAssets: isMobile,
       ),
     ],
     WalletHomeSection.growth => const [

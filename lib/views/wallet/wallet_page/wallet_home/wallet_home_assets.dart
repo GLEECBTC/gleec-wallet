@@ -27,6 +27,7 @@ class WalletHomeAssets extends StatelessWidget {
     required this.hideZeroBalances,
     required this.onHideZeroBalances,
     this.arrrActivationService,
+    this.showAddAssets = true,
     super.key,
   });
 
@@ -34,6 +35,9 @@ class WalletHomeAssets extends StatelessWidget {
   final bool hideZeroBalances;
   final ValueChanged<bool> onHideZeroBalances;
   final ArrrActivationService? arrrActivationService;
+
+  /// Off where the toolbar offers Add assets instead.
+  final bool showAddAssets;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +99,8 @@ class WalletHomeAssets extends StatelessWidget {
                   onChanged: onHideZeroBalances,
                 ),
               ),
-            const SliverToBoxAdapter(child: _AddAssetsButton()),
+            if (showAddAssets)
+              const SliverToBoxAdapter(child: WalletAddAssetsButton()),
           ],
         );
       },
@@ -287,34 +292,65 @@ class _HideZeroBalances extends StatelessWidget {
   }
 }
 
-class _AddAssetsButton extends StatelessWidget {
-  const _AddAssetsButton();
+/// Add assets, which opens the coins manager: across the foot of the list,
+/// or [compact] for a toolbar, where [iconOnly] leaves out the label when
+/// the toolbar is short of room.
+class WalletAddAssetsButton extends StatelessWidget {
+  const WalletAddAssetsButton({
+    this.compact = false,
+    this.iconOnly = false,
+    super.key,
+  });
+
+  static const buttonKey = Key('add-assets-button');
+
+  final bool compact;
+  final bool iconOnly;
+
+  void _open(BuildContext context) {
+    context.read<CoinsManagerBloc>().add(
+      const CoinsManagerCoinsListReset(CoinsManagerAction.add),
+    );
+    routingState.walletState.action = coinsManagerRouteAction.addAssets;
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
+    final label = LocaleKeys.addAssets.tr();
+    final style = TextButton.styleFrom(
+      minimumSize: compact ? const Size(40, 40) : const Size.fromHeight(52),
+      padding: iconOnly ? EdgeInsets.zero : null,
+      foregroundColor: palette.brandHover,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(compact ? 12 : 16),
+        side: BorderSide(color: palette.border),
+      ),
+      textStyle: SwapText.strong(context),
+    );
+    const icon = Icon(Icons.add_rounded, size: 20);
+    if (iconOnly) {
+      return Tooltip(
+        message: label,
+        child: TextButton(
+          key: buttonKey,
+          onPressed: () => _open(context),
+          style: style,
+          child: icon,
+        ),
+      );
+    }
+    final button = TextButton.icon(
+      key: buttonKey,
+      onPressed: () => _open(context),
+      style: style,
+      icon: icon,
+      label: Text(label),
+    );
+    if (compact) return button;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: TextButton.icon(
-        key: const Key('add-assets-button'),
-        onPressed: () {
-          context.read<CoinsManagerBloc>().add(
-            const CoinsManagerCoinsListReset(CoinsManagerAction.add),
-          );
-          routingState.walletState.action = coinsManagerRouteAction.addAssets;
-        },
-        style: TextButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          foregroundColor: palette.brandHover,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: palette.border),
-          ),
-          textStyle: SwapText.strong(context),
-        ),
-        icon: const Icon(Icons.add_rounded, size: 20),
-        label: Text(LocaleKeys.addAssets.tr()),
-      ),
+      child: button,
     );
   }
 }
