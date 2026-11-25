@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show AssetBundle;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
@@ -33,7 +34,9 @@ final class MM2 {
   MM2({
     KomodoDefiSdk? sdk,
     SolanaBuildConfig solana = SolanaBuildConfig.environment,
-  }) : _solana = solana {
+    AssetBundle? assets,
+  }) : _solana = solana,
+       _assetBundle = assets {
     solana.validate();
     _kdfSdk =
         sdk ??
@@ -100,6 +103,8 @@ final class MM2 {
   }
 
   final SolanaBuildConfig _solana;
+  // Null reads the app's root bundle.
+  final AssetBundle? _assetBundle;
   late final KomodoDefiSdk _kdfSdk;
   Future<KomodoDefiSdk>? _initialization;
 
@@ -124,17 +129,36 @@ final class MM2 {
     if (kIsWeb) {
       _solana.verifyPreviewOrigin(Uri.base);
     }
-    await _solana.verifyCatalog();
+    await _solana.verifyCatalog(bundle: _assetBundle);
     await _kdfSdk.initialize();
     // Hack to ensure that kdf is running in noauth mode
     await _kdfSdk.auth.getUsers();
-    // Production and candidate builds both refuse an engine other than the
-    // one their Solana support was reviewed on.
-    if (_solana.enabled) {
-      _solana.verifyEngineVersion(await version());
-    }
+    if (_solana.enabled) await _verifySolanaEngine();
 
     return _kdfSdk;
+  }
+
+  /// Refuses a KDF other than the one this build packaged, or a candidate's
+  /// manifest engine.
+  Future<void> _verifySolanaEngine() async {
+    final engineVersion = await version();
+    if (engineVersion.isEmpty) {
+      // An error reply has no result; it says nothing about which engine runs.
+      throw StateError(
+        'KDF did not report its version, so the Solana engine check could not '
+        'run.',
+      );
+    }
+    final expected = await _solana.expectedEngineCommit(bundle: _assetBundle);
+    if (!_solana.isCandidate &&
+        expected != SolanaBuildConfig.productionEngineCommit) {
+      log(
+        'Solana runs on KDF $expected, not on the reviewed production engine '
+        '${SolanaBuildConfig.productionEngineCommit}.',
+        path: 'mm2 => initialize',
+      ).ignore();
+    }
+    _solana.verifyEngineVersion(engineVersion, expectedCommit: expected);
   }
 
   Future<String> version() async {

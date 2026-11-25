@@ -22,7 +22,7 @@ The earlier build combined KDF dev `e3392da6f5`, the PR 35 head `b1ff8f05c8`, an
 
 The earlier build’s seven artifacts were built with nitride-kdf-builds and are served from `https://kdf-dev-builds.nitride.app/local-solana-combined/`. macOS and Linux also have `native-v1` archives carrying the shared library, built from a `git archive` of the commit with Rust 1.98.0 and `--locked` (Linux offline, in the Debian 11 CI image). Both libraries pass the eight-phase native lifecycle smoke: macOS on arm64 and on x86_64 under Rosetta, Linux on amd64. Archive checksums are in the SDK build configuration.
 
-Production builds check the running engine against `SolanaBuildConfig.productionEngineCommit`, which a unit test holds equal to this pin. A repin therefore updates that constant and, until SPL Max and Token-2022 withdrawals are verified on the new engine, adds it to `enginesWithOpenWithdrawalDefects`.
+Production builds check at startup that the running engine is this pin, and a unit test holds `SolanaBuildConfig.productionEngineCommit` equal to it. A repin therefore updates that constant. Until SPL Max and Token-2022 withdrawals are verified on the new engine, the repin also adds it to `enginesWithOpenWithdrawalDefects`.
 
 This pin may reach `dev` only. The release guard rejects `local/...` and `charl-temp/...` KDF pins on pull requests into `main` and release branches. [`kdf-pin-releasable.yml`](../.github/workflows/kdf-pin-releasable.yml)
 

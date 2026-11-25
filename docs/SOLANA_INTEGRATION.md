@@ -18,7 +18,7 @@ Solana support is developed alongside the upstream fixes. The integration recogn
 
 | Mode | Selected by | What users get | Catalog and storage | Engine check at startup |
 |---|---|---|---|---|
-| Production | the default | SOL and classic SPL tokens as wallet assets: hold, send, receive and history. SPL Max, Token-2022 and devnet trading are refused at startup. | The SDK's updatable catalog and default storage. | The running KDF must report `productionEngineCommit`. |
+| Production | the default | SOL and classic SPL tokens as wallet assets: hold, send, receive and history. SPL Max, Token-2022 and devnet trading are refused at startup. | The SDK's updatable catalog and default storage. | The running KDF must be the one the build packaged: the SDK's `api_commit_hash`. |
 | Candidate | any of `SOLANA_KDF_COMMIT`, `SOLANA_COINS_COMMIT`, `SOLANA_CATALOG_SHA256`, `SOLANA_PREVIEW_ORIGIN`, or a `solana-preview-` `KDF_COINS_STORAGE_NAMESPACE` | As production, plus whichever experimental flags the profile allows and the engine's defect record permits. | A frozen snapshot bound to its SHA-256, an isolated namespace and a dedicated browser origin. | The running KDF must report `SOLANA_KDF_COMMIT`. |
 | Disabled | `SOLANA_ENABLED=false` | No Solana assets or operations. | Default. | None. |
 
@@ -26,7 +26,9 @@ An incomplete candidate profile fails validation; it never runs as a production 
 
 Mainnet trading stays blocked in every mode. The trading policy refuses mainnet and mixed-network Solana pairs, and KDF keeps mainnet Solana wallet-only in release builds whatever the coins file says. Devnet coins can still be held and sent in production.
 
-`productionEngineCommit` is the engine production Solana support runs on. `solana_build_config_test` holds it equal to the SDK's KDF pin, so repinning KDF fails the unit tests until it names the new engine. That engine must also be in `enginesWithOpenWithdrawalDefects` until SPL Max and Token-2022 withdrawals are verified on it. KDF's development and release workflows set the version tag to the seven-character commit, so the startup check compares that tag. A mismatch stops startup, as it does for a candidate.
+`productionEngineCommit` is the engine production Solana support was reviewed on. `solana_build_config_test` holds it equal to the SDK's KDF pin, so repinning KDF fails the unit tests until it names the new engine. That engine must also be in `enginesWithOpenWithdrawalDefects` until SPL Max and Token-2022 withdrawals are verified on it.
+
+At startup, production reads the KDF commit from the bundled SDK build configuration and compares it with the tag in KDF's `version`. KDF CI sets the tag to seven characters; longer abbreviations also match. A mismatch stops startup, as it does for a candidate. Checking the packaged pin rather than the constant lets a wallet built against another SDK, such as an SDK integration preview, still start.
 
 Primary references: [KDF Solana integration](https://github.com/GLEECBTC/kdf-internal/pull/35), [KDF API documentation changes](https://github.com/GLEECBTC/komodo-docs-mdx/pull/608) at `df0b99642b7f9a2864b8e4cdb83b843c9be0c5f7`, and the immutable KDF commit linked in the dependency record. The reviewed [specs PR 2](https://github.com/GLEECBTC/gleec-specs/pull/2) at `7c388ea7b91cb7c657435d416bc03e5349b46162` has no Solana execution specification; its routed contract covers EVM. Source-shaped replay fixtures verify wallet contracts, not real chain execution.
 

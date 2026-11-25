@@ -3,7 +3,10 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -28,22 +31,32 @@ class _InitializationAuth extends Fake implements KomodoDefiLocalAuth {
 
 /// Answers the legacy `version` request the engine gate sends.
 class _VersionClient extends Fake implements ApiClient {
-  _VersionClient(this.version);
+  _VersionClient(this.reply);
 
-  final String version;
+  final JsonMap reply;
   final methods = <Object?>[];
 
   @override
   Future<JsonMap> executeRpc(JsonMap request) async {
     methods.add(request['method']);
-    return {'result': version, 'datetime': '2026-11-25T00:00:00+00:00'};
+    return reply;
   }
 }
 
 class _InitializationSdk extends Fake implements KomodoDefiSdk {
-  _InitializationSdk(this.ready, {Object? usersFailure, String? engineVersion})
-    : auth = _InitializationAuth(failure: usersFailure),
-      client = _VersionClient(engineVersion ?? _productionVersion);
+  _InitializationSdk(
+    this.ready, {
+    Object? usersFailure,
+    String? engineVersion,
+    JsonMap? versionReply,
+  }) : auth = _InitializationAuth(failure: usersFailure),
+       client = _VersionClient(
+         versionReply ??
+             {
+               'result': engineVersion ?? _versionOf(_production),
+               'datetime': '2026-11-25T00:00:00+00:00',
+             },
+       );
 
   final Future<void> ready;
   int initializeCalls = 0;
@@ -63,8 +76,33 @@ class _InitializationSdk extends Fake implements KomodoDefiSdk {
 
 class _ConfigOnlySdk extends Fake implements KomodoDefiSdk {}
 
-final _productionVersion =
-    '3.2.0-beta_${SolanaBuildConfig.productionEngineCommit.substring(0, 7)}';
+/// Serves only the listed assets, so an unexpected read fails the test.
+class _Files extends CachingAssetBundle {
+  _Files(this.files);
+
+  final Map<String, List<int>> files;
+
+  @override
+  Future<ByteData> load(String key) async {
+    final content = files[key];
+    if (content == null) throw StateError('Unexpected asset read: $key');
+    return ByteData.sublistView(Uint8List.fromList(content));
+  }
+}
+
+const _production = SolanaBuildConfig.productionEngineCommit;
+const _older = '46769c4df3b043669eee59508bf1af017157dcdd';
+
+String _versionOf(String commit) => '3.2.0-beta_${commit.substring(0, 7)}';
+
+/// The SDK build configuration a build packages, naming its KDF.
+_Files _packaging(String commit) => _Files({
+  SolanaBuildConfig.sdkBuildConfigAsset: utf8.encode(
+    jsonEncode({
+      'api': {'api_commit_hash': commit},
+    }),
+  ),
+});
 
 void main() {
   group('MM2 initialization boundaries', () {
@@ -73,7 +111,7 @@ void main() {
       () async {
         final ready = Completer<void>();
         final sdk = _InitializationSdk(ready.future);
-        final engine = MM2(sdk: sdk);
+        final engine = MM2(sdk: sdk, assets: _packaging(_production));
         final failure = StateError('Candidate verification failed');
 
         final first = engine.initialize();
@@ -97,7 +135,7 @@ void main() {
     test('failure after SDK setup never exposes the initialized SDK', () async {
       final failure = StateError('Engine startup failed');
       final sdk = _InitializationSdk(Future.value(), usersFailure: failure);
-      final engine = MM2(sdk: sdk);
+      final engine = MM2(sdk: sdk, assets: _packaging(_production));
       await expectLater(engine.initialize(), throwsA(same(failure)));
       await expectLater(engine.initialize(), throwsA(same(failure)));
       expect(sdk.initializeCalls, 1);
@@ -107,7 +145,7 @@ void main() {
     test('successful callers share one fully initialized SDK', () async {
       final ready = Completer<void>();
       final sdk = _InitializationSdk(ready.future);
-      final engine = MM2(sdk: sdk);
+      final engine = MM2(sdk: sdk, assets: _packaging(_production));
       final first = engine.initialize();
       final concurrent = engine.initialize();
       expect(concurrent, same(first));
@@ -123,26 +161,64 @@ void main() {
   });
 
   group('MM2 Solana engine gate', () {
-    test('a production build refuses an engine it does not pin', () async {
+    test('a production build refuses a KDF it did not package', () async {
       final sdk = _InitializationSdk(
         Future.value(),
-        engineVersion: '3.2.0-beta_46769c4',
+        engineVersion: _versionOf(_older),
       );
-      final engine = MM2(sdk: sdk, solana: const SolanaBuildConfig());
+      final engine = MM2(
+        sdk: sdk,
+        solana: const SolanaBuildConfig(),
+        assets: _packaging(_production),
+      );
       await expectLater(engine.initialize(), throwsStateError);
       // The refusal sticks: no later caller gets the SDK.
       await expectLater(engine.initialize(), throwsStateError);
       expect(sdk.client.methods, ['version']);
     });
 
+    test('a wallet built against another SDK starts on its KDF', () async {
+      // An SDK preview packages a KDF other than the reviewed production
+      // engine. The pin test, not startup, guards the reviewed engine.
+      final sdk = _InitializationSdk(
+        Future.value(),
+        engineVersion: _versionOf(_older),
+      );
+      final engine = MM2(
+        sdk: sdk,
+        solana: const SolanaBuildConfig(),
+        assets: _packaging(_older),
+      );
+      expect(await engine.initialize(), same(sdk));
+    });
+
+    test('an error reply is not reported as a different engine', () async {
+      final sdk = _InitializationSdk(
+        Future.value(),
+        versionReply: {'error': 'rpc failed', 'error_type': 'InternalError'},
+      );
+      final engine = MM2(sdk: sdk, assets: _packaging(_production));
+      await expectLater(
+        engine.initialize(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('did not report its version'),
+          ),
+        ),
+      );
+    });
+
     test('a build without Solana never checks the engine', () async {
       final sdk = _InitializationSdk(
         Future.value(),
-        engineVersion: '3.2.0-beta_46769c4',
+        engineVersion: _versionOf(_older),
       );
       final engine = MM2(
         sdk: sdk,
         solana: const SolanaBuildConfig(enabled: false),
+        assets: _Files({}),
       );
       expect(await engine.initialize(), same(sdk));
       expect(sdk.client.methods, isEmpty);
@@ -156,6 +232,60 @@ void main() {
         ),
         throwsStateError,
       );
+    });
+
+    test('a candidate checks its catalog digest and its own engine', () async {
+      const candidateEngine = 'b1ff8f05c880d6f118124cac9ef615aa9d91bb39';
+      final catalog = utf8.encode('{"TESTSOL":{"coin":"TESTSOL"}}');
+      final digest = sha256.convert(catalog).toString();
+      final candidate = SolanaBuildConfig(
+        engineCommit: candidateEngine,
+        coinsCommit: 'ca20611537fe84f9398d1a63f3d27a4386fb161d',
+        catalogSha256: digest,
+        storageNamespace: 'solana-preview-${digest.substring(0, 12)}',
+        previewOrigin: 'http://localhost:18471',
+      );
+      // A candidate never reads the SDK build configuration.
+      final assets = _Files({SolanaBuildConfig.catalogAsset: catalog});
+
+      final ownEngine = _InitializationSdk(
+        Future.value(),
+        engineVersion: _versionOf(candidateEngine),
+      );
+      expect(
+        await MM2(
+          sdk: ownEngine,
+          solana: candidate,
+          assets: assets,
+        ).initialize(),
+        same(ownEngine),
+      );
+
+      final productionEngine = _InitializationSdk(Future.value());
+      await expectLater(
+        MM2(
+          sdk: productionEngine,
+          solana: candidate,
+          assets: assets,
+        ).initialize(),
+        throwsStateError,
+      );
+
+      final changedCatalog = _InitializationSdk(
+        Future.value(),
+        engineVersion: _versionOf(candidateEngine),
+      );
+      await expectLater(
+        MM2(
+          sdk: changedCatalog,
+          solana: candidate,
+          assets: _Files({
+            SolanaBuildConfig.catalogAsset: [...catalog, 10],
+          }),
+        ).initialize(),
+        throwsStateError,
+      );
+      expect(changedCatalog.initializeCalls, 0);
     });
   });
 

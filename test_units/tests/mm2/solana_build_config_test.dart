@@ -25,6 +25,19 @@ class _UnreadableBundle extends CachingAssetBundle {
       throw StateError('Production read the catalog snapshot: $key');
 }
 
+/// Serves only the listed assets.
+class _FilesBundle extends CachingAssetBundle {
+  _FilesBundle(this.files);
+  final Map<String, List<int>> files;
+
+  @override
+  Future<ByteData> load(String key) async {
+    final content = files[key];
+    if (content == null) throw StateError('Unexpected asset read: $key');
+    return ByteData.sublistView(Uint8List.fromList(content));
+  }
+}
+
 void main() {
   const engine = 'b1ff8f05c880d6f118124cac9ef615aa9d91bb39';
   const coins = 'ca20611537fe84f9398d1a63f3d27a4386fb161d';
@@ -171,6 +184,78 @@ void main() {
         returnsNormally,
       );
     });
+
+    test('longer commit abbreviations still identify the engine', () {
+      // KDF falls back to `git log %h`, which grows with the repository.
+      const config = SolanaBuildConfig();
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 10)}',
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 9)}0',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 6)}',
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('production expects the KDF this build packaged', () async {
+      const older = '46769c4df3b043669eee59508bf1af017157dcdd';
+      final packaged = _FilesBundle({
+        SolanaBuildConfig.sdkBuildConfigAsset: utf8.encode(
+          jsonEncode({
+            'api': {'api_commit_hash': older},
+          }),
+        ),
+      });
+      const config = SolanaBuildConfig();
+      final expected = await config.expectedEngineCommit(bundle: packaged);
+      expect(expected, older);
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_46769c4',
+          expectedCommit: expected,
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+          expectedCommit: expected,
+        ),
+        throwsStateError,
+      );
+      for (final malformed in [
+        '{}',
+        '{"api":{}}',
+        '{"api":{"api_commit_hash":"46769c4"}}',
+        '[]',
+      ]) {
+        await expectLater(
+          config.expectedEngineCommit(
+            bundle: _FilesBundle({
+              SolanaBuildConfig.sdkBuildConfigAsset: utf8.encode(malformed),
+            }),
+          ),
+          throwsStateError,
+          reason: malformed,
+        );
+      }
+    });
+
+    test('unit runs use the compiled production default', () {
+      // CI builds pass no Solana define, so this is what ships.
+      expect(SolanaBuildConfig.environment.mode, SolanaBuildMode.production);
+    });
   });
 
   group('Solana candidate build boundaries', () {
@@ -202,6 +287,16 @@ void main() {
         throwsStateError,
       );
     });
+
+    test(
+      'a candidate expects its manifest engine without reading the SDK',
+      () async {
+        expect(
+          await candidate().expectedEngineCommit(bundle: _UnreadableBundle()),
+          engine,
+        );
+      },
+    );
 
     test('known engine withdrawal defects cannot be overridden by flags', () {
       expect(SolanaBuildConfig.enginesWithOpenWithdrawalDefects, {
@@ -263,10 +358,18 @@ void main() {
         () => config.verifyEngineVersion('3.2.0-beta_$coins'),
         throwsStateError,
       );
-      // A candidate is bound to its own engine, not the production one.
+      // A candidate is bound to its own engine, not the production one, and
+      // no caller-supplied commit can stand in for its manifest.
       expect(
         () => config.verifyEngineVersion(
           '3.2.0-beta_${production.substring(0, 7)}',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+          expectedCommit: production,
         ),
         throwsStateError,
       );

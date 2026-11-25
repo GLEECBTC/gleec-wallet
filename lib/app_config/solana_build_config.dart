@@ -49,10 +49,16 @@ class SolanaBuildConfig {
   static const catalogAsset =
       'packages/komodo_defi_framework/assets/config/coins_config.json';
 
-  /// The engine production Solana support runs on. A unit test holds it equal
-  /// to the KDF commit the SDK pins, so repinning KDF means reviewing Solana on
-  /// the new engine and listing it in [enginesWithOpenWithdrawalDefects] until
-  /// SPL Max and Token-2022 withdrawals are verified there.
+  /// The SDK build configuration bundled with the app. Its `api_commit_hash`
+  /// names the KDF whose binaries this build packaged.
+  static const sdkBuildConfigAsset =
+      'packages/komodo_defi_framework/app_build/build_config.json';
+
+  /// The engine production Solana support was reviewed on. A unit test holds
+  /// it equal to the KDF commit the SDK pins, so repinning KDF means reviewing
+  /// Solana on the new engine and listing it in
+  /// [enginesWithOpenWithdrawalDefects] until SPL Max and Token-2022
+  /// withdrawals are verified there.
   static const productionEngineCommit =
       'fd8249c904ae1c75d66fce1c1e361686f13d723c';
 
@@ -91,9 +97,29 @@ class SolanaBuildConfig {
 
   bool get isCandidate => mode == SolanaBuildMode.candidate;
 
-  /// The engine the running KDF has to report.
+  /// The engine this configuration was reviewed on.
   String get requiredEngineCommit =>
       isCandidate ? engineCommit : productionEngineCommit;
+
+  /// The engine the running KDF has to report. A candidate names it in its
+  /// profile. Production expects the KDF this build packaged: a wallet built
+  /// against another SDK still starts, and the unit test above, not the
+  /// runtime, ties that pin to [productionEngineCommit].
+  Future<String> expectedEngineCommit({AssetBundle? bundle}) async {
+    validate();
+    if (isCandidate) return engineCommit;
+    final Object? config = jsonDecode(
+      await (bundle ?? rootBundle).loadString(sdkBuildConfigAsset),
+    );
+    final api = config is Map ? config['api'] : null;
+    final commit = api is Map ? api['api_commit_hash'] : null;
+    if (commit is! String || !RegExp(r'^[a-f0-9]{40}$').hasMatch(commit)) {
+      throw StateError(
+        'The bundled SDK build configuration names no full KDF commit.',
+      );
+    }
+    return commit;
+  }
 
   /// Production grants only the wallet operations, even if [validate] is
   /// skipped.
@@ -192,19 +218,23 @@ class SolanaBuildConfig {
     }
   }
 
-  /// KDF builds expose a seven-character tag in `version` (KDF CI sets
-  /// `KDF_BUILD_TAG` to `git rev-parse --short=7`). A candidate manifest binds
-  /// that tag to the complete commit and artifact digest; in production the
-  /// tag must name [productionEngineCommit]. Either way this check detects an
+  /// KDF's `version` ends in an abbreviated commit: seven characters from KDF
+  /// CI (`git rev-parse --short=7`), more when git needs them to stay unique,
+  /// or the full commit. A candidate manifest binds that tag to the complete
+  /// commit and artifact digest; in production it must name the KDF the build
+  /// packaged ([expectedEngineCommit]). Either way this check detects an
   /// unintended runtime binary.
-  void verifyEngineVersion(String version) {
+  void verifyEngineVersion(String version, {String? expectedCommit}) {
     if (!enabled) return;
     validate();
-    final expected = requiredEngineCommit;
-    final versionTag = RegExp(
-      r'^[A-Za-z0-9][A-Za-z0-9.+-]*_([a-f0-9]{7}|[a-f0-9]{40})$',
-    ).firstMatch(version)?.group(1);
-    if (versionTag != expected && versionTag != expected.substring(0, 7)) {
+    // A candidate is always held to its own manifest engine.
+    final expected = isCandidate
+        ? engineCommit
+        : expectedCommit ?? productionEngineCommit;
+    final versionTag = RegExp(r'^[A-Za-z0-9][A-Za-z0-9.+-]*_([a-f0-9]{7,40})$')
+        .firstMatch(version)
+        ?.group(1);
+    if (versionTag == null || !expected.startsWith(versionTag)) {
       throw StateError(
         isCandidate
             ? 'The running KDF does not match the Solana candidate.'
