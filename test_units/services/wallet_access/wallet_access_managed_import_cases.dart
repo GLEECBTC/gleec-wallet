@@ -108,6 +108,40 @@ void _managedImportCases() {
       );
     });
 
+    for (final (label, returned) in <(String, KdfUser Function(KdfUser))>[
+      (
+        'another entry',
+        (opened) => opened.copyWith(
+          metadata: {...opened.metadata, '_wallet_entry_id': 'another'},
+        ),
+      ),
+      (
+        'no public key',
+        (opened) => opened.copyWith(
+          walletId: WalletId.fromName(
+            opened.walletId.name,
+            opened.walletId.authOptions,
+          ),
+        ),
+      ),
+    ]) {
+      test('an engine wallet with $label never stays open', () async {
+        auth.registeredAs = returned;
+        await expectLater(
+          import(),
+          throwsA(
+            isA<WalletAccessException>().having(
+              (e) => e.failure,
+              'failure',
+              WalletAccessFailure.invalidResponse,
+            ),
+          ),
+        );
+        expect(auth.verifiedWallets, isEmpty);
+        expect(auth.active, isNull);
+      });
+    }
+
     test('a taken name fails without renaming and leaves nothing', () async {
       auth.collideOnce = true;
       await expectLater(

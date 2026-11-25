@@ -158,13 +158,14 @@ extension _ManagedImport on WalletAccessService {
       rethrow;
     }
     _ensureRevision(revision);
+    // Register has opened an engine wallet, so one refused here is closed.
+    // A resumed wallet keeps the derivation it was created with; another
+    // would show addresses other than the moved wallet's.
     if (WalletAccessService.entryId(user) != id ||
-        !user.walletId.hasFullIdentity) {
-      throw const WalletAccessException(WalletAccessFailure.invalidResponse);
+        !user.walletId.hasFullIdentity ||
+        user.walletId.isHd != isHd) {
+      await _refuseOpenedWallet();
     }
-    // A resumed engine wallet keeps the derivation it was created with.
-    // Another one would show addresses other than the moved wallet's.
-    if (user.walletId.isHd != isHd) await _refuseOpenedWallet();
     await _sdk.auth.verifyPassword(
       password: password,
       expectedWalletId: user.walletId,

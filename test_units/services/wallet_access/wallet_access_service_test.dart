@@ -328,6 +328,9 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   /// What the engine reports for a wallet it creates, when that is not what
   /// was asked for.
   AuthOptions? engineOptions;
+
+  /// What register returns, when that is not the wallet it opened.
+  KdfUser Function(KdfUser opened)? registeredAs;
   bool discardMetadataWrite = false;
   void Function()? afterMetadataWrite;
   String enginePassword = _password;
@@ -540,7 +543,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       failCreationAfterCommitOnce = false;
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
-    return user;
+    return registeredAs?.call(user) ?? user;
   }
 
   @override
