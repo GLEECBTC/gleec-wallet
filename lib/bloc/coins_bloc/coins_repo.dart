@@ -574,11 +574,18 @@ class CoinsRepo {
   /// become N real `get_enabled_coins` round trips, each rebuilding the
   /// ~800-entry asset map, and the per-call invalidation disables the cache
   /// TTL for every other consumer for the whole window.
+  ///
+  /// [respectActivationBackoff] is for automatic callers. The SDK refuses
+  /// attempts for an asset whose activation keeps failing with the same error
+  /// until its backoff expires, and such a refusal ends the retries here. By
+  /// default the call is treated as a user request, which clears that backoff
+  /// before each attempt.
   Future<void> activateAssetsSync(
     List<Asset> assets, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
     bool useSharedActivationCache = false,
+    bool respectActivationBackoff = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
@@ -600,6 +607,7 @@ class CoinsRepo {
         notifyListeners: notifyListeners,
         addToWalletMetadata: addToWalletMetadata,
         useSharedActivationCache: useSharedActivationCache,
+        respectActivationBackoff: respectActivationBackoff,
         maxRetryAttempts: maxRetryAttempts,
         initialRetryDelay: initialRetryDelay,
         maxRetryDelay: maxRetryDelay,
@@ -615,6 +623,7 @@ class CoinsRepo {
     required bool notifyListeners,
     required bool addToWalletMetadata,
     required bool useSharedActivationCache,
+    required bool respectActivationBackoff,
     required int maxRetryAttempts,
     required Duration initialRetryDelay,
     required Duration maxRetryDelay,
@@ -774,6 +783,9 @@ class CoinsRepo {
               // (deliberately shorter than this one), which fails the attempt
               // and clears the entry so this retry starts fresh. Keep this as
               // the outer backstop.
+              if (!respectActivationBackoff) {
+                _kdfSdk.resetActivationBackoff([asset.id]);
+              }
               final result = await _kdfSdk
                   .activateAsset(asset)
                   .timeout(_activationAttemptTimeout);
@@ -784,7 +796,8 @@ class CoinsRepo {
             maxAttempts: maxRetryAttempts,
             shouldRetry: (error) =>
                 error is! WalletChangedDisconnectException &&
-                error is! ActivationPolicyException,
+                error is! ActivationPolicyException &&
+                error is! ActivationDeferredException,
             backoffStrategy: ExponentialBackoff(
               initialDelay: initialRetryDelay,
               maxDelay: maxRetryDelay,
@@ -824,14 +837,25 @@ class CoinsRepo {
       } catch (e, s) {
         await walletScope.refresh();
         walletScope.check();
-        _log.shout(
-          'Error activating asset after retries: ${asset.id.id}',
-          e,
-          s,
-        );
+        final isDeferred = e is ActivationDeferredException;
+        if (e is ActivationDeferredException) {
+          // Metadata only: the KDF error text would get the record dropped
+          // from diagnostics.
+          _log.info(
+            'Activation of ${asset.id.id} deferred until '
+            '${e.retryAfter.toIso8601String()} after '
+            '${e.consecutiveFailures} identical failures',
+          );
+        } else {
+          _log.shout(
+            'Error activating asset after retries: ${asset.id.id}',
+            e,
+            s,
+          );
+        }
 
         // Capture FD snapshot when KDF asset activation fails
-        if (PlatformTuner.isIOS) {
+        if (PlatformTuner.isIOS && !isDeferred) {
           try {
             await FdMonitorService().logDetailedStatus();
             final stats = await FdMonitorService().getCurrentCount();
