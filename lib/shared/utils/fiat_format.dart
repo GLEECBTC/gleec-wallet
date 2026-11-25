@@ -18,6 +18,9 @@ abstract final class FiatFormat {
   static const collapseZerosFrom = 4;
 
   static final NumberFormat _grouped = NumberFormat('#,##0.00', _locale);
+  static final NumberFormat _compact = NumberFormat.compactSimpleCurrency(
+    locale: _locale,
+  );
 
   /// A held value: `$1,234.56`, or `<$0.01` for a positive amount under a cent.
   static String amount(double value, {String symbol = r'$'}) {
@@ -27,6 +30,11 @@ abstract final class FiatFormat {
     final sign = value < 0 && rounded > 0 ? minus : '';
     return '$sign$symbol${_grouped.format(rounded)}';
   }
+
+  /// A value shown beside its currency's code rather than a symbol, as on
+  /// Buy, where the currency may not be the dollar: `1,234.56`.
+  static String number(double value) =>
+      value.isFinite ? _grouped.format(value) : '--';
 
   /// [amount] split before the cents, so they can be drawn smaller:
   /// `$1,234` and `.56`. A value under a cent has no fraction part.
@@ -43,6 +51,13 @@ abstract final class FiatFormat {
     final rounded = _roundCents(value.abs());
     if (rounded == 0) return amount(0);
     return '${value > 0 ? '+' : minus}\$${_grouped.format(rounded)}';
+  }
+
+  /// A short value for a chart axis: `$950`, `$1.2K`, `−$3.4M`.
+  static String compact(double value) {
+    if (!value.isFinite) return '--';
+    final text = _compact.format(value.abs());
+    return value < 0 && text != _compact.format(0) ? '$minus$text' : text;
   }
 
   /// A change in percent: `+1.23%`, `−0.57%`, `0.00%`.

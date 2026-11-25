@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
+    show SparklineRepository;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
@@ -10,6 +12,7 @@ import 'package:web_dex/shared/utils/balance_format.dart';
 import 'package:web_dex/shared/utils/extensions/sdk_extensions.dart';
 import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/coin_sparkline.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/asset_display_name.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_style.dart';
 
@@ -93,6 +96,8 @@ class _WalletAssetRowState extends State<WalletAssetRow> {
           child: InkWell(
             onTap: widget.onTap,
             onLongPress: widget.onLongPress,
+            // A right click is the long press of a mouse.
+            onSecondaryTap: widget.onLongPress,
             borderRadius: widget.borderRadius,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -101,35 +106,46 @@ class _WalletAssetRowState extends State<WalletAssetRow> {
                 Padding(
                   padding: WalletHomeGeometry.rowPadding,
                   child: LayoutBuilder(
-                    builder: (context, constraints) => Row(
-                      children: [
-                        AssetLogo.ofId(
-                          coin.id,
-                          size: WalletHomeGeometry.logoSize,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _NameAndPrice(
+                    builder: (context, constraints) =>
+                        constraints.maxWidth >= WalletHomeGeometry.wideRowFrom
+                        ? _WideRow(
+                            coin: coin,
                             name: names.name,
                             network: names.network,
                             price: price,
                             change: change,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth * 0.42,
-                          ),
-                          child: _Holding(
                             balance: balance,
-                            price: price,
-                            symbol: coin.id.symbol.configSymbol,
                             hidden: hidden,
+                          )
+                        : Row(
+                            children: [
+                              AssetLogo.ofId(
+                                coin.id,
+                                size: WalletHomeGeometry.logoSize,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _NameAndPrice(
+                                  name: names.name,
+                                  network: names.network,
+                                  price: price,
+                                  change: change,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth * 0.42,
+                                ),
+                                child: _Holding(
+                                  balance: balance,
+                                  price: price,
+                                  symbol: coin.id.symbol.configSymbol,
+                                  hidden: hidden,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -147,12 +163,16 @@ class _NameAndPrice extends StatelessWidget {
     required this.network,
     required this.price,
     required this.change,
+    this.showPrice = true,
   });
 
   final String name;
   final String? network;
   final double? price;
   final double? change;
+
+  /// Off where the price has a column of its own.
+  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -181,9 +201,127 @@ class _NameAndPrice extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 3),
-        _PriceLine(price: price, change: change),
+        if (showPrice) ...[
+          const SizedBox(height: 3),
+          _PriceLine(price: price, change: change),
+        ],
       ],
+    );
+  }
+}
+
+/// The row on a wide screen: the price with its 24h change, the week's
+/// sparkline and the holding each take a column, so they line up down the
+/// list.
+class _WideRow extends StatelessWidget {
+  const _WideRow({
+    required this.coin,
+    required this.name,
+    required this.network,
+    required this.price,
+    required this.change,
+    required this.balance,
+    required this.hidden,
+  });
+
+  final Coin coin;
+  final String name;
+  final String? network;
+  final double? price;
+  final double? change;
+  final double? balance;
+  final bool hidden;
+
+  @override
+  Widget build(BuildContext context) {
+    // Only the app provides one; without it the row has no sparkline.
+    final sparklines = context.read<SparklineRepository?>();
+    return Row(
+      children: [
+        AssetLogo.ofId(coin.id, size: WalletHomeGeometry.logoSize),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 4,
+          child: _NameAndPrice(
+            name: name,
+            network: network,
+            price: price,
+            change: change,
+            showPrice: false,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 3,
+          child: _PriceColumn(price: price, change: change),
+        ),
+        if (sparklines != null) ...[
+          const SizedBox(width: 24),
+          SizedBox(
+            width: 90,
+            height: 36,
+            child: CoinSparkline(coinId: coin.id, repository: sparklines),
+          ),
+        ],
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 3,
+          child: _Holding(
+            balance: balance,
+            price: price,
+            symbol: coin.id.symbol.configSymbol,
+            hidden: hidden,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// [_PriceLine] as a column: the price over its 24h change.
+class _PriceColumn extends StatelessWidget {
+  const _PriceColumn({required this.price, required this.change});
+
+  final double? price;
+  final double? change;
+
+  @override
+  Widget build(BuildContext context) {
+    final price = this.price;
+    final change = this.change;
+    final detail = WalletHomeText.detail(context);
+    if (price == null) {
+      return Text('—', style: detail, textAlign: TextAlign.end);
+    }
+    return Semantics(
+      label: [
+        FiatFormat.spokenPrice(price),
+        if (change != null) FiatFormat.percent(change),
+      ].join(', '),
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerEnd,
+            child: Text(
+              FiatFormat.price(price),
+              maxLines: 1,
+              style: WalletHomeText.value(context),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            change == null ? '—' : FiatFormat.percent(change),
+            maxLines: 1,
+            style: change == null
+                ? detail
+                : detail.copyWith(color: trendColor(context, change)),
+          ),
+        ],
+      ),
     );
   }
 }

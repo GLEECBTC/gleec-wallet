@@ -1,5 +1,5 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class SeedWordButton extends StatelessWidget {
   const SeedWordButton({
@@ -14,6 +14,7 @@ class SeedWordButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final themeData = Theme.of(context);
     final color = themeData.colorScheme.secondary;
 
@@ -52,11 +53,7 @@ class SeedWordButton extends StatelessWidget {
                     Container(
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: 8),
-                      child: Icon(
-                        Icons.close,
-                        size: 13,
-                        color: theme.custom.headerIconColor,
-                      ),
+                      child: Icon(Icons.close, size: 13, color: palette.text),
                     ),
                 ],
               ),
@@ -75,6 +72,7 @@ class _Text extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -83,7 +81,7 @@ class _Text extends StatelessWidget {
             text,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: theme.custom.headerIconColor,
+              color: palette.text,
               fontWeight: FontWeight.w500,
               fontSize: 12,
             ),

@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -32,6 +31,7 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
   Widget build(BuildContext context) {
     if (isMobile && widget.hideOnMobile) return const SizedBox.shrink();
 
+    final palette = AppPalette.of(context);
     final CustomizationBackupNotificationData customization =
         _getCustomization();
 
@@ -79,11 +79,9 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
                     horizontal: 17,
                     vertical: 15,
                   ),
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.all(Radius.circular(18)),
-                    color:
-                        customization.backgroundColor ??
-                        Theme.of(context).colorScheme.surface,
+                  decoration: AppSurface.card(
+                    palette,
+                    color: customization.backgroundColor,
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -143,7 +141,7 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
       line: BackupNotificationLineStyle(
         width: 8,
         height: 45,
-        color: theme.custom.warningColor,
+        color: AppPalette.of(context).warning,
       ),
     );
   }

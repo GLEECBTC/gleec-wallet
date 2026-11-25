@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
@@ -15,15 +14,15 @@ class SecuritySectionCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: padding,
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.tertiary,
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: AppSurface.card(palette),
+      child: child,
+    );
+  }
 }
 
 /// The three text weights a section uses: its title, its body one step
@@ -68,33 +67,37 @@ class SecuritySecondaryButton extends StatelessWidget {
   final double width;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    // A node of its own: merged upwards, the button would take the section
-    // text beside it as its name and lose its own label.
-    container: true,
-    // The kit's border button is an ink well, which reports a tap but not
-    // that it is a button.
-    button: true,
-    enabled: onPressed != null,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
-      child: UiBorderButton(
-        width: width,
-        allowMultiline: true,
-        borderWidth: 2,
-        borderColor: theme.custom.specificButtonBorderColor,
-        prefix: icon == null
-            ? null
-            : IconTheme.merge(
-                data: IconThemeData(
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurface,
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Semantics(
+      // A node of its own: merged upwards, the button would take the section
+      // text beside it as its name and lose its own label.
+      container: true,
+      // The kit's border button is an ink well, which reports a tap but not
+      // that it is a button.
+      button: true,
+      enabled: onPressed != null,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: UiBorderButton(
+          width: width,
+          allowMultiline: true,
+          borderWidth: 2,
+          borderColor: palette.border,
+          backgroundColor: palette.surfaceHigh,
+          prefix: icon == null
+              ? null
+              : IconTheme.merge(
+                  data: IconThemeData(
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  child: icon!,
                 ),
-                child: icon!,
-              ),
-        text: text,
-        onPressed: onPressed,
+          text: text,
+          onPressed: onPressed,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

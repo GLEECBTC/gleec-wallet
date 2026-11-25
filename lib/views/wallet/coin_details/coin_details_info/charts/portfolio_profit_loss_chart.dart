@@ -8,6 +8,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
 
@@ -125,7 +126,7 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
             : 0.0;
         final bool hasValidTotal = isSuccess && rawTotalValue.isFinite;
         final formattedValue = hasValidTotal
-            ? '${totalValue >= 0 ? '+' : '-'}${NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(totalValue)}'
+            ? FiatFormat.signedAmount(totalValue)
             : '--';
 
         return Card(
@@ -204,10 +205,7 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
                             ChartAxisLabels(
                               isVertical: true,
                               count: 5,
-                              labelBuilder: (value) =>
-                                  NumberFormat.compactSimpleCurrency(
-                                    locale: 'en_US',
-                                  ).format(value),
+                              labelBuilder: FiatFormat.compact,
                             ),
                             ChartAxisLabels(
                               isVertical: false,
@@ -313,7 +311,7 @@ class _PortfolioProfitLossTooltip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final adjective = portfolioValue > 0 ? '+' : '-';
+    final palette = AppPalette.of(context);
     return ChartTooltipContainer(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -324,11 +322,13 @@ class _PortfolioProfitLossTooltip extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$adjective${NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(portfolioValue.abs())}',
+            FiatFormat.signedAmount(portfolioValue),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: portfolioValue > 0
-                  ? Colors.green
-                  : Theme.of(context).colorScheme.error,
+                  ? palette.success
+                  : portfolioValue < 0
+                  ? palette.danger
+                  : palette.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),

@@ -69,10 +69,34 @@ void testFiatFormat() {
       expect(FiatFormat.price(0.9999996), r'$1.00');
     });
 
+    test('writes a value for beside a currency code, without a symbol', () {
+      expect(FiatFormat.number(10), '10.00');
+      expect(FiatFormat.number(10000), '10,000.00');
+      expect(FiatFormat.number(2499.999), '2,500.00');
+    });
+
+    test('shortens a chart axis value, with a true minus', () {
+      expect(FiatFormat.compact(950), r'$950');
+      expect(FiatFormat.compact(1200), r'$1.2K');
+      expect(FiatFormat.compact(3400000), r'$3.4M');
+      expect(FiatFormat.compact(-1200), '−\$1.2K');
+      expect(FiatFormat.compact(-0.001), r'$0.00');
+    });
+
+    test('keeps the short forms in one style whatever the locale is', () {
+      final previous = Intl.defaultLocale;
+      addTearDown(() => Intl.defaultLocale = previous);
+      Intl.defaultLocale = 'de_DE';
+      expect(FiatFormat.number(10000), '10,000.00');
+      expect(FiatFormat.compact(1200), r'$1.2K');
+    });
+
     test('marks a value it cannot show', () {
       expect(FiatFormat.amount(double.nan), '--');
       expect(FiatFormat.price(double.infinity), '--');
       expect(FiatFormat.percent(double.nan), '--');
+      expect(FiatFormat.number(double.nan), '--');
+      expect(FiatFormat.compact(double.infinity), '--');
     });
   });
 }

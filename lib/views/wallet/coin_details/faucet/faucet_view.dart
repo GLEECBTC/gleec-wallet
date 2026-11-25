@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -98,22 +97,21 @@ class _StatesOfPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final localState = state;
     if (localState is FaucetRequestInProgress || localState is FaucetInitial) {
       return const _Loading();
     } else if (localState is FaucetRequestSuccess) {
       final bool isDenied = localState.response.status == FaucetStatus.denied;
       return _FaucetResult(
-        color: isDenied
-            ? theme.custom.decreaseColor
-            : theme.custom.headerFloatBoxColor,
+        color: isDenied ? palette.danger : palette.brandHover,
         icon: isDenied ? Icons.close_rounded : Icons.check_rounded,
         message: localState.response.message,
         onClose: onClose,
       );
     } else if (localState is FaucetRequestError) {
       return _FaucetResult(
-        color: theme.custom.decreaseColor,
+        color: palette.danger,
         icon: Icons.close_rounded,
         message: localState.message,
         onClose: onClose,

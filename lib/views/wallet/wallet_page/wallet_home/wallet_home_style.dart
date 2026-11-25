@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 
 /// Type for the wallet home, on the swap screens' palette so the app's two
@@ -104,7 +105,19 @@ abstract final class WalletHomeGeometry {
 
   /// Where a row's text starts, for dividers that line up with it.
   static const rowTextInset = 16.0 + logoSize + 12.0;
+
+  /// The readable column the home keeps to on a tablet or desktop.
+  static const wideContentWidth = 880.0;
+
+  /// The row width from which an asset's price, trend and holding take
+  /// columns of their own.
+  static const wideRowFrom = 600.0;
 }
+
+/// A sheet's width: the whole screen on a phone, a readable column on a
+/// tablet or desktop rather than the full window.
+BoxConstraints? get walletSheetConstraints =>
+    isMobile ? null : const BoxConstraints(maxWidth: 560);
 
 /// The colour of a change: up, down, or flat. The sign and arrow beside it
 /// carry the direction too, so it is never told by colour alone.

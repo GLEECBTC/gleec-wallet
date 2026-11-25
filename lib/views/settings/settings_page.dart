@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
@@ -23,7 +24,9 @@ class SettingsPage extends StatelessWidget {
   final SettingsMenuValue selectedMenu;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppPaletteScope(child: _buildLayout());
+
+  Widget _buildLayout() {
     if (isMobile) {
       final showMobileMenu = selectedMenu == SettingsMenuValue.none;
       if (showMobileMenu) return _MobileMenuLayout(selectedMenu);

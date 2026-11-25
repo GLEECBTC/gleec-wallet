@@ -1,6 +1,6 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/kmd_rewards_info/kmd_reward_item.dart';
@@ -64,6 +64,7 @@ class KmdRewardListItem extends StatelessWidget {
   }
 
   Widget _buildMobileItem(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15),
       decoration: BoxDecoration(
@@ -80,11 +81,7 @@ class KmdRewardListItem extends StatelessWidget {
               color: Theme.of(context).colorScheme.tertiary,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Icon(
-              Icons.arrow_downward,
-              size: 15,
-              color: theme.custom.increaseColor,
-            ),
+            child: Icon(Icons.arrow_downward, size: 15, color: palette.success),
           ),
           const SizedBox(width: 15),
           Column(
@@ -110,7 +107,7 @@ class KmdRewardListItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: theme.custom.increaseColor,
+                  color: palette.success,
                 ),
               ),
               SelectableText(
@@ -139,6 +136,7 @@ class KmdRewardListItem extends StatelessWidget {
   }
 
   Widget _buildStatus(BuildContext context) {
+    final palette = AppPalette.of(context);
     final RewardItemError? rewardError = reward.error;
 
     if (rewardError != null) {
@@ -155,9 +153,11 @@ class KmdRewardListItem extends StatelessWidget {
             CustomTooltip(
               maxWidth: 200,
               padding: const EdgeInsets.all(12),
+              // The tooltip opens in the app overlay, outside the palette.
+              color: palette.surfaceRaised,
               tooltip: SelectableText(
                 rewardError.long,
-                style: const TextStyle(fontSize: 13),
+                style: TextStyle(fontSize: 13, color: palette.text),
               ),
               child: const Icon(Icons.info_outlined, size: 16),
             ),
@@ -166,9 +166,9 @@ class KmdRewardListItem extends StatelessWidget {
     }
 
     if (_isThereReward) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(0, 0, 20, 0),
-        child: Icon(Icons.check_circle, color: Colors.green, size: 14),
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
+        child: Icon(Icons.check_circle, color: palette.success, size: 14),
       );
     }
 
@@ -176,6 +176,7 @@ class KmdRewardListItem extends StatelessWidget {
   }
 
   Widget _buildTimeLeft(BuildContext context) {
+    final palette = AppPalette.of(context);
     final Duration? timeLeft = reward.timeLeft;
     return timeLeft == null
         ? SelectableText(
@@ -187,13 +188,10 @@ class KmdRewardListItem extends StatelessWidget {
         : SelectableText(
             _formatTimeLeft(timeLeft),
             style: timeLeft.inDays <= 2
-                ? Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 14,
-                    color: Colors.orange,
-                  )
-                : Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontSize: 14),
+                ? Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(fontSize: 14, color: palette.warning)
+                : Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(fontSize: 14),
           );
   }
 

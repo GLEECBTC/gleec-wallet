@@ -10,6 +10,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/fiat/models/fiat_price_info.dart';
 import 'package:web_dex/bloc/fiat/models/i_currency.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/views/fiat/custom_fiat_input_field.dart';
 import 'package:web_dex/views/fiat/fiat_currency_item.dart';
 import 'package:web_dex/views/fiat/fiat_icon.dart';
@@ -151,8 +152,14 @@ class FiatInputsState extends State<FiatInputs> {
     final fiatListLoading = widget.fiatList.length <= 1;
     final coinListLoading = widget.coinList.length <= 1;
 
-    final minFiatAmount = widget.fiatMinAmount?.toStringAsFixed(2);
-    final maxFiatAmount = widget.fiatMaxAmount?.toStringAsFixed(2);
+    final min = widget.fiatMinAmount;
+    final max = widget.fiatMaxAmount;
+    final minFiatAmount = min == null
+        ? null
+        : FiatFormat.number(min.toDouble());
+    final maxFiatAmount = max == null
+        ? null
+        : FiatFormat.number(max.toDouble());
     final boundariesString =
         widget.fiatMaxAmount == null && widget.fiatMinAmount == null
         ? ''

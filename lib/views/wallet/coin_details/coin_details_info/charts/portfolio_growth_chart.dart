@@ -11,7 +11,7 @@ import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
 
@@ -91,12 +91,7 @@ class _PortfolioGrowthChartState extends State<PortfolioGrowthChart> {
                   leadingIcon: _singleCoinOrNull == null
                       ? null
                       : AssetIcon.ofTicker(_singleCoinOrNull!.abbr, size: 24),
-                  leadingText: Text(
-                    NumberFormat.currency(
-                      symbol: '\$',
-                      decimalDigits: 2,
-                    ).format(totalValue),
-                  ),
+                  leadingText: Text(FiatFormat.amount(totalValue)),
                   availableCoins: widget.initialCoins
                       .map(
                         (coin) => getSdkAsset(
@@ -142,13 +137,7 @@ class _PortfolioGrowthChartState extends State<PortfolioGrowthChart> {
                       ChartAxisLabels(
                         isVertical: true,
                         count: 5,
-                        labelBuilder: (value) =>
-                            NumberFormat.compactSimpleCurrency(
-                              // symbol: '\$',
-                              // USD Locale
-                              locale: 'en_US',
-                              // )..maximumFractionDigits = 2
-                            ).format(value),
+                        labelBuilder: FiatFormat.compact,
                       ),
                       ChartAxisLabels(
                         isVertical: false,
@@ -267,20 +256,16 @@ class _PortfolioGrowthChartTooltip extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    formatAmt(data.y),
-                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    FiatFormat.amount(data.y),
+                    style: Theme.of(context).textTheme.bodyMedium!
+                        .copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
               );
             })
           else
             Text(
-              NumberFormat.currency(
-                symbol: '\$',
-                decimalDigits: 2,
-              ).format(dataPoints.first.y),
+              FiatFormat.amount(dataPoints.first.y),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
         ],

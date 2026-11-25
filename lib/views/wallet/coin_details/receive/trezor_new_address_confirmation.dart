@@ -28,9 +28,10 @@ class TrezorNewAddressConfirmation extends StatelessWidget {
         const SizedBox(height: 24),
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
+          // Dark modules on white in both themes: scanners need the contrast.
           child: QrImageView(
             data: address,
-            backgroundColor: Theme.of(context).textTheme.bodyMedium!.color!,
+            backgroundColor: Colors.white,
             size: 200.0,
             errorCorrectionLevel: QrErrorCorrectLevel.H,
           ),

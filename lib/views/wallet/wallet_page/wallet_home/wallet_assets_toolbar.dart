@@ -32,6 +32,7 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
     required this.searchFocusNode,
     required this.onSearchChanged,
     required this.textScaler,
+    this.inlineSearch = false,
   });
 
   final WalletHomeSection section;
@@ -45,6 +46,10 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
 
   /// The toolbar grows with the text size, so its labels are never clipped.
   final TextScaler textScaler;
+
+  /// Shows the search field beside the sections, where there is room for
+  /// it, rather than behind a button.
+  final bool inlineSearch;
 
   double get _extent => 48 + textScaler.scale(16);
 
@@ -89,6 +94,14 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
                   section: section,
                   onSection: onSection,
                   onSearchOpen: onSearchOpen,
+                  search: inlineSearch
+                      ? WalletHomeSearchField(
+                          fieldKey: const Key('wallet-page-search-field'),
+                          controller: searchController,
+                          focusNode: searchFocusNode,
+                          onChanged: onSearchChanged,
+                        )
+                      : null,
                 ),
         ),
       ),
@@ -100,7 +113,8 @@ class WalletAssetsToolbarDelegate extends SliverPersistentHeaderDelegate {
       section != oldDelegate.section ||
       searchOpen != oldDelegate.searchOpen ||
       textScaler != oldDelegate.textScaler ||
-      searchController != oldDelegate.searchController;
+      searchController != oldDelegate.searchController ||
+      inlineSearch != oldDelegate.inlineSearch;
 }
 
 class _SectionRow extends StatelessWidget {
@@ -108,12 +122,16 @@ class _SectionRow extends StatelessWidget {
     required this.section,
     required this.onSection,
     required this.onSearchOpen,
+    this.search,
     super.key,
   });
 
   final WalletHomeSection section;
   final ValueChanged<WalletHomeSection> onSection;
   final VoidCallback onSearchOpen;
+
+  /// The search field, in place of the button that opens it.
+  final Widget? search;
 
   @override
   Widget build(BuildContext context) {
@@ -136,13 +154,16 @@ class _SectionRow extends StatelessWidget {
           ),
         ),
         if (section == WalletHomeSection.assets)
-          IconButton(
-            key: const Key('wallet-home-search-button'),
-            tooltip: LocaleKeys.searchAssets.tr(),
-            color: palette.textSecondary,
-            onPressed: onSearchOpen,
-            icon: const Icon(Icons.search_rounded),
-          ),
+          if (search case final search?)
+            SizedBox(width: 280, child: search)
+          else
+            IconButton(
+              key: const Key('wallet-home-search-button'),
+              tooltip: LocaleKeys.searchAssets.tr(),
+              color: palette.textSecondary,
+              onPressed: onSearchOpen,
+              icon: const Icon(Icons.search_rounded),
+            ),
       ],
     );
   }

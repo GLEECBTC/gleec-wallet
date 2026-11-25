@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +14,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/kmd_rewards_info/kmd_reward_item.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/reward_events.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/common/page_header/page_header.dart';
 import 'package:web_dex/views/common/pages/page_layout.dart';
@@ -50,8 +49,8 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
   bool get _isThereReward => _totalReward != null && _totalReward! > 0;
 
   Color get _messageColor => _successMessage.isNotEmpty
-      ? Colors.green[400]!
-      : theme.currentGlobal.colorScheme.error;
+      ? AppPalette.of(context).success
+      : AppPalette.of(context).danger;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +108,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
   }
 
   Widget _buildDesktop(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 30),
       child: Column(
@@ -135,12 +135,12 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                 height: 177,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10.0),
-                  gradient: theme.custom.userRewardBoxColor,
+                  color: palette.surfaceHigh,
                   boxShadow: [
                     BoxShadow(
                       offset: const Offset(0, 7),
                       blurRadius: 10,
-                      color: theme.custom.rewardBoxShadowColor,
+                      color: palette.shadow,
                     ),
                   ],
                 ),
@@ -163,17 +163,15 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.color
-                                  ?.withValues(alpha: 0.4),
+                              color: palette.textTertiary,
                             ),
                           ),
                           const SizedBox(height: 30.0),
                           UiBorderButton(
                             width: 160,
                             height: 38,
+                            borderColor: palette.brand,
+                            backgroundColor: palette.surfaceHigh,
                             text: LocaleKeys.rewardBoxReadMore.tr(),
                             onPressed: () {
                               launchURLString(
@@ -220,6 +218,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
   }
 
   Widget _buildMobile(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -237,12 +236,12 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                 height: 177,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10.0),
-                  gradient: theme.custom.userRewardBoxColor,
+                  color: palette.surfaceHigh,
                   boxShadow: [
                     BoxShadow(
                       offset: const Offset(0, 7),
                       blurRadius: 10,
-                      color: theme.custom.rewardBoxShadowColor,
+                      color: palette.shadow,
                     ),
                   ],
                 ),
@@ -265,17 +264,15 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.color
-                                  ?.withValues(alpha: 0.3),
+                              color: palette.textTertiary,
                             ),
                           ),
                           const SizedBox(height: 24.0),
                           UiBorderButton(
                             width: 160,
                             height: 38,
+                            borderColor: palette.brand,
+                            backgroundColor: palette.surfaceHigh,
                             text: LocaleKeys.rewardBoxReadMore.tr(),
                             onPressed: () {
                               launchURLString(
@@ -453,7 +450,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
       rewardAmount,
       'KMD',
     );
-    final String formattedUsdPrice = cutTrailingZeros(formatAmt(usdPrice ?? 0));
+    final String formattedUsdPrice = FiatFormat.amount(usdPrice ?? 0);
     setState(() {
       _isClaiming = false;
     });

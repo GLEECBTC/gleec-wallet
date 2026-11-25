@@ -29,7 +29,6 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_entry_boundary.dart';
-import 'package:web_dex/views/swap/common/swap_palette.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -135,10 +134,10 @@ class _MainLayoutState extends State<MainLayout> {
                 state.mode == AuthorizeMode.logIn;
             return Scaffold(
               key: scaffoldKey,
-              // The wallet home paints the palette's canvas; the same colour
-              // fills the system bars' insets around it.
-              backgroundColor: onWalletHome
-                  ? SwapPalette.of(context).canvas
+              // These pages paint the palette's canvas; the same colour fills
+              // the system bars' insets and the layout's gutters around them.
+              backgroundColor: onWalletHome || _pageOnPalette(state)
+                  ? AppPalette.of(context).canvas
                   : null,
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
@@ -165,6 +164,20 @@ class _MainLayoutState extends State<MainLayout> {
         );
       },
     );
+  }
+
+  /// Whether the page shown is drawn on the palette: the signed-in wallet on
+  /// any screen size, a coin page, Buy or Settings. The phone wallet home is
+  /// also checked on its own, because the feedback button follows it.
+  bool _pageOnPalette(AuthBlocState auth) {
+    final wallet = routingState.walletState;
+    return switch (routingState.selectedMenu) {
+      MainMenuValue.wallet =>
+        wallet.selectedCoin.isNotEmpty ||
+            (wallet.action.isEmpty && auth.mode == AuthorizeMode.logIn),
+      MainMenuValue.fiat || MainMenuValue.settings => true,
+      _ => false,
+    };
   }
 
   // Method to show an alert dialog with an option to agree if the app is in

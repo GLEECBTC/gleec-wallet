@@ -1,5 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
@@ -9,12 +11,11 @@ class PrivacyNoticePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Theme.of(context).colorScheme.surface,
-      ),
+      // On mobile the settings wrapper is the card around this page.
+      decoration: isMobile ? null : AppSurface.card(palette),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

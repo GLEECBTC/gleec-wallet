@@ -2,7 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 /// A widget that displays an asset amount with its fiat value in parentheses.
@@ -61,7 +61,7 @@ class AssetAmountWithFiat extends StatelessWidget {
 
     // If no price available, just show the amount
     final formattedFiat = price != null
-        ? ' (${formatUsdValue((price * amount).toDouble())})'
+        ? ' (${FiatFormat.amount((price * amount).toDouble())})'
         : '';
 
     final fullText = '$displayText$formattedFiat';

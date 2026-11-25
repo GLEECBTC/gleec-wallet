@@ -1,5 +1,6 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/src/design_system/app_palette_scope.dart';
 
 class UiBorderButton extends StatelessWidget {
   const UiBorderButton({
@@ -55,7 +56,9 @@ class UiBorderButton extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color:
-                  backgroundColor ?? theme.custom.defaultBorderButtonBackground,
+                  backgroundColor ??
+                  AppPaletteScope.maybeOf(context)?.surfaceRaised ??
+                  theme.custom.defaultBorderButtonBackground,
               borderRadius: BorderRadius.circular(15),
             ),
             child: Material(

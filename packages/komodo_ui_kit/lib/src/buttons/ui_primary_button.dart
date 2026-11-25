@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
+import 'package:komodo_ui_kit/src/design_system/app_palette_scope.dart';
 
 class UiPrimaryButton extends StatefulWidget {
   const UiPrimaryButton({
@@ -117,10 +118,13 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
     // branch knows is that it is dark. It previously reached across into the
     // *light* theme's `onSurface` for a near-white, which only worked while
     // that role held a background value.
+    // On the palette, secondary is the brand fill, which is short of 4.5:1
+    // as text on the palette's light surfaces.
     return ThemeData.estimateBrightnessForColor(_backgroundColor) ==
             Brightness.dark
         ? Colors.white
-        : Theme.of(context).colorScheme.secondary;
+        : AppPaletteScope.maybeOf(context)?.text ??
+              Theme.of(context).colorScheme.secondary;
   }
 
   /// Returns a text style with the appropriate foreground color based on the

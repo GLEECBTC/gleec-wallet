@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,6 +27,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -380,10 +380,7 @@ class _DesktopContent extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(18.0),
-      ),
+      decoration: AppSurface.card(AppPalette.of(context)),
       child: DexScrollbar(
         scrollController: scrollController,
         isMobile: isMobile,
@@ -575,10 +572,7 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(15, 18, 15, 16),
-      decoration: BoxDecoration(
-        color: isMobile ? Theme.of(context).cardColor : null,
-        borderRadius: BorderRadius.circular(18.0),
-      ),
+      decoration: isMobile ? AppSurface.card(AppPalette.of(context)) : null,
       child: Column(
         children: [
           _AssetGlow(
@@ -856,11 +850,11 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   /// re-opened seconds after the last fetch showed a placeholder for the whole
   /// duration of a fresh round trip, even though the number was already in
   /// memory. See [build]'s `showGhost`/`isRefreshing` split.
-  Widget _buildGhostValue(ThemeData themeData) {
+  Widget _buildGhostValue(ThemeData themeData, AppPalette palette) {
     final style = themeData.textTheme.titleMedium?.copyWith(
       fontSize: isMobile ? 25 : 22,
       fontWeight: FontWeight.w700,
-      color: theme.custom.headerFloatBoxColor,
+      color: palette.text,
       height: 1.1,
     );
 
@@ -891,7 +885,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
           style: themeData.textTheme.titleSmall!.copyWith(
             fontSize: isMobile ? 25 : 20,
             fontWeight: FontWeight.w500,
-            color: theme.custom.headerFloatBoxColor.withValues(alpha: 0.75),
+            color: palette.text.withValues(alpha: 0.75),
             height: 1.1,
           ),
         ),
@@ -902,6 +896,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeData = Theme.of(context);
+    final palette = AppPalette.of(context);
     final balance = latestBalance?.spendable.toDouble();
 
     // Unconfirmed *and* nothing cached -> skeleton. Unconfirmed *with* a cached
@@ -932,12 +927,12 @@ class CoinDetailsBalanceContent extends StatelessWidget {
             style: themeData.textTheme.titleMedium!.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: theme.custom.headerFloatBoxColor,
+              color: palette.textSecondary,
             ),
           ),
         Flexible(
           child: showGhost
-              ? _buildGhostValue(themeData)
+              ? _buildGhostValue(themeData, palette)
               : Row(
                   mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
                   mainAxisAlignment: isMobile
@@ -952,7 +947,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         style: themeData.textTheme.titleMedium!.copyWith(
                           fontSize: isMobile ? 25 : 22,
                           fontWeight: FontWeight.w700,
-                          color: theme.custom.headerFloatBoxColor.withValues(
+                          color: palette.text.withValues(
                             alpha: isRefreshing ? 0.65 : 1,
                           ),
                           height: 1.1,
@@ -965,7 +960,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                       style: themeData.textTheme.titleSmall!.copyWith(
                         fontSize: isMobile ? 25 : 20,
                         fontWeight: FontWeight.w500,
-                        color: theme.custom.headerFloatBoxColor.withValues(
+                        color: palette.text.withValues(
                           alpha: isRefreshing ? 0.65 : 1,
                         ),
                         height: 1.1,
@@ -979,9 +974,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         height: 12,
                         child: CircularProgressIndicator(
                           strokeWidth: 1.5,
-                          color: theme.custom.headerFloatBoxColor.withValues(
-                            alpha: 0.65,
-                          ),
+                          color: palette.textSecondary,
                         ),
                       ),
                     ],
@@ -1092,6 +1085,7 @@ class _FiatBalance extends StatelessWidget {
             child: CoinFiatBalance(
               coin,
               isSelectable: true,
+              format: FiatFormat.amount,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
           ),
@@ -1130,6 +1124,7 @@ class _GetRewardsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return FocusDecorator(
       child: InkWell(
         onTap: coin.isSuspended ? null : onTap,
@@ -1139,8 +1134,8 @@ class _GetRewardsButton extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 110),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: theme.custom.specificButtonBorderColor),
-              color: theme.custom.specificButtonBackgroundColor,
+              border: Border.all(color: palette.border),
+              color: palette.surfaceHigh,
             ),
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 5),
             child: Row(
@@ -1150,8 +1145,7 @@ class _GetRewardsButton extends StatelessWidget {
                   child: SvgPicture.asset(
                     '$assetsPath/ui_icons/rewards.svg',
                     colorFilter: ColorFilter.mode(
-                      Theme.of(context).textTheme.labelLarge?.color ??
-                          Colors.white,
+                      palette.text,
                       BlendMode.srcIn,
                     ),
                     allowDrawingOutsideViewBox: true,

@@ -1,13 +1,14 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/views/wallet/coin_details/constants.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_item.dart';
@@ -17,9 +18,10 @@ class SendCompleteForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final decoration = BoxDecoration(
       borderRadius: BorderRadius.circular(18),
-      color: theme.custom.buttonColorDefault,
+      color: palette.surfaceHigh,
     );
 
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
@@ -54,17 +56,17 @@ class SendCompleteForm extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 25,
                           fontWeight: FontWeight.w700,
-                          color: theme.custom.headerFloatBoxColor,
+                          color: palette.text,
                         ),
                       ),
                       if (state.usdAmountPrice != null) ...[
                         const SizedBox(height: 5),
                         SelectableText(
-                          '\$${state.usdAmountPrice}',
+                          FiatFormat.amount(state.usdAmountPrice!),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: theme.custom.headerFloatBoxColor,
+                            color: palette.text,
                           ),
                         ),
                       ],

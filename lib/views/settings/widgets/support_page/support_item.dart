@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -33,6 +32,7 @@ class _SupportItemState extends State<SupportItem> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,9 +57,10 @@ class _SupportItemState extends State<SupportItem> {
                     width: 30,
                   ),
                 UiGradientIcon(
-                    icon: expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down)
+                  icon: expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                ),
               ],
             ),
             onTap: () {
@@ -78,16 +79,20 @@ class _SupportItemState extends State<SupportItem> {
         ),
         if (widget.data.content != null)
           Visibility(
-              visible: expanded,
-              child: HtmlParser(
-                widget.data.content!,
-                linkStyle: TextStyle(
-                    color: theme.custom.headerFloatBoxColor,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14),
-                textStyle:
-                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              )),
+            visible: expanded,
+            child: HtmlParser(
+              widget.data.content!,
+              linkStyle: TextStyle(
+                color: palette.brandHover,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ),
         const UiDivider(),
       ],
     );

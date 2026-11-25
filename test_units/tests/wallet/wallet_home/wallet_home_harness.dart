@@ -46,14 +46,16 @@ Future<void> initWalletHomeLocalization() async {
   await EasyLocalization.ensureInitialized();
 }
 
-/// Pumps [child] in the dark theme, in English, with a sign-in of [auth].
+/// Pumps [child] in the dark theme, in English, with a sign-in of [auth], on
+/// a phone unless [size] says otherwise.
 Future<void> pumpWalletHome(
   WidgetTester tester,
   Widget child, {
   AuthBlocState? auth,
   bool reduceMotion = false,
+  Size size = const Size(390, 844),
 }) async {
-  tester.view.physicalSize = const Size(390, 844);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
