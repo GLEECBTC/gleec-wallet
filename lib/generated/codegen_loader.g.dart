@@ -2201,7 +2201,8 @@ abstract class LocaleKeys {
   static const authExistingPasskeyNotFound = 'authExistingPasskeyNotFound';
   static const authExistingPasskeyUnsupported =
       'authExistingPasskeyUnsupported';
-  static const authExistingPasskeyProviderError = 'authExistingPasskeyProviderError';
+  static const authExistingPasskeyProviderError =
+      'authExistingPasskeyProviderError';
   static const authPasskeySetupInterrupted = 'authPasskeySetupInterrupted';
   static const authExistingPasskeyReady = 'authExistingPasskeyReady';
   static const authExistingPasskeyOffDescription =
@@ -2222,6 +2223,37 @@ abstract class LocaleKeys {
   static const authPasskeyRemoved = 'authPasskeyRemoved';
   static const authPasswordChangedDevicePasskeyOff =
       'authPasswordChangedDevicePasskeyOff';
+  static const authSecurityKeyInsertTitle = 'authSecurityKeyInsertTitle';
+  static const authSecurityKeyInsert = 'authSecurityKeyInsert';
+  static const authSecurityKeyNoAccessTitle = 'authSecurityKeyNoAccessTitle';
+  static const authSecurityKeyNoAccess = 'authSecurityKeyNoAccess';
+  static const authSecurityKeyReinsertTitle = 'authSecurityKeyReinsertTitle';
+  static const authSecurityKeyReinsert = 'authSecurityKeyReinsert';
+  static const authSecurityKeyChooseKeyTitle = 'authSecurityKeyChooseKeyTitle';
+  static const authSecurityKeyChooseKey = 'authSecurityKeyChooseKey';
+  static const authSecurityKeyPinTitle = 'authSecurityKeyPinTitle';
+  static const authSecurityKeyPinLabel = 'authSecurityKeyPinLabel';
+  static const authSecurityKeyPinWrong = 'authSecurityKeyPinWrong';
+  static const authSecurityKeyPinTries = 'authSecurityKeyPinTries';
+  static const authSecurityKeyPinLastTry = 'authSecurityKeyPinLastTry';
+  static const authSecurityKeyPinTooShort = 'authSecurityKeyPinTooShort';
+  static const authSecurityKeyPinTooLong = 'authSecurityKeyPinTooLong';
+  static const authSecurityKeyTouchTitle = 'authSecurityKeyTouchTitle';
+  static const authSecurityKeyTouch = 'authSecurityKeyTouch';
+  static const authSecurityKeyTimedOutTitle = 'authSecurityKeyTimedOutTitle';
+  static const authSecurityKeyTimedOut = 'authSecurityKeyTimedOut';
+  static const authSecurityKeyChooseAccountTitle =
+      'authSecurityKeyChooseAccountTitle';
+  static const authSecurityKeyChooseAccount = 'authSecurityKeyChooseAccount';
+  static const authSecurityKeyUnnamedPasskey = 'authSecurityKeyUnnamedPasskey';
+  static const authSecurityKeyPasskeyUnusable =
+      'authSecurityKeyPasskeyUnusable';
+  static const authSecurityKeyPasskeyNotFound =
+      'authSecurityKeyPasskeyNotFound';
+  static const authSecurityKeyUnsupported = 'authSecurityKeyUnsupported';
+  static const authOpenWithoutPasskey = 'authOpenWithoutPasskey';
+  static const authOpenWithoutPasskeyPending = 'authOpenWithoutPasskeyPending';
+  static const authOpenedWithoutPasskey = 'authOpenedWithoutPasskey';
   static const swapAssetPreparationUnavailable =
       'swapAssetPreparationUnavailable';
   static const swapAvailabilityChecking = 'swapAvailabilityChecking';

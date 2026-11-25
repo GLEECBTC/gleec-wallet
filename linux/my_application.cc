@@ -8,6 +8,7 @@
 #include <gtk/gtk.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "security_key_channel.h"
 
 #if GLIB_CHECK_VERSION(2,74,0)
   #define MY_APP_DEFAULT_FLAGS G_APPLICATION_DEFAULT_FLAGS
@@ -19,6 +20,7 @@ struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
   GtkWindow* main_window;
+  SecurityKeyChannel* security_key;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -103,6 +105,8 @@ static void my_application_activate(GApplication* application) {
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  self->security_key = security_key_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 
@@ -138,6 +142,7 @@ static gboolean my_application_local_command_line(GApplication* application, gch
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_pointer(&self->security_key, security_key_channel_free);
 
   if (self->main_window != nullptr) {
     g_signal_handlers_disconnect_by_data(self->main_window, self);
@@ -155,6 +160,7 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {
   self->main_window = nullptr;
+  self->security_key = nullptr;
 }
 
 MyApplication* my_application_new() {

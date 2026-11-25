@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,6 +17,7 @@ import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/logout_popup.dart';
 import 'package:web_dex/views/common/wallet_access/app_lock_boundary.dart';
+import 'package:web_dex/views/common/wallet_access/security_key/security_key_prompt_host.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_access_actions.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_password_input.dart';
@@ -215,7 +217,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                     onRecover: () => _exit(recover: true),
                   );
                 }
-                return AppLockBoundary(
+                final lock = AppLockBoundary(
                   coordinator: access.unlockCoordinator,
                   onUnlock: () => _unlock(access),
                   onUsePassword: () => setState(() {
@@ -239,6 +241,11 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                   ),
                   child: widget.child,
                 );
+                // Linux asks for a security key's PIN itself, over the lock
+                // cover when unlocking.
+                return !kIsWeb && defaultTargetPlatform == TargetPlatform.linux
+                    ? SecurityKeyPromptHost(child: lock)
+                    : lock;
               },
             );
           },

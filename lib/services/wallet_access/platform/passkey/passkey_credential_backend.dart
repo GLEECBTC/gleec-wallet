@@ -81,6 +81,10 @@ class PasskeyCredentialBackend extends CredentialBackend {
       existingPasskeyCandidate:
           actual.available &&
           await _authenticator.isSupported().catchError((Object _) => false),
+      unattendedReturn:
+          actual.available &&
+          actual.unattendedReturn &&
+          !actual.deviceAuthentication,
     );
   }
 
@@ -229,6 +233,18 @@ class PasskeyCredentialBackend extends CredentialBackend {
     String value, {
     required int expectedRevision,
   }) => _replaceWithDevice(key, value, expectedRevision);
+
+  @override
+  Future<void> replacePasskeyWithUnattended(
+    String key,
+    String value, {
+    required int expectedRevision,
+  }) => _replaceWithDevice(
+    key,
+    value,
+    expectedRevision,
+    requireAuthentication: false,
+  );
 
   @override
   Future<String?> prepareDelete(String key, {required String reason}) =>
