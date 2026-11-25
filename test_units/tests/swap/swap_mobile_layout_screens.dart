@@ -211,7 +211,6 @@ void _fabCases() {
           MaterialApp(
             home: Scaffold(
               floatingActionButton: MainLayoutFab(
-                showAddCoinButton: false,
                 isMini: true,
                 showFeedbackButton: feedback,
               ),

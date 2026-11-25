@@ -4,11 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/analytics/events.dart';
-import 'package:web_dex/analytics/events/portfolio_events.dart';
-import 'package:web_dex/analytics/wallet_load_timeline.dart';
-import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
@@ -20,6 +15,7 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/balance_utils.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/balance_summary_widget.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_overview_analytics.dart';
 
 // TODO(@takenagain): Please clean up the widget structure and bloc usage for
 // the wallet overview. It may be better to split this into a separate bloc
@@ -49,7 +45,7 @@ class WalletOverview extends StatefulWidget {
 }
 
 class _WalletOverviewState extends State<WalletOverview> {
-  bool _logged = false;
+  final _analytics = WalletOverviewAnalytics();
   static const double _desktopCaptionHeight = 20;
 
   @override
@@ -67,12 +63,7 @@ class _WalletOverviewState extends State<WalletOverview> {
         final portfolioAssetsOverviewBloc = context.watch<AssetOverviewBloc>();
         final int assetCount = state.walletCoins.length;
 
-        // Get asset overview state data
         final overviewState = portfolioAssetsOverviewBloc.state;
-        final stateWithData =
-            overviewState is PortfolioAssetsOverviewLoadSuccess
-            ? overviewState
-            : null;
 
         // Calculate the total balance from the SDK balances and market data
         // interfaces rather than the PortfolioGrowthBloc - limited coin
@@ -83,36 +74,12 @@ class _WalletOverviewState extends State<WalletOverview> {
           sdk: context.sdk,
         );
         final double? totalBalance = walletTotal.totalUsd;
-
-        // The first frame in which the user can actually see their money.
-        // `takeElapsedMs` returns non-null exactly once per session, so this
-        // needs no latch of its own and cannot double-report across rebuilds.
-        if (totalBalance != null) {
-          final elapsedMs = WalletLoadTimeline.instance.takeElapsedMs();
-          if (elapsedMs != null) {
-            context.read<AnalyticsBloc>().logEvent(
-              TimeToFirstBalanceEventData(
-                timeToFirstBalanceMs: elapsedMs,
-                assetCount: walletTotal.assetCount,
-                pricedAssetCount: walletTotal.pricedAssetCount,
-                walletType:
-                    context.read<AuthBloc>().state.currentUser?.isHd ?? false
-                    ? 'hd'
-                    : 'iguana',
-              ),
-            );
-          }
-        }
-
-        if (!_logged && stateWithData != null && totalBalance != null) {
-          context.read<AnalyticsBloc>().logEvent(
-            PortfolioViewedEventData(
-              totalCoins: assetCount,
-              totalValueUsd: stateWithData.totalValue.value,
-            ),
-          );
-          _logged = true;
-        }
+        _analytics.report(
+          context,
+          walletTotal: walletTotal,
+          overview: overviewState,
+          walletCoinCount: assetCount,
+        );
 
         // The all-time cards wait for the wallet balance, so that the row of
         // statistics fills in together.

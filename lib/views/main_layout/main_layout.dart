@@ -24,13 +24,12 @@ import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/services/storage/storage_persistence_gate.dart';
 import 'package:web_dex/shared/utils/window/window.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile.dart';
-import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
-import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_entry_boundary.dart';
+import 'package:web_dex/views/swap/common/swap_palette.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -128,8 +127,19 @@ class _MainLayoutState extends State<MainLayout> {
       builder: (context, state) {
         return LayoutBuilder(
           builder: (context, constraints) {
+            final onWalletHome =
+                isMobile &&
+                routingState.selectedMenu == MainMenuValue.wallet &&
+                routingState.walletState.selectedCoin.isEmpty &&
+                routingState.walletState.action.isEmpty &&
+                state.mode == AuthorizeMode.logIn;
             return Scaffold(
               key: scaffoldKey,
+              // The wallet home paints the palette's canvas; the same colour
+              // fills the system bars' insets around it.
+              backgroundColor: onWalletHome
+                  ? SwapPalette.of(context).canvas
+                  : null,
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
               appBar: null,
@@ -142,17 +152,12 @@ class _MainLayoutState extends State<MainLayout> {
                   ? MainMenuBarMobile()
                   : null,
               floatingActionButton: MainLayoutFab(
-                showAddCoinButton:
-                    isMobile &&
-                    routingState.selectedMenu == MainMenuValue.wallet &&
-                    routingState.walletState.selectedCoin.isEmpty &&
-                    routingState.walletState.action.isEmpty &&
-                    context.watch<AuthBloc>().state.mode == AuthorizeMode.logIn,
                 // Swap pins full-width actions to the bottom of its screens,
-                // where the button would sit over them. Settings still offers
-                // feedback.
+                // where the button would sit over them, and the wallet home
+                // has it in its header. Settings still offers feedback.
                 showFeedbackButton:
-                    routingState.selectedMenu != MainMenuValue.dex,
+                    routingState.selectedMenu != MainMenuValue.dex &&
+                    !onWalletHome,
                 isMini: isMobile,
               ),
             );
@@ -201,36 +206,15 @@ class _MainLayoutState extends State<MainLayout> {
 class MainLayoutFab extends StatelessWidget {
   const MainLayoutFab({
     super.key,
-    required this.showAddCoinButton,
     required this.isMini,
     this.showFeedbackButton = true,
   });
 
-  final bool showAddCoinButton;
   final bool isMini;
   final bool showFeedbackButton;
 
   @override
   Widget build(BuildContext context) {
-    final Widget? addAssetsFab = showAddCoinButton
-        ? Tooltip(
-            message: LocaleKeys.addAssets.tr(),
-            child: SizedBox.square(
-              dimension: isMini ? 56.0 : 64.0,
-              child: UiGradientButton(
-                onPressed: () {
-                  context.read<CoinsManagerBloc>().add(
-                    const CoinsManagerCoinsListReset(CoinsManagerAction.add),
-                  );
-                  routingState.walletState.action =
-                      coinsManagerRouteAction.addAssets;
-                },
-                child: const Icon(Icons.add_rounded, size: 36),
-              ),
-            ),
-          )
-        : null;
-
     final Widget? feedbackFab =
         showFeedbackButton && context.isFeedbackAvailable
         ? Tooltip(
@@ -252,13 +236,6 @@ class MainLayoutFab extends StatelessWidget {
           )
         : null;
 
-    if (feedbackFab != null && addAssetsFab != null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [feedbackFab, const SizedBox(height: 16), addAssetsFab],
-      );
-    }
-
-    return addAssetsFab ?? feedbackFab ?? const SizedBox.shrink();
+    return feedbackFab ?? const SizedBox.shrink();
   }
 }

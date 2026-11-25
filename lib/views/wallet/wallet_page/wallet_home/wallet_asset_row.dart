@@ -1,0 +1,356 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_ui/komodo_ui.dart';
+import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
+import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/balance_format.dart';
+import 'package:web_dex/shared/utils/extensions/sdk_extensions.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
+import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_home/asset_display_name.dart';
+import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_style.dart';
+
+/// One asset in the wallet: its logo, name and network, and market price
+/// with the 24h change; on the right, what is held, in dollars and in coins.
+///
+/// Held amounts are never cut short, since "147…" for a 14,772 balance reads
+/// as a different number: the value column shrinks its text to fit, and the
+/// name gives way first.
+class WalletAssetRow extends StatefulWidget {
+  const WalletAssetRow({
+    required this.coin,
+    required this.onTap,
+    this.onLongPress,
+    this.showDivider = false,
+    this.borderRadius,
+    super.key,
+  });
+
+  final Coin coin;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// Draws a hairline above the row, inset to where its text starts.
+  final bool showDivider;
+
+  /// Clips the press highlight to the group's corners.
+  final BorderRadius? borderRadius;
+
+  @override
+  State<WalletAssetRow> createState() => _WalletAssetRowState();
+}
+
+class _WalletAssetRowState extends State<WalletAssetRow> {
+  /// Held for the widget's lifetime: a `watchBalance` stream made in [build]
+  /// restarts the SDK's balance watcher on every rebuild.
+  late Stream<BalanceInfo> _balanceStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant WalletAssetRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id != widget.coin.id) {
+      _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final coin = widget.coin;
+    final sdk = context.sdk;
+    final hidden = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
+    final price = context.select(
+      (CoinsBloc bloc) =>
+          bloc.state.getPriceForAsset(coin.id)?.price?.toDouble(),
+    );
+    final change = context.select(
+      (CoinsBloc bloc) => bloc.state.get24hChangeForAsset(coin.id),
+    );
+    final names = assetDisplayParts(coin);
+
+    return StreamBuilder<BalanceInfo>(
+      initialData: sdk.balances.lastKnown(coin.id),
+      stream: _balanceStream,
+      builder: (context, snapshot) {
+        final balance =
+            (snapshot.hasError
+                    ? sdk.balances.lastKnown(coin.id)
+                    : snapshot.data)
+                ?.spendable
+                .toDouble();
+        return Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            borderRadius: widget.borderRadius,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.showDivider) const _Divider(),
+                Padding(
+                  padding: WalletHomeGeometry.rowPadding,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Row(
+                      children: [
+                        AssetLogo.ofId(
+                          coin.id,
+                          size: WalletHomeGeometry.logoSize,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _NameAndPrice(
+                            name: names.name,
+                            network: names.network,
+                            price: price,
+                            change: change,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth * 0.42,
+                          ),
+                          child: _Holding(
+                            balance: balance,
+                            price: price,
+                            symbol: coin.id.symbol.configSymbol,
+                            hidden: hidden,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NameAndPrice extends StatelessWidget {
+  const _NameAndPrice({
+    required this.name,
+    required this.network,
+    required this.price,
+    required this.change,
+  });
+
+  final String name;
+  final String? network;
+  final double? price;
+  final double? change;
+
+  @override
+  Widget build(BuildContext context) {
+    final network = this.network;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // The chip flows after the name, so with large text the pair wraps
+        // onto a second line rather than cutting the name short.
+        Text.rich(
+          TextSpan(
+            text: name,
+            children: [
+              if (network != null)
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 6),
+                    child: NetworkChip(label: network),
+                  ),
+                ),
+            ],
+          ),
+          style: WalletHomeText.title(context),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 3),
+        _PriceLine(price: price, change: change),
+      ],
+    );
+  }
+}
+
+/// The market price and its 24h change, which stay visible when balances
+/// are hidden: they are public, not the user's.
+class _PriceLine extends StatelessWidget {
+  const _PriceLine({required this.price, required this.change});
+
+  final double? price;
+  final double? change;
+
+  @override
+  Widget build(BuildContext context) {
+    final price = this.price;
+    final change = this.change;
+    final style = WalletHomeText.detail(context);
+    if (price == null) return Text('—', style: style);
+    return Semantics(
+      label: [
+        FiatFormat.spokenPrice(price),
+        if (change != null) FiatFormat.percent(change),
+      ].join(', '),
+      excludeSemantics: true,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: FiatFormat.price(price)),
+              if (change != null)
+                TextSpan(
+                  text: '  ${FiatFormat.percent(change)}',
+                  style: TextStyle(color: trendColor(context, change)),
+                ),
+            ],
+          ),
+          style: style,
+          maxLines: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _Holding extends StatelessWidget {
+  const _Holding({
+    required this.balance,
+    required this.price,
+    required this.symbol,
+    required this.hidden,
+  });
+
+  final double? balance;
+  final double? price;
+  final String symbol;
+  final bool hidden;
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = this.balance;
+    final price = this.price;
+    if (balance == null && !hidden) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Bar(width: 64, height: 14),
+          SizedBox(height: 6),
+          _Bar(width: 44, height: 10),
+        ],
+      );
+    }
+    final palette = SwapPalette.of(context);
+    final String value;
+    final String amount;
+    if (hidden) {
+      value = '\$$maskedBalanceText';
+      amount = '$maskedBalanceText $symbol';
+    } else {
+      value = price == null ? '—' : FiatFormat.amount(balance! * price);
+      amount = '${formatListBalance(balance!)} $symbol';
+    }
+    final isEmpty = !hidden && balance == 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _fit(
+          Text(
+            value,
+            maxLines: 1,
+            style: WalletHomeText.value(context).copyWith(
+              color: isEmpty || price == null
+                  ? palette.textTertiary
+                  : palette.text,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        _fit(Text(amount, maxLines: 1, style: WalletHomeText.detail(context))),
+      ],
+    );
+  }
+
+  Widget _fit(Widget child) => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: AlignmentDirectional.centerEnd,
+    child: child,
+  );
+}
+
+/// The network a token runs on, beside its name: `ERC-20`, `TRC-20`.
+class NetworkChip extends StatelessWidget {
+  const NetworkChip({required this.label, super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: SwapPalette.of(context).surfaceHigh,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(label, style: WalletHomeText.chip(context), maxLines: 1),
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: WalletHomeGeometry.rowTextInset,
+      ),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: SwapPalette.of(context).border.withValues(alpha: 0.6),
+      ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: SwapPalette.of(context).surfaceHigh,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    );
+  }
+}

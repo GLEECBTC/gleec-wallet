@@ -21,17 +21,13 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
-import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
-import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
-import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/shared/constants.dart';
-import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -47,17 +43,23 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info_fiat.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/transactions/transaction_table.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_quick_action_scope.dart';
+import 'package:web_dex/views/wallet/common/open_swap_with_asset.dart';
 
 class CoinDetailsInfo extends StatefulWidget {
   const CoinDetailsInfo({
     required this.coin,
     required this.setPageType,
     required this.onBackButtonPressed,
+    this.quickAction,
     super.key,
   });
   final Coin coin;
   final void Function(CoinPageType) setPageType;
   final VoidCallback onBackButtonPressed;
+
+  /// Send or Receive, asked for from the wallet home, to start on arrival.
+  final CoinQuickActionRequest? quickAction;
 
   @override
   State<CoinDetailsInfo> createState() => _CoinDetailsInfoState();
@@ -141,22 +143,25 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
               CoinsPubkeysRequested(widget.coin.abbr),
             );
           },
-          child: PageLayout(
-            padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
-            header: PageHeader(
-              title: widget.coin.displayName,
-              widgetTitle: widget.coin.mode == CoinMode.segwit
-                  ? const Padding(
-                      padding: EdgeInsets.only(left: 6.0),
-                      child: SegwitIcon(height: 22),
-                    )
-                  : null,
-              backText: _backText,
-              onBackButtonPressed: _onBackButtonPressed,
-              actions: [_buildDisableButton()],
-            ),
-            content: Expanded(
-              child: _EntranceTransition(child: _buildContent(context)),
+          child: CoinQuickActionScope(
+            request: widget.quickAction,
+            child: PageLayout(
+              padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
+              header: PageHeader(
+                title: widget.coin.displayName,
+                widgetTitle: widget.coin.mode == CoinMode.segwit
+                    ? const Padding(
+                        padding: EdgeInsets.only(left: 6.0),
+                        child: SegwitIcon(height: 22),
+                      )
+                    : null,
+                backText: _backText,
+                onBackButtonPressed: _onBackButtonPressed,
+                actions: [_buildDisableButton()],
+              ),
+              content: Expanded(
+                child: _EntranceTransition(child: _buildContent(context)),
+              ),
             ),
           ),
         ),
@@ -467,7 +472,7 @@ class _DesktopCoinDetails extends StatelessWidget {
               isMobile: false,
               selectWidget: setPageType,
               onClickSwapButton: canTradeCoin
-                  ? () => _goToSwap(context, coin)
+                  ? () => openSwapWithAsset(context, coin)
                   : null,
               coin: coin,
             ),
@@ -596,7 +601,7 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
               isMobile: true,
               selectWidget: setPageType,
               onClickSwapButton: canTradeCoin
-                  ? () => _goToSwap(context, coin)
+                  ? () => openSwapWithAsset(context, coin)
                   : null,
               coin: coin,
             ),
@@ -1166,17 +1171,4 @@ class _GetRewardsButton extends StatelessWidget {
       ),
     );
   }
-}
-
-void _goToSwap(BuildContext context, Coin coin) {
-  // The Swap form opens on this coin; Advanced's taker form is seeded too, so
-  // switching to it keeps the choice.
-  context.read<SwapServices>().requestIntent((
-    pay: coin.abbr,
-    receive: null,
-    amount: null,
-    fiat: false,
-  ));
-  context.read<TakerBloc>().add(TakerSetSellCoin(coin));
-  routingState.selectedMenu = MainMenuValue.dex;
 }

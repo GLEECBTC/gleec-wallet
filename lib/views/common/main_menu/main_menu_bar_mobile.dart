@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +11,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile_item.dart';
+import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 class MainMenuBarMobile extends StatelessWidget {
@@ -45,20 +45,15 @@ class MainMenuBarMobile extends StatelessWidget {
               : '';
         }
 
+        final palette = SwapPalette.of(context);
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: theme.currentGlobal.cardColor,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                offset: const Offset(0, -10),
-                blurRadius: 10,
-              ),
-            ],
+            color: palette.surface,
+            border: Border(top: BorderSide(color: palette.border)),
           ),
           child: SafeArea(
             child: SizedBox(
-              height: 75,
+              height: 72,
               child: Row(
                 mainAxisSize: MainAxisSize.max,
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
