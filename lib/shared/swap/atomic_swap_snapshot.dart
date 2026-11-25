@@ -203,10 +203,7 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
         movementOverride: SwapFundsMovement.sent,
         outcome: SwapExecutionOutcome(
           kind: SwapOutcomeKind.completed,
-          // The record holds the maker's payment, before any fee taken from
-          // it on arrival; the accepted quote's minimum already has it off.
-          receivedAmount:
-              accepted?.guaranteedReceive ?? _decimalOf(swap.buyAmount),
+          receivedAmount: _received(swap, accepted),
           receivedAsset: accepted?.to ?? resolveAsset(swap.buyCoin),
         ),
       );
@@ -329,3 +326,12 @@ DateTime? _earlier(DateTime? a, DateTime? b) =>
 
 Decimal _decimalOf(Rational value) =>
     value.toDecimal(scaleOnInfinitePrecision: 18);
+
+/// What a completed [swap] delivered: the maker's payment as recorded, at
+/// the matched price, less the fees the [accepted] quote takes out of it on
+/// arrival. A swap known only by its record has the payment alone.
+Decimal _received(Swap swap, SwapQuote? accepted) {
+  final paid = _decimalOf(swap.buyAmount);
+  if (accepted == null) return paid;
+  return accepted.feesInReceive.fold(paid, (left, fee) => left - fee.amount);
+}
