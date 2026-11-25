@@ -1,0 +1,142 @@
+{
+  "SOL": {
+    "coin": "SOL",
+    "type": "SOLANA",
+    "name": "Solana",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "SOL",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}",
+    "explorer_address_url": "address/{ADDRESS}",
+    "supported": [],
+    "active": false,
+    "is_testnet": false,
+    "currently_enabled": false,
+    "wallet_only": true,
+    "fname": "Solana",
+    "mm2": 1,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'",
+    "nodes": [
+      {
+        "url": "https://api.mainnet-beta.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}"
+  },
+  "TESTSOL": {
+    "coin": "TESTSOL",
+    "type": "SOLANA",
+    "name": "Solana (Devnet)",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}?cluster=devnet",
+    "explorer_address_url": "address/{ADDRESS}?cluster=devnet",
+    "supported": [],
+    "active": false,
+    "is_testnet": true,
+    "currently_enabled": false,
+    "wallet_only": true,
+    "fname": "Solana (Devnet)",
+    "mm2": 1,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'",
+    "nodes": [
+      {
+        "url": "https://api.devnet.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}?cluster=devnet"
+  },
+  "USDC-SOL": {
+    "coin": "USDC-SOL",
+    "type": "SOLANATOKEN",
+    "name": "USD Coin (Solana)",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "USDC",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}",
+    "explorer_address_url": "address/{ADDRESS}",
+    "supported": [],
+    "active": false,
+    "is_testnet": false,
+    "currently_enabled": false,
+    "wallet_only": true,
+    "fname": "USD Coin (Solana)",
+    "mm2": 1,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "SOL",
+        "decimals": 6,
+        "mint_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'",
+    "parent_coin": "SOL",
+    "decimals": 6,
+    "nodes": [
+      {
+        "url": "https://api.mainnet-beta.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}"
+  },
+  "TESTUSDC-TESTSOL": {
+    "coin": "TESTUSDC-TESTSOL",
+    "type": "SOLANATOKEN",
+    "name": "USD Coin (Solana Devnet)",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}?cluster=devnet",
+    "explorer_address_url": "address/{ADDRESS}?cluster=devnet",
+    "supported": [],
+    "active": false,
+    "is_testnet": true,
+    "currently_enabled": false,
+    "wallet_only": true,
+    "fname": "USD Coin (Solana Devnet)",
+    "mm2": 1,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "TESTSOL",
+        "decimals": 6,
+        "mint_address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'",
+    "parent_coin": "TESTSOL",
+    "decimals": 6,
+    "nodes": [
+      {
+        "url": "https://api.devnet.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}?cluster=devnet"
+  }
+}

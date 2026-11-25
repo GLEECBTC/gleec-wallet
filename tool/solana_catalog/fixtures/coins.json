@@ -1,0 +1,74 @@
+[
+  {
+    "coin": "SOL",
+    "name": "solana",
+    "fname": "Solana",
+    "mm2": 1,
+    "wallet_only": true,
+    "is_testnet": false,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'"
+  },
+  {
+    "coin": "TESTSOL",
+    "name": "solana_devnet",
+    "fname": "Solana (Devnet)",
+    "mm2": 1,
+    "wallet_only": true,
+    "is_testnet": true,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'"
+  },
+  {
+    "coin": "USDC-SOL",
+    "name": "usdc_sol",
+    "fname": "USD Coin (Solana)",
+    "mm2": 1,
+    "wallet_only": true,
+    "is_testnet": false,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "SOL",
+        "decimals": 6,
+        "mint_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'"
+  },
+  {
+    "coin": "TESTUSDC-TESTSOL",
+    "name": "usdc_sol_devnet",
+    "fname": "USD Coin (Solana Devnet)",
+    "mm2": 1,
+    "wallet_only": true,
+    "is_testnet": true,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "TESTSOL",
+        "decimals": 6,
+        "mint_address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'"
+  }
+]

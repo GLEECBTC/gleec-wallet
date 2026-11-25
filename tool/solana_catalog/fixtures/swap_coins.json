@@ -1,0 +1,60 @@
+[
+  {
+    "coin": "TESTSOL",
+    "name": "solana_devnet",
+    "fname": "Solana (Devnet)",
+    "mm2": 1,
+    "wallet_only": false,
+    "is_testnet": true,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'"
+  },
+  {
+    "coin": "TESTUSDC-TESTSOL",
+    "name": "usdc_sol_devnet",
+    "fname": "USD Coin (Solana Devnet)",
+    "mm2": 1,
+    "wallet_only": false,
+    "is_testnet": true,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "TESTSOL",
+        "decimals": 6,
+        "mint_address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'"
+  },
+  {
+    "coin": "MARTY",
+    "asset": "MARTY",
+    "fname": "MARTY",
+    "is_privacy_coin": true,
+    "rpcport": 52592,
+    "pubtype": 60,
+    "p2shtype": 85,
+    "wiftype": 188,
+    "txversion": 4,
+    "overwintered": 1,
+    "mm2": 1,
+    "sign_message_prefix": "Komodo Signed Message:\n",
+    "is_testnet": true,
+    "required_confirmations": 1,
+    "avg_blocktime": 60,
+    "protocol": {
+      "type": "UTXO"
+    },
+    "derivation_path": "m/44'/141'",
+    "trezor_coin": "Komodo"
+  }
+]

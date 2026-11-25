@@ -1,0 +1,19 @@
+{
+  "purpose": "isolated Solana integration candidate; not a production registry release",
+  "nodes_verified_during_generation": false,
+  "solana_nodes_verified_during_generation": false,
+  "utxo_nodes_verified_during_generation": false,
+  "curated_utxo_tickers": [
+    "MARTY"
+  ],
+  "curated_utxo_config_source": "utils/coins_config.json",
+  "runtime_updates_enabled": false,
+  "requires_explicit_enable_auto_update_false": true,
+  "requires_isolated_storage_namespace": true,
+  "sha256": {
+    "coins.json": "2866fcc149576d4809b2770adef146d89d31928be81cd2c70b44189f773e6014",
+    "coins_config.json": "5d10d969557cd0a681e4d60b605641606e76f55b8050e757597dc735d033451c",
+    "swap_coins.json": "59b7020ae032af8a421922bfc56a05b0c1fb709990f2519402c850b4e65cc465",
+    "swap_coins_config.json": "3b116790d8667afc89e69d09852efd64bf0703c68e36e16ed21d978c33349932"
+  }
+}

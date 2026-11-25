@@ -26,7 +26,7 @@ the original mixed workspace intact.
 
 | Review unit | Main implementation surfaces | Validation |
 |---|---|---|
-| Coins repository ([PR #2103](https://github.com/GLEECBTC/coins/pull/2103)) | Initial four registry entries; `solana/`, Solana explorers, `utils/solana_registry.py`, scanner/generator integration and immutable fixtures. Swap fixtures additionally reuse MARTY. | 40 scanner/generator tests; standalone read-only node checks. |
+| Coins repository ([PR #2103](https://github.com/GLEECBTC/coins/pull/2103)) | Initial four registry entries, `solana/`, Solana explorers, `utils/solana_registry.py`, and scanner and catalog-generator integration. | Scanner and generator regression tests, plus standalone read-only node checks. |
 | Vendored SDK ([PR #444](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/444)) | SOL/SPL types and typed RPCs; activation coordinator; platform stream routing; history persistence; withdrawal refresh/journal; authenticated signing/export; catalog capabilities and isolated storage. Primary new tests are `komodo_defi_sdk/test/solana/`, `test/withdrawals/solana_*`, RPC/type protocol tests and harness `test/solana_replay_test.dart`. | Affected package suites, harness replay and browser stream/catalog checks below. |
 | Wallet (this repository) | `lib/app_config/solana_build_config.dart`; SDK/bootstrap wiring; shared trading policy and funding discovery; existing withdrawal/history/key-export presentation; localized messages; candidate/smoke tools. | `test_units/main.dart`, including Solana build, trading and atomic-lifecycle tests plus existing withdrawal/history suites. |
 
@@ -50,7 +50,7 @@ Preserve old evidence and reconcile any old uncertain signature before a funded
 retry under the new names. The recorded native smoke uses fresh unfunded wallets,
 so this change requires no production-wallet migration.
 
-Candidate catalogs are prepared in the separate coins worktree/branch and identified by both the source base commit and the exact snapshot SHA256. A base commit alone does not identify uncommitted candidate entries. Generate/review the registry's Solana fixtures before making a profile; the fixture manifest identifies wallet-only and explicitly opt-in devnet swap variants separately.
+Use the [Solana preview catalogs](../tool/solana_catalog/README.md) to select a pinned fixture or generate one from a separate coins checkout. The fixture manifest records the SHA256 for the wallet-only and opt-in devnet swap variants. Record the full coins source commit and the exact catalog hash when making a profile.
 
 The reviewed devnet swap fixture contains `TESTSOL`, `TESTUSDC-TESTSOL` and the existing `MARTY` UTXO testnet configuration. Its `swap_coins_config.json` SHA256 is `3b116790d8667afc89e69d09852efd64bf0703c68e36e16ed21d978c33349932`; raw `swap_coins.json` is `59b7020ae032af8a421922bfc56a05b0c1fb709990f2519402c850b4e65cc465`. Existing MARTY endpoint configurations are preserved; their runtime availability is a separate funded-round prerequisite. Use that snapshot and a separately generated manifest/profile for atomic acceptance. Do not reuse the wallet-only catalog digest with a swap snapshot.
 
