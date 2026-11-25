@@ -116,6 +116,17 @@ final class _CoinsActivationCancelled extends CoinsEvent {
 }
 
 /// A new host policy answer changes the visible and activatable wallet assets.
+/// Re-activation of selected coins that are not active, started by the bloc
+/// itself rather than by the user, so it respects the SDK's activation backoff.
+final class _CoinsReactivationRequested extends CoinsEvent {
+  const _CoinsReactivationRequested(this.coinIds);
+
+  final Iterable<String> coinIds;
+
+  @override
+  List<Object> get props => [coinIds];
+}
+
 final class _CoinsPolicyChanged extends CoinsEvent {
   const _CoinsPolicyChanged(this.status);
   final AppGeoStatus status;
