@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:decimal/decimal.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
@@ -6,11 +10,12 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
+import 'swap_bloc_fakes.dart';
 import 'swap_test_fixtures.dart';
 
-/// Covers the repository when a source or the wallet cannot answer, how
-/// options that cannot be ranked are ordered, and how quotes are priced in
-/// dollars without inventing a price nobody gave.
+/// Covers the repository when a source or the wallet cannot answer — Max
+/// included — how options that cannot be ranked are ordered, and how quotes
+/// are priced in dollars without inventing a price nobody gave.
 void main() {
   final prices = FakePriceSource({eth: d('3000'), usdc: d('1')});
   final pricing = SwapPricingService(prices);
@@ -102,6 +107,140 @@ void main() {
       );
 
       expect(await repo.requote(quoteOf()), same(refusal));
+    });
+  });
+
+  group('max amounts', () {
+    const tick = Duration(milliseconds: 1);
+    // Given the ordinary 25 s pricing budget, a preferred source is asked
+    // alone for half of it, and Max stops waiting at three times it.
+    const halfway = Duration(milliseconds: 12500);
+    const limit = Duration(seconds: 75);
+
+    ScriptedQuoteSource held(SwapLiquiditySource source, [String? amount]) =>
+        ScriptedQuoteSource(source)
+          ..max = amount == null ? null : _maxOf(amount)
+          ..maxGate = Completer<void>();
+
+    ScriptedQuoteSource answering(SwapLiquiditySource source) =>
+        ScriptedQuoteSource(source)..max = _maxOf('1.99');
+
+    for (final stalled in SwapLiquiditySource.values) {
+      test('a stalled ${stalled.name} Max times out, the other is kept', () {
+        fakeAsync((async) {
+          final working = SwapLiquiditySource.values.singleWhere(
+            (source) => source != stalled,
+          );
+          final max = _askMax(pricing, [
+            held(stalled, '1.995'),
+            answering(working),
+          ]);
+
+          async.elapse(limit - tick);
+          expect(max.answer, isNull);
+          async.elapse(tick);
+
+          expect(max.answer, {working: _maxOf('1.99')});
+        });
+      });
+    }
+
+    test('a preferred source silent halfway has the others asked too', () {
+      fakeAsync((async) {
+        final routed = answering(SwapLiquiditySource.routed);
+        final max = _askMax(pricing, [
+          routed,
+          held(SwapLiquiditySource.atomic, '1.995'),
+        ], preferred: SwapLiquiditySource.atomic);
+
+        async.elapse(halfway - tick);
+        expect(routed.maxCalls, 0);
+        async.elapse(tick);
+        expect(routed.maxCalls, 1);
+        // The preferred source may still answer until Max stops waiting.
+        async.elapse(limit - halfway - tick);
+        expect(max.answer, isNull);
+        async.elapse(tick);
+
+        expect(max.answer, {SwapLiquiditySource.routed: _maxOf('1.99')});
+      });
+    });
+
+    test('a preferred source that answers after halfway is still used', () {
+      fakeAsync((async) {
+        final routed = answering(SwapLiquiditySource.routed);
+        final atomic = held(SwapLiquiditySource.atomic, '1.995');
+        final max = _askMax(pricing, [
+          routed,
+          atomic,
+        ], preferred: SwapLiquiditySource.atomic);
+
+        async.elapse(const Duration(seconds: 20));
+        expect(routed.maxCalls, 1);
+        atomic.maxGate!.complete();
+        async.flushMicrotasks();
+
+        expect(max.answer, {SwapLiquiditySource.atomic: _maxOf('1.995')});
+        expect(async.pendingTimers, isEmpty);
+      });
+    });
+
+    test('a late empty preferred answer returns the others at once', () {
+      fakeAsync((async) {
+        final routed = answering(SwapLiquiditySource.routed);
+        final atomic = held(SwapLiquiditySource.atomic);
+        final max = _askMax(pricing, [
+          routed,
+          atomic,
+        ], preferred: SwapLiquiditySource.atomic);
+
+        async.elapse(const Duration(seconds: 20));
+        expect(max.answer, isNull);
+        atomic.maxGate!.complete();
+        async.flushMicrotasks();
+
+        expect(max.answer, {SwapLiquiditySource.routed: _maxOf('1.99')});
+        expect(routed.maxCalls, 1);
+      });
+    });
+
+    test('a Max nothing answers in time is a timeout', () {
+      fakeAsync((async) {
+        final max = _askMax(pricing, [
+          held(SwapLiquiditySource.routed, '1.99'),
+          // One that cannot tell has nothing to explain.
+          ScriptedQuoteSource(SwapLiquiditySource.atomic),
+        ]);
+
+        async.elapse(limit);
+
+        expect(
+          max.failure,
+          const SwapQuoteFailure(
+            source: SwapLiquiditySource.routed,
+            kind: SwapQuoteFailureKind.timeout,
+          ),
+        );
+      });
+    });
+
+    test("one source's timeout does not hide another's reason", () {
+      fakeAsync((async) {
+        final short = _RefusedMax(
+          SwapLiquiditySource.routed,
+          SwapQuoteFailureKind.insufficientFunds,
+        )..maxGate = Completer<void>();
+        final max = _askMax(pricing, [
+          short,
+          _RefusedMax(SwapLiquiditySource.atomic, SwapQuoteFailureKind.timeout),
+        ]);
+        // The order book runs out of time first.
+        async.flushMicrotasks();
+        short.maxGate!.complete();
+        async.flushMicrotasks();
+
+        expect(max.failure!.kind, SwapQuoteFailureKind.insufficientFunds);
+      });
     });
   });
 
@@ -258,6 +397,60 @@ void main() {
       expect(quote.pricing.isComplete, isFalse);
     });
   });
+}
+
+SwapMaxAmount _maxOf(String amount) =>
+    SwapMaxAmount(amount: d(amount), reservedForFees: d('0.01'));
+
+/// A Max asked of the repository, as it stands so far.
+class _AskedMax {
+  Map<SwapLiquiditySource, SwapMaxAmount>? answer;
+
+  /// Why no source had an answer.
+  SwapQuoteFailure? failure;
+}
+
+/// Asks [sources] for Max on 2 ETH sold for USDC.
+_AskedMax _askMax(
+  SwapPricingService pricing,
+  List<FakeQuoteSource> sources, {
+  SwapLiquiditySource? preferred,
+}) {
+  final asked = _AskedMax();
+  unawaited(
+    UnifiedSwapRepository(sources: sources, pricing: pricing)
+        .maxAmounts(from: eth, to: usdc, balance: d('2'), preferred: preferred)
+        .then<void>(
+          (answer) {
+            asked.answer = answer;
+          },
+          onError: (Object error) {
+            asked.failure = (error as SwapMaxUnavailableException).failure;
+          },
+        ),
+  );
+  return asked;
+}
+
+/// A source whose Max is refused for [kind], once [maxGate] lets it answer.
+class _RefusedMax extends ScriptedQuoteSource {
+  _RefusedMax(super.source, this.kind);
+
+  final SwapQuoteFailureKind kind;
+
+  @override
+  Future<SwapMaxAmount?> maxAmount({
+    required AssetId from,
+    required AssetId to,
+    required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
+  }) async {
+    await maxGate?.future;
+    throw SwapMaxUnavailableException(
+      SwapQuoteFailure(source: source, kind: kind),
+    );
+  }
 }
 
 class _BrokenSource extends FakeQuoteSource {

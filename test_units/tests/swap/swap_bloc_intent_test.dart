@@ -370,13 +370,17 @@ void main() {
     swapBlocTest('bounds Max search at three pricing timeouts', (h) {
       holdMax(h);
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
-      h.elapse(const Duration(seconds: 75));
+      h.elapse(const Duration(seconds: 75) - const Duration(milliseconds: 1));
+      // A selected route's Max may take as long as that.
+      expect(bloc.state.checkingMax, isTrue);
+      h.elapse(const Duration(milliseconds: 1));
 
       expect(bloc.state.checkingMax, isFalse);
       expect(bloc.state.inputText, '2');
       expect(h.routed.requests.last.amount, d('1'));
       expect(bloc.state.canReview, isFalse);
       expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
+      expect(bloc.state.failure!.kind, SwapQuoteFailureKind.timeout);
     });
 
     for (final (name, edit) in [

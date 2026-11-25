@@ -296,8 +296,14 @@ class UnifiedSwapRepository {
   /// The largest amount of [from] that can be sold for [to], per source.
   ///
   /// Each source keeps back what its own fees need; the caller picks which to
-  /// apply. A [preferred] source is asked alone, and the others only if it
-  /// cannot tell.
+  /// apply. A [preferred] source's answer is used whenever it has one, so it
+  /// is asked alone at first, and the others too once it cannot tell or has
+  /// been silent for half of [timeout].
+  ///
+  /// [timeout] is the ordinary-operation budget, tripled for Max as in
+  /// [watchQuotes]. A source still silent then has timed out, and the others'
+  /// answers are returned. With none, the most useful reason a source gave is
+  /// thrown as a [SwapMaxUnavailableException].
   Future<Map<SwapLiquiditySource, SwapMaxAmount>> maxAmounts({
     required AssetId from,
     required AssetId to,
@@ -305,39 +311,58 @@ class UnifiedSwapRepository {
     SwapLiquiditySource? preferred,
     SwapQuoteOrder order = SwapQuoteOrder.cheapest,
     double? slippage,
+    Duration timeout = const Duration(seconds: 25),
   }) async {
+    final limit = timeout * 3;
     final failures = <SwapQuoteFailure>[];
+    final expired = Completer<void>();
+    final halfway = Completer<void>();
+    final timers = [
+      Timer(limit, expired.complete),
+      Timer(timeout ~/ 2, halfway.complete),
+    ];
+
+    Future<SwapMaxAmount?> askOne(SwapQuoteSource source) async {
+      try {
+        return await Future.any([
+          source.maxAmount(
+            from: from,
+            to: to,
+            balance: balance,
+            order: order,
+            slippage: slippage,
+          ),
+          expired.future.then<SwapMaxAmount?>(
+            (_) => throw TimeoutException('No Max answer', limit),
+          ),
+        ]);
+      } on SwapMaxUnavailableException catch (error) {
+        failures.add(error.failure);
+      } on TimeoutException {
+        failures.add(
+          SwapQuoteFailure(
+            source: source.source,
+            kind: SwapQuoteFailureKind.timeout,
+          ),
+        );
+      } on Object {
+        failures.add(
+          SwapQuoteFailure(
+            source: source.source,
+            kind: SwapQuoteFailureKind.unknown,
+          ),
+        );
+      }
+      return null;
+    }
+
     Future<Map<SwapLiquiditySource, SwapMaxAmount>> ask(
       Iterable<SwapQuoteSource> sources,
     ) async {
       final entries = await Future.wait(
-        sources.map((source) async {
-          try {
-            return MapEntry(
-              source.source,
-              await source.maxAmount(
-                from: from,
-                to: to,
-                balance: balance,
-                order: order,
-                slippage: slippage,
-              ),
-            );
-          } on SwapMaxUnavailableException catch (error) {
-            failures.add(error.failure);
-          } on Object {
-            failures.add(
-              SwapQuoteFailure(
-                source: source.source,
-                kind: SwapQuoteFailureKind.unknown,
-              ),
-            );
-          }
-          return MapEntry<SwapLiquiditySource, SwapMaxAmount?>(
-            source.source,
-            null,
-          );
-        }),
+        sources.map(
+          (source) async => MapEntry(source.source, await askOne(source)),
+        ),
       );
       return {
         for (final entry in entries)
@@ -346,15 +371,44 @@ class UnifiedSwapRepository {
     }
 
     final able = _sourcesFor(from, to);
-    if (preferred != null) {
-      final own = await ask(able.where((s) => s.source == preferred));
-      if (own.isNotEmpty) return own;
+    final own = [
+      for (final source in able)
+        if (source.source == preferred) source,
+    ];
+    final others = [
+      for (final source in able)
+        if (source.source != preferred) source,
+    ];
+    try {
+      final Map<SwapLiquiditySource, SwapMaxAmount> maxes;
+      if (own.isEmpty) {
+        maxes = await ask(others);
+      } else {
+        final mine = ask(own);
+        final early = await Future.any([
+          mine,
+          halfway.future.then((_) => null),
+        ]);
+        if (early != null && early.isNotEmpty) return early;
+        final theirs = ask(others);
+        final answered = await mine;
+        maxes = answered.isNotEmpty ? answered : await theirs;
+      }
+      if (maxes.isEmpty && failures.isNotEmpty) {
+        throw SwapMaxUnavailableException(
+          UnifiedSwapQuotes(
+            ranked: const [],
+            unrankable: const [],
+            failures: failures,
+          ).primaryFailure!,
+        );
+      }
+      return maxes;
+    } finally {
+      for (final timer in timers) {
+        timer.cancel();
+      }
     }
-    final alternatives = await ask(able.where((s) => s.source != preferred));
-    if (alternatives.isEmpty && failures.isNotEmpty) {
-      throw SwapMaxUnavailableException(failures.first);
-    }
-    return alternatives;
   }
 
   /// Failures known without asking any source; null means ask the sources.

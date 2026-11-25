@@ -397,6 +397,7 @@ import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
 import 'tests/swap/swap_bloc_intent_test.dart' as swap_bloc_intent_test;
+import 'tests/swap/swap_bloc_max_silent_test.dart' as swap_bloc_max_silent_test;
 import 'tests/swap/swap_bloc_offers_test.dart' as swap_bloc_offers_test;
 import 'tests/swap/swap_bloc_opening_test.dart' as swap_bloc_opening_test;
 import 'tests/swap/swap_bloc_review_test.dart' as swap_bloc_review_test;
@@ -982,6 +983,7 @@ void main() {
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();
   swap_bloc_intent_test.main();
+  swap_bloc_max_silent_test.main();
   swap_bloc_offers_test.main();
   swap_bloc_opening_test.main();
   swap_bloc_review_test.main();

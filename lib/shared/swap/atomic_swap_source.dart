@@ -177,6 +177,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     }
   }
 
+  /// Reports Max as timed out once [maxTimeout] passes without an answer.
   @override
   Future<SwapMaxAmount?> maxAmount({
     required AssetId from,
@@ -184,7 +185,15 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     required Decimal balance,
     SwapQuoteOrder order = SwapQuoteOrder.cheapest,
     double? slippage,
-  }) => _maxAmount(from, to, balance);
+  }) => _maxAmount(from, to, balance).timeout(
+    maxTimeout,
+    onTimeout: () => throw const SwapMaxUnavailableException(
+      SwapQuoteFailure(
+        source: SwapLiquiditySource.atomic,
+        kind: SwapQuoteFailureKind.timeout,
+      ),
+    ),
+  );
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async => [
@@ -220,13 +229,19 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   @visibleForTesting
   static const offeredTimeout = Duration(seconds: 15);
 
+  /// How long Max may take on the order book. KDF's own Max has no limit, so
+  /// an order book that never answered would hold Max as long as the form
+  /// waits.
+  @visibleForTesting
+  static const maxTimeout = Duration(seconds: 25);
+
   /// How long Max waits for the gas to claim a token before it settles for
   /// KDF's own answer.
   @visibleForTesting
   static const claimFeeTimeout = Duration(seconds: 10);
 
   /// How long after Max is asked the gas to claim a token may still be read,
-  /// so Max answers within the form's own wait for it.
+  /// so KDF's own answer still lands within [maxTimeout].
   @visibleForTesting
   static const claimFeeDeadline = Duration(seconds: 20);
 
