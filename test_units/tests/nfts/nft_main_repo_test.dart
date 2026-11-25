@@ -463,6 +463,7 @@ class _FakeCoinsRepo implements CoinsRepo {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
     bool useSharedActivationCache = false,
+    bool respectActivationBackoff = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),

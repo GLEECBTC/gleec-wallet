@@ -309,6 +309,51 @@ void testCoinsRepoActivationWalletRace() {
         expect(sdk.balances.watchCalls, 1);
       },
     );
+
+    group('activation backoff', () {
+      Future<void> activate({required bool respectActivationBackoff}) =>
+          repo.activateAssetsSync(
+            [asset],
+            addToWalletMetadata: false,
+            respectActivationBackoff: respectActivationBackoff,
+            maxRetryAttempts: 3,
+            initialRetryDelay: Duration.zero,
+            maxRetryDelay: Duration.zero,
+          );
+
+      test('a user request clears the backoff before every attempt', () async {
+        sdk.activate = () async => false;
+
+        await expectLater(
+          activate(respectActivationBackoff: false),
+          throwsA(isA<Exception>()),
+        );
+
+        expect(sdk.activationCalls, 3);
+        expect(sdk.backoffResets, [
+          [asset.id],
+          [asset.id],
+          [asset.id],
+        ]);
+      });
+
+      test('an automatic request stops at the first refusal', () async {
+        sdk.deferral = ActivationDeferredException(
+          assetId: asset.id,
+          retryAfter: DateTime.now().add(const Duration(minutes: 1)),
+          consecutiveFailures: 3,
+          lastError: 'servers list is empty',
+        );
+
+        await expectLater(
+          activate(respectActivationBackoff: true),
+          throwsA(isA<ActivationDeferredException>()),
+        );
+
+        expect(sdk.activationCalls, 1);
+        expect(sdk.backoffResets, isEmpty);
+      });
+    });
   });
 }
 
@@ -360,16 +405,35 @@ class _Sdk implements KomodoDefiSdk {
   final activatedAssetsCache = _Cache();
   Future<bool> Function() activate = () async => true;
   int activationCalls = 0;
+
+  /// When set, [activateAsset] refuses like the SDK's backoff does.
+  ActivationDeferredException? deferral;
+  final List<List<AssetId>> backoffResets = [];
   @override
   Future<ActivationResult> activateAsset(
     Asset asset, {
     Duration? timeout,
   }) async {
     activationCalls++;
+    final refused = deferral;
+    if (refused != null) {
+      return ActivationResult.failure(
+        asset.id,
+        refused.toString(),
+        cause: refused,
+      );
+    }
     return await activate()
         ? ActivationResult.success(asset.id)
         : ActivationResult.failure(asset.id, 'Activation failed');
   }
+
+  @override
+  ActivationDeferredException? activationDeferral(AssetId assetId) => deferral;
+
+  @override
+  void resetActivationBackoff([Iterable<AssetId>? assetIds]) =>
+      backoffResets.add(assetIds?.toList() ?? const []);
 
   @override
   final Map<AssetId, AssetActivationState> activationStates = {};
