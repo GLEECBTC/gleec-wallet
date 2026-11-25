@@ -10,6 +10,17 @@
   - After a successful wallet open from the new folder and a seven-day grace period, cleanup removes unchanged files from `.kdf.moved`. A running wallet engine defers cleanup.
   - If you back up `Documents\.kdf` yourself, back up the new folder or your recovery phrase instead. To use one wallet on several computers that share OneDrive, update each of them within that week.
 
+## 🎨 UI/UX Improvements
+
+- **A New Wallet Home on Phones** ([@CharlVS]) — The wallet screen on phones now uses the same colours, type and motion as Swap.
+  - Receive, Send, Swap and Buy sit under the balance. Send and Receive ask which asset, then open its page with the action started, so the backup and activation checks still apply.
+  - Every amount, price and change on the screen uses one number format, whatever the phone's region: `$60,251.14`, never `$60 251,14` beside `$0.041`. Very small prices keep four digits, such as `$0.0₅5123`.
+  - Each token shows its network beside its name, so USDT on Ethereum and on TRON can be told apart.
+  - An empty wallet says how to add crypto and highlights Receive. Hiding empty assets says how many are hidden.
+  - Long-press an asset for Send, Receive, Swap, its details, or Disable.
+  - The floating add and bug-report buttons no longer cover the list: Add assets is at the end of the list, and feedback is in the header.
+  - Navigation labels shrink to fit instead of being cut off with large text.
+
 ## 🐛 Bug Fixes
 
 - **Price History Retries** ([@CharlVS], [SDK#443](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/443)) — Coins priced only by CoinPaprika, such as BTCZ, LCC and DINGO, no longer request a year of price history again every minute.

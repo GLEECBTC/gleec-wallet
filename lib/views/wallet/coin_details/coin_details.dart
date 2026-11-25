@@ -10,6 +10,8 @@ import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/portfolio_events.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info.dart';
@@ -35,6 +37,8 @@ class CoinDetails extends StatefulWidget {
 
 class _CoinDetailsState extends State<CoinDetails> {
   CoinPageType _selectedPageType = CoinPageType.info;
+  late final CoinQuickActionRequest? _quickAction = routingState.walletState
+      .takeQuickAction(widget.coin.abbr);
 
   String _rewardValue = '';
   String _formattedUsdPrice = '';
@@ -103,6 +107,7 @@ class _CoinDetailsState extends State<CoinDetails> {
           coin: widget.coin,
           setPageType: _setPageType,
           onBackButtonPressed: widget.onBackButtonPressed,
+          quickAction: _quickAction,
         );
 
       case CoinPageType.send:

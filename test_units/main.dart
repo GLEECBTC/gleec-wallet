@@ -226,6 +226,7 @@ import 'tests/formatter/duration_format_tests.dart';
 import 'tests/formatter/format_amount_tests.dart';
 import 'tests/formatter/format_amount_test_alt_tests.dart';
 import 'tests/formatter/format_dex_amt_tests.dart';
+import 'tests/formatter/fiat_format_tests.dart';
 import 'tests/formatter/formatted_date_tests.dart';
 import 'tests/formatter/leading_zeros_tests.dart';
 import 'tests/formatter/number_without_exponent_tests.dart';
@@ -603,6 +604,12 @@ import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
 import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
+import 'tests/wallet/wallet_home/wallet_home_assets_test.dart'
+    as wallet_home_assets_test;
+import 'tests/wallet/wallet_home/wallet_home_hero_test.dart'
+    as wallet_home_hero_test;
+import 'tests/wallet/wallet_home/wallet_home_logic_test.dart'
+    as wallet_home_logic_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -729,6 +736,7 @@ void main() {
     testToStringAmount();
     testLeadingZeros();
     testFormatDexAmount();
+    testFiatFormat();
     testDecimalTextInputFormatter();
     testDurationFormat();
     testNumberWithoutExponent();
@@ -820,6 +828,9 @@ void main() {
   testAuthBloc();
   testWalletOperationIdentity();
   wallet_data_loader_test.main();
+  wallet_home_assets_test.main();
+  wallet_home_hero_test.main();
+  wallet_home_logic_test.main();
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();

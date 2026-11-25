@@ -2286,4 +2286,13 @@ abstract class LocaleKeys {
   static const swapWalletSummaryInProgress = 'swapWalletSummaryInProgress';
   static const swapWalletSummaryAttention = 'swapWalletSummaryAttention';
   static const swapWalletSummaryReceived = 'swapWalletSummaryReceived';
+  static const walletHomeTotalBalance = 'walletHomeTotalBalance';
+  static const walletHomeShowBalances = 'walletHomeShowBalances';
+  static const walletHomeEmptyHint = 'walletHomeEmptyHint';
+  static const walletHomeChooseAsset = 'walletHomeChooseAsset';
+  static const walletHomeNothingToSend = 'walletHomeNothingToSend';
+  static const walletHomeNothingToSendHint = 'walletHomeNothingToSendHint';
+  static const walletHomeNoAssets = 'walletHomeNoAssets';
+  static const walletHomeAssetDetails = 'walletHomeAssetDetails';
+  static const walletHomeHiddenAssets = 'walletHomeHiddenAssets';
 }
