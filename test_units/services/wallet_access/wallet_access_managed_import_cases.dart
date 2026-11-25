@@ -77,12 +77,35 @@ void _managedImportCases() {
     });
 
     test('a legacy wallet keeps its own derivation', () async {
-      await import(type: WalletType.iguana);
+      final user = await import(type: WalletType.iguana);
       expect(
         auth.registeredOptions.single.derivationMethod,
         DerivationMethod.iguana,
       );
+      expect(user.walletId.isHd, isFalse);
       expect((await recordFor(auth.registrations.single.id))?.isHd, isFalse);
+    });
+
+    test('an engine wallet with another derivation never opens', () async {
+      auth.engineOptions = const AuthOptions(
+        derivationMethod: DerivationMethod.iguana,
+      );
+      await expectLater(
+        import(),
+        throwsA(
+          isA<WalletAccessException>().having(
+            (e) => e.failure,
+            'failure',
+            WalletAccessFailure.invalidResponse,
+          ),
+        ),
+      );
+      expect(auth.verifiedWallets, isEmpty);
+      expect(auth.active, isNull);
+      expect(
+        (await recordFor(auth.registrations.single.id))?.phase,
+        isNot('ready'),
+      );
     });
 
     test('a taken name fails without renaming and leaves nothing', () async {
@@ -159,10 +182,7 @@ void _managedImportCases() {
     test('creation does not resume an interrupted import', () async {
       auth.failCreationOnce = true;
       await expectLater(import(), throwsStateError);
-      final created = await service.createWallet(
-        walletType: WalletType.hdwallet,
-        initialMetadata: {},
-      );
+      final created = await service.createWallet(initialMetadata: {});
       expect(
         auth.seeds[WalletAccessService.entryId(created)],
         'generated '

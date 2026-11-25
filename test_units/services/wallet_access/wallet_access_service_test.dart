@@ -42,8 +42,9 @@ KdfUser _user({
   String name = 'Wallet',
   String id = _entry,
   Map<String, dynamic> metadata = const {},
+  AuthOptions options = _options,
 }) => KdfUser(
-  walletId: WalletId.withPubkeyHash(name, _options, _hash),
+  walletId: WalletId.withPubkeyHash(name, options, _hash),
   isBip39Seed: true,
   metadata: {'_wallet_entry_id': id, 'type': 'hdwallet', ...metadata},
 );
@@ -323,6 +324,10 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   bool failCreationAfterCommitOnce = false;
   bool failEncryptedReadOnce = false;
   bool ownedCollision = false;
+
+  /// What the engine reports for a wallet it creates, when that is not what
+  /// was asked for.
+  AuthOptions? engineOptions;
   bool discardMetadataWrite = false;
   void Function()? afterMetadataWrite;
   String enginePassword = _password;
@@ -521,7 +526,11 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       activate(existing.single);
       return existing.single;
     }
-    final user = _user(name: walletName, id: provisioningId);
+    final user = _user(
+      name: walletName,
+      id: provisioningId,
+      options: engineOptions ?? options,
+    );
     users.add(user);
     seeds[provisioningId] =
         mnemonic?.plaintextMnemonic ?? 'generated $provisioningId';

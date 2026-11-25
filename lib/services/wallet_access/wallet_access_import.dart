@@ -162,6 +162,9 @@ extension _ManagedImport on WalletAccessService {
         !user.walletId.hasFullIdentity) {
       throw const WalletAccessException(WalletAccessFailure.invalidResponse);
     }
+    // A resumed engine wallet keeps the derivation it was created with.
+    // Another one would show addresses other than the moved wallet's.
+    if (user.walletId.isHd != isHd) await _refuseOpenedWallet();
     await _sdk.auth.verifyPassword(
       password: password,
       expectedWalletId: user.walletId,
@@ -175,12 +178,7 @@ extension _ManagedImport on WalletAccessService {
       methods: const {'get_mnemonic'},
     );
     if (!_sameSeed(opened.plaintextMnemonic, mnemonic)) {
-      try {
-        await _sdk.auth.signOut();
-      } on Object {
-        // The mismatch is what must be reported.
-      }
-      throw const WalletAccessException(WalletAccessFailure.invalidResponse);
+      await _refuseOpenedWallet();
     }
     final encrypted = await _sdk.auth.getMnemonicEncrypted();
     if (encrypted.isEncrypted != true) {
@@ -196,6 +194,17 @@ extension _ManagedImport on WalletAccessService {
     await _didAuthenticate(user, expectedRevision: revision);
     await _clearPendingImport(id);
     return user;
+  }
+
+  /// Closes an engine wallet that is not the one being imported, so the user
+  /// never funds it by mistake.
+  Future<Never> _refuseOpenedWallet() async {
+    try {
+      await _sdk.auth.signOut();
+    } on Object {
+      // The mismatch is what must be reported.
+    }
+    throw const WalletAccessException(WalletAccessFailure.invalidResponse);
   }
 
   /// Removes a credential no engine wallet refers to, with its record and
