@@ -3,7 +3,7 @@
 This runbook applies to `GLEECBTC/gleec-wallet` and
 `GLEECBTC/komodo-defi-sdk-flutter`. It complements [Gitflow](GITFLOW_BRANCHING.md).
 The release owner controls main promotion. Preparing rules, PRs or RCs does not
-permit an agent to merge main. The current app/SDK RC PRs remain open.
+permit an agent to merge main.
 
 ## Enforced merge methods
 
