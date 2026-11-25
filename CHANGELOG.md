@@ -23,7 +23,7 @@
   - A wallet whose password was created for it leads with its recovery phrase, and offers the password when a password manager may have saved it.
   - A password you chose is still asked for.
   - A failed unlock no longer suggests a password the owner never saw.
-- **Coins That Cannot Activate** ([@CharlVS], [SDK#461](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/461)) — A coin whose activation keeps failing the same way is no longer retried several times a minute for the whole session. CLC has no servers configured, and on desktop and mobile MONA has none the app can use.
+- **Coins That Cannot Activate** ([@CharlVS], [SDK#461](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/461)) — A coin whose activation keeps failing the same way is no longer retried several times a minute for the whole session. CLC, for example, has no servers configured.
   - After three identical failures, the wallet waits 1 minute before trying again, then 2, 4 and so on, up to 30 minutes.
   - Enabling the coin again, or any other request you make for it, tries at once.
   - A wallet change, or the network coming back after the region check failed, also starts over.
