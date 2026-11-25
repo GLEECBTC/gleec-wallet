@@ -1,11 +1,7 @@
-import 'dart:async';
-
-import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -15,13 +11,11 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
-import 'package:web_dex/shared/utils/hd_wallet_mode_preference.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_passkey_icon.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/password_text_field.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_access_actions.dart';
-import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 
 export 'package:web_dex/views/common/wallet_password_dialog/password_text_field.dart';
 
@@ -34,7 +28,6 @@ class WalletLogIn extends StatefulWidget {
     required this.onCancel,
     this.onSwitchWallet,
     this.onRecover,
-    this.initialHdMode = false,
     this.initialQuickLogin = false,
     super.key,
   });
@@ -48,7 +41,6 @@ class WalletLogIn extends StatefulWidget {
   /// read as two different things.
   final VoidCallback? onSwitchWallet;
   final VoidCallback? onRecover;
-  final bool initialHdMode;
 
   /// Whether this wallet was remembered, so its enrolled unlock may be offered
   /// once without a tap. Handed back unchanged through [onLogin].
@@ -61,10 +53,7 @@ class WalletLogIn extends StatefulWidget {
 class _WalletLogInState extends State<WalletLogIn> {
   final TextEditingController _passwordController = TextEditingController();
   final _passwordFocus = FocusNode(debugLabel: 'wallet sign-in password');
-  late bool _isHdMode;
   bool _waitingForLegal = false;
-  KdfUser? _user;
-  bool? _storedHdPreference;
   Future<WalletAccessStatus?>? _accessStatus;
   bool _manualPassword = false;
   bool _automaticAttempted = false;
@@ -76,16 +65,6 @@ class _WalletLogInState extends State<WalletLogIn> {
   /// The error on screen when the user changed method; it described the other
   /// method's attempt.
   AuthException? _dismissedError;
-
-  @override
-  void initState() {
-    super.initState();
-    _isHdMode =
-        widget.initialHdMode ||
-        widget.wallet.config.type == WalletType.hdwallet;
-    _loadHdModePreference();
-    unawaited(_fetchKdfUser());
-  }
 
   @override
   void didChangeDependencies() {
@@ -122,33 +101,6 @@ class _WalletLogInState extends State<WalletLogIn> {
     );
   }
 
-  Future<void> _fetchKdfUser() async {
-    final kdfSdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    final users = await kdfSdk.auth.getUsers();
-    final user = users.firstWhereOrNull(
-      (user) => user.walletId.name == widget.wallet.name,
-    );
-
-    if (mounted && user != null) {
-      final fallbackHdMode =
-          widget.initialHdMode ||
-          user.wallet.config.type == WalletType.hdwallet;
-      setState(() {
-        _user = user;
-        _isHdMode = _storedHdPreference ?? fallbackHdMode;
-      });
-    }
-  }
-
-  Future<void> _loadHdModePreference() async {
-    final storedPreference = await readHdWalletModePreference(widget.wallet.id);
-    if (!mounted || storedPreference == null) return;
-    setState(() {
-      _storedHdPreference = storedPreference;
-      _isHdMode = storedPreference;
-    });
-  }
-
   @override
   void dispose() {
     _passwordController.clear();
@@ -172,22 +124,13 @@ class _WalletLogInState extends State<WalletLogIn> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final WalletType derivedType =
-          _isHdMode && _user != null && _user!.isBip39Seed == true
-          ? WalletType.hdwallet
-          : WalletType.iguana;
-
-      final Wallet walletToUse = widget.wallet.copyWith(
-        config: widget.wallet.config.copyWith(type: derivedType),
-      );
-
       if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
         LegalAgreementSubmitted('wallet-login', snapshot: consentSnapshot),
       );
       widget.onLogin(
         _passwordController.text,
-        walletToUse,
+        widget.wallet,
         widget.initialQuickLogin,
       );
     });
@@ -347,21 +290,6 @@ class _WalletLogInState extends State<WalletLogIn> {
                         WalletAccessNotice(
                           text: errorMessage,
                           tone: WalletAccessTone.error,
-                        ),
-                      ],
-                      if (_user != null && _user!.isBip39Seed == true) ...[
-                        const SizedBox(height: 16),
-                        HDWalletModeSwitch(
-                          value: _isHdMode,
-                          onChanged: (value) {
-                            setState(() => _isHdMode = value);
-                            unawaited(
-                              storeHdWalletModePreference(
-                                widget.wallet.id,
-                                value,
-                              ),
-                            );
-                          },
                         ),
                       ],
                       const SizedBox(height: 24),

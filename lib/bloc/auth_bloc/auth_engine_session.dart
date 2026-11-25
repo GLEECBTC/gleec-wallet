@@ -9,13 +9,13 @@ extension _EngineSessionAttach on AuthBloc {
   Future<KdfUser?> _recoverInterruptedPasswordChange(
     Wallet wallet,
     String password,
-    AuthOptions options,
+    bool allowWeakPassword,
   ) async {
     try {
       return await _walletAccess?.recoverPasswordRotation(
         wallet,
         password,
-        options: options,
+        allowWeakPassword: allowWeakPassword,
       );
     } on WalletAccessException catch (error) {
       // Recovery is a repair before sign-in, not a condition of it. Busy in

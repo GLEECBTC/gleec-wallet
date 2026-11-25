@@ -575,7 +575,7 @@ class _MultiAddressWalletNotice extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  LocaleKeys.multiAddressWalletNoticeDescription.tr(),
+                  LocaleKeys.authImportDerivationHint.tr(),
                   style: theme.textTheme.bodySmall,
                 ),
               ],

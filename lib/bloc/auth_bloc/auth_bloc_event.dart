@@ -50,11 +50,7 @@ class AuthRegisterRequested extends AuthBlocEvent {
 }
 
 class AuthQuickCreateRequested extends AuthBlocEvent {
-  const AuthQuickCreateRequested({
-    this.walletType = WalletType.hdwallet,
-    this.useDeviceProtection = true,
-  });
-  final WalletType walletType;
+  const AuthQuickCreateRequested({this.useDeviceProtection = true});
   final bool useDeviceProtection;
 }
 

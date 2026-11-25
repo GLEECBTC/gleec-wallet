@@ -219,6 +219,7 @@ void testAuthBloc() {
     );
 
     test('preserves the typed exception for an incorrect password', () async {
+      auth.userToReturn = _user();
       auth.errorToThrow = AuthException(
         'Incorrect password',
         type: AuthExceptionType.incorrectPassword,
@@ -237,6 +238,7 @@ void testAuthBloc() {
     });
 
     test('wraps a non-auth exception as a general auth error', () async {
+      auth.userToReturn = _user();
       auth.errorToThrow = StateError('kdf unreachable');
 
       final bloc = buildBloc();
