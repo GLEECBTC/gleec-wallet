@@ -145,6 +145,32 @@ void main() {
       expect(snapshot.needsAttention, isTrue);
     });
 
+    test('a completed swap delivered the accepted minimum', () {
+      // The maker paid 3000 USDC; 10 of it paid the fee to claim it.
+      final accepted = quoteOf(
+        source: SwapLiquiditySource.atomic,
+        expected: '2990',
+        guaranteed: '2990',
+        fees: [
+          SwapFeeComponent(
+            kind: SwapFeeKind.network,
+            amount: d('10'),
+            deductedFromReceive: true,
+            asset: usdc,
+          ),
+        ],
+      );
+
+      final snapshot = fromLog([
+        ...paid,
+        'MakerPaymentSpent',
+        'Finished',
+      ], accepted: accepted);
+
+      expect(snapshot.outcome!.receivedAmount, d('2990'));
+      expect(snapshot.outcome!.receivedAmount, snapshot.minimumReceive);
+    });
+
     test('the accepted quote names what came back or arrived', () {
       final accepted = quoteOf(
         source: SwapLiquiditySource.atomic,

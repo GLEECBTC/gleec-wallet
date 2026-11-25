@@ -52,6 +52,8 @@ void main() {
       ]);
       expect(rig.seen.skip(1).every((s) => !s.canCancel), isTrue);
       expect(rig.done, isTrue);
+      // What the quote accepted, not the 3000 the maker's payment carried.
+      expect(rig.latest.outcome!.receivedAmount, d('2990'));
     },
   );
 

@@ -203,7 +203,10 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
         movementOverride: SwapFundsMovement.sent,
         outcome: SwapExecutionOutcome(
           kind: SwapOutcomeKind.completed,
-          receivedAmount: _decimalOf(swap.buyAmount),
+          // The record holds the maker's payment, before any fee taken from
+          // it on arrival; the accepted quote's minimum already has it off.
+          receivedAmount:
+              accepted?.guaranteedReceive ?? _decimalOf(swap.buyAmount),
           receivedAsset: accepted?.to ?? resolveAsset(swap.buyCoin),
         ),
       );
