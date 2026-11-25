@@ -304,8 +304,8 @@ class UnifiedSwapRepository {
   /// [watchQuotes]. A source still silent then has timed out, and the others'
   /// answers are returned. The order book, whose Max has no limit of its own,
   /// times out after one budget when another source could answer instead.
-  /// With none, the most useful reason a source gave is thrown as a
-  /// [SwapMaxUnavailableException].
+  /// With no answer at all, a [SwapMaxUnavailableException] carries every
+  /// source's reason, led by the most useful.
   Future<Map<SwapLiquiditySource, SwapMaxAmount>> maxAmounts({
     required AssetId from,
     required AssetId to,
@@ -346,7 +346,7 @@ class UnifiedSwapRepository {
           ),
         ]);
       } on SwapMaxUnavailableException catch (error) {
-        failures.add(error.failure);
+        failures.addAll(error.failures);
       } on TimeoutException {
         failures.add(
           SwapQuoteFailure(
@@ -409,6 +409,7 @@ class UnifiedSwapRepository {
             unrankable: const [],
             failures: failures,
           ).primaryFailure!,
+          failures: List.unmodifiable(failures),
         );
       }
       return maxes;

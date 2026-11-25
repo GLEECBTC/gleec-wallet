@@ -332,7 +332,8 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     } on SwapMaxUnavailableException catch (error) {
       if (version != _maxVersion || !state.checkingMax) return;
       emit(state.copyWith(checkingMax: false));
-      _failEvaluation(emit, error.failure, quiet: false);
+      // Every source's reason, so one that could not look is still named.
+      _failEvaluation(emit, error.failure, quiet: false, all: error.failures);
       return;
     }
     // Typing, another pair or wallet, or a later Max has taken over.

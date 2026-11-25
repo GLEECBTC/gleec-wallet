@@ -247,6 +247,10 @@ void main() {
         async.flushMicrotasks();
 
         expect(max.failure!.kind, SwapQuoteFailureKind.insufficientFunds);
+        expect(max.failures!.map((f) => (f.source, f.kind)), [
+          (SwapLiquiditySource.atomic, SwapQuoteFailureKind.timeout),
+          (SwapLiquiditySource.routed, SwapQuoteFailureKind.insufficientFunds),
+        ]);
       });
     });
   });
@@ -413,8 +417,9 @@ SwapMaxAmount _maxOf(String amount) =>
 class _AskedMax {
   Map<SwapLiquiditySource, SwapMaxAmount>? answer;
 
-  /// Why no source had an answer.
+  /// Why no source had an answer, and each source's own reason.
   SwapQuoteFailure? failure;
+  List<SwapQuoteFailure>? failures;
 }
 
 /// Asks [sources] for Max on 2 ETH sold for USDC.
@@ -432,7 +437,10 @@ _AskedMax _askMax(
             asked.answer = answer;
           },
           onError: (Object error) {
-            asked.failure = (error as SwapMaxUnavailableException).failure;
+            error as SwapMaxUnavailableException;
+            asked
+              ..failure = error.failure
+              ..failures = error.failures;
           },
         ),
   );

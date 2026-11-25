@@ -242,6 +242,13 @@ abstract interface class SwapQuoteSource {
 
 /// Max failed without establishing a spendable source amount.
 class SwapMaxUnavailableException implements Exception {
-  const SwapMaxUnavailableException(this.failure);
+  const SwapMaxUnavailableException(this.failure, {this._failures});
+
+  /// The reason that best explains it.
   final SwapQuoteFailure failure;
+
+  final List<SwapQuoteFailure>? _failures;
+
+  /// Why each source asked had no Max, [failure] among them.
+  List<SwapQuoteFailure> get failures => _failures ?? [failure];
 }
