@@ -9,6 +9,7 @@ on:
         release/*,
         release-*,
         hotfix/*,
+        hotfix-*,
         bugfix/*,
         feature/*,
         chore/*,
