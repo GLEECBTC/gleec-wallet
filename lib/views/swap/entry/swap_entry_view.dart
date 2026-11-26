@@ -113,10 +113,17 @@ class _SwapEntryViewState extends State<SwapEntryView> {
 
   /// Whether Max just ended on its own: its answer landed, or none came and
   /// the whole balance stayed. Whatever else drops a Max still asking
-  /// changes the pair, the wallet or the amount at the same time.
+  /// changes the pair, the wallet or the amount at the same time. Pricing
+  /// the Max again, as each refresh does, is news only when its amount or
+  /// its source changes.
   bool _maxEnded(UnifiedSwapState previous, UnifiedSwapState current) {
     final max = current.maxApplied;
-    if (max != null) return max != previous.maxApplied;
+    if (max != null) {
+      final before = previous.maxApplied;
+      return before == null ||
+          before.amount != max.amount ||
+          before.source != max.source;
+    }
     return previous.checkingMax &&
         !current.checkingMax &&
         current.pay == previous.pay &&

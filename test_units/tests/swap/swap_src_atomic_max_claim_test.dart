@@ -10,13 +10,29 @@ import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
+import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
 import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
 
+const _tick = Duration(milliseconds: 1);
+
+/// The form's 25 s for one price: all the order book has for Max when
+/// another source could answer instead.
+const _budget = Duration(seconds: 25);
+
+/// A Max asked of the repository, as it stands so far.
+class _AskedMax {
+  Map<SwapLiquiditySource, SwapMaxAmount>? maxes;
+  SwapQuoteFailure? failure;
+}
+
 /// Covers Max on the order book when the coin sold also pays the gas to claim
-/// what arrives, as for a token on its own network.
+/// what arrives, as for a token on its own network, and when KDF's own Max
+/// is slow or never comes.
 void main() {
   final usdt = assetOf('USDT-ERC20', parent: eth);
   late SrcTrading trading;
@@ -37,6 +53,59 @@ void main() {
     networks: () => SwapNetworks([eth, btc]),
     now: now,
   ).maxAmount(from: from ?? eth, to: to ?? usdc, balance: d('1'));
+
+  /// Max on 1 ETH sold for USDC, through the repository: the order book over
+  /// [trading] beside an aggregator answering [routed], or that cannot tell.
+  /// [alone] keeps the aggregator from the pair, as for GLEEC, leaving the
+  /// order book the only source. Read the answer, or the failure, as it
+  /// stands.
+  _AskedMax askMax(
+    FakeAsync async, {
+    SwapMaxAmount? routed,
+    SwapLiquiditySource? preferred,
+    bool alone = false,
+  }) {
+    final start = DateTime(2026, 10, 5);
+    final repository = UnifiedSwapRepository(
+      sources: [
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          tradable: alone ? {eth} : {eth, usdc},
+          max: routed,
+        ),
+        AtomicSwapQuoteSource(
+          trading: trading,
+          networks: () => SwapNetworks([eth, btc]),
+          now: () => start.add(async.elapsed),
+        ),
+      ],
+      pricing: SwapPricingService(FakePriceSource({})),
+      activatedAssets: () async => {eth, usdc},
+    );
+    final asked = _AskedMax();
+    unawaited(
+      repository
+          .catalog()
+          .then(
+            (_) => repository.maxAmounts(
+              from: eth,
+              to: usdc,
+              balance: d('1'),
+              preferred: preferred,
+            ),
+          )
+          .then<void>(
+            (maxes) {
+              asked.maxes = maxes;
+            },
+            onError: (Object error) {
+              asked.failure = (error as SwapMaxUnavailableException).failure;
+            },
+          ),
+    );
+    async.flushMicrotasks();
+    return asked;
+  }
 
   test('keeps back the gas to claim a token on its network', () async {
     expect(
@@ -148,9 +217,8 @@ void main() {
           ..preimageGate = Completer<void>();
         SwapMaxAmount? max;
         unawaited(
-          maxOf(
-            now: () => start.add(async.elapsed),
-          ).then((value) => max = value),
+          maxOf(now: () => start.add(async.elapsed))
+              .then((value) => max = value),
         );
         async.elapse(kdfTakes);
         trading.maxGate!.complete();
@@ -170,9 +238,8 @@ void main() {
         trading.maxGate = Completer<void>();
         SwapMaxAmount? max;
         unawaited(
-          maxOf(
-            now: () => start.add(async.elapsed),
-          ).then((value) => max = value),
+          maxOf(now: () => start.add(async.elapsed))
+              .then((value) => max = value),
         );
         async.elapse(AtomicSwapQuoteSource.claimFeeDeadline);
         trading.maxGate!.complete();
@@ -182,6 +249,92 @@ void main() {
         expect(trading.preimages, isEmpty);
       });
     });
+
+    test('KDF\'s Max lands before Max stops waiting on the order book', () {
+      fakeAsync((async) {
+        trading
+          ..maxGate = Completer<void>()
+          ..preimageGate = Completer<void>();
+        final max = askMax(async);
+        async.elapse(kdfTakes);
+        trading.maxGate!.complete();
+        async.elapse(_budget - kdfTakes - _tick);
+
+        expect(max.maxes![SwapLiquiditySource.atomic]!.amount, d('0.98'));
+      });
+    });
+
+    test('an order-book-only pair whose Max answers at 30 s still lands', () {
+      fakeAsync((async) {
+        trading.maxGate = Completer<void>();
+        final max = askMax(async, alone: true);
+        async.elapse(const Duration(seconds: 30));
+        expect(max.failure, isNull);
+        trading.maxGate!.complete();
+        async.flushMicrotasks();
+
+        expect(max.maxes![SwapLiquiditySource.atomic]!.amount, d('0.98'));
+      });
+    });
+  });
+
+  test('a slow min_trading_vol read keeps KDF\'s Max', () {
+    fakeAsync((async) {
+      final start = DateTime(2026, 10, 5);
+      trading.minimumGate = Completer<void>();
+      SwapMaxAmount? max;
+      unawaited(
+        maxOf(now: () => start.add(async.elapsed)).then((value) => max = value),
+      );
+
+      async.elapse(AtomicSwapQuoteSource.claimFeeDeadline - _tick);
+      expect(max, isNull);
+      async.elapse(_tick);
+
+      expect(max!.amount, d('0.98'));
+      expect(max!.offerLimit, isFalse);
+    });
+  });
+
+  group('when KDF\'s Max never comes', () {
+    test('Max says the order book timed out', () {
+      fakeAsync((async) {
+        trading.maxGate = Completer<void>();
+        final max = askMax(async);
+
+        async.elapse(_budget - _tick);
+        expect(max.failure, isNull);
+        async.elapse(_tick);
+
+        expect(
+          max.failure,
+          const SwapQuoteFailure(
+            source: SwapLiquiditySource.atomic,
+            kind: SwapQuoteFailureKind.timeout,
+          ),
+        );
+      });
+    });
+
+    for (final preferred in [null, SwapLiquiditySource.atomic]) {
+      final selected = preferred == null ? '' : ' with the order book selected';
+      test('the routed Max is used$selected', () {
+        fakeAsync((async) {
+          trading.maxGate = Completer<void>();
+          final max = askMax(
+            async,
+            routed: SwapMaxAmount(amount: d('0.99'), reservedForFees: d('0')),
+            preferred: preferred,
+          );
+
+          async.elapse(_budget - _tick);
+          expect(max.maxes, isNull);
+          async.elapse(_tick);
+
+          expect(max.maxes!.keys, [SwapLiquiditySource.routed]);
+        });
+      });
+    }
   });
 
   test('takes the claim off before keeping to the decimals', () async {

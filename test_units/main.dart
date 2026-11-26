@@ -404,6 +404,7 @@ import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
 import 'tests/swap/swap_bloc_intent_test.dart' as swap_bloc_intent_test;
+import 'tests/swap/swap_bloc_max_silent_test.dart' as swap_bloc_max_silent_test;
 import 'tests/swap/swap_bloc_offers_test.dart' as swap_bloc_offers_test;
 import 'tests/swap/swap_bloc_opening_test.dart' as swap_bloc_opening_test;
 import 'tests/swap/swap_bloc_review_test.dart' as swap_bloc_review_test;
@@ -438,6 +439,8 @@ import 'tests/swap/swap_entry_ui_failures_test.dart'
 import 'tests/swap/swap_entry_ui_fee_shortfall_test.dart'
     as swap_entry_ui_fee_shortfall_test;
 import 'tests/swap/swap_entry_ui_form_test.dart' as swap_entry_ui_form_test;
+import 'tests/swap/swap_entry_ui_max_announce_test.dart'
+    as swap_entry_ui_max_announce_test;
 import 'tests/swap/swap_entry_ui_messages_test.dart'
     as swap_entry_ui_messages_test;
 import 'tests/swap/swap_entry_ui_offers_test.dart' as swap_entry_ui_offers_test;
@@ -1005,6 +1008,7 @@ void main() {
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();
   swap_bloc_intent_test.main();
+  swap_bloc_max_silent_test.main();
   swap_bloc_offers_test.main();
   swap_bloc_opening_test.main();
   swap_bloc_review_test.main();
@@ -1029,6 +1033,7 @@ void main() {
   swap_entry_ui_failures_test.main();
   swap_entry_ui_fee_shortfall_test.main();
   swap_entry_ui_form_test.main();
+  swap_entry_ui_max_announce_test.main();
   swap_entry_ui_messages_test.main();
   swap_entry_ui_offers_test.main();
   swap_entry_ui_options_test.main();

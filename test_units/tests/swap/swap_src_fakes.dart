@@ -50,6 +50,9 @@ TradePreimageResponse preimageOf({
 class SrcTrading implements TradingManager {
   String minimum = '0.001';
   Object? minimumError;
+
+  /// Holds `min_trading_vol` open until completed.
+  Completer<void>? minimumGate;
   String maxTaker = '1';
   Object? maxTakerError;
 
@@ -90,6 +93,7 @@ class SrcTrading implements TradingManager {
     required String coin,
   }) async {
     minimums.add(coin);
+    await minimumGate?.future;
     final error = minimumError;
     if (error != null) throw error;
     return MinTradingVolumeResponse(mmrpc: '2.0', amount: minimum);
