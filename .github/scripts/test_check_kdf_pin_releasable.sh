@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Tests for check_kdf_pin_releasable.sh: kdf-internal branches pass, a
-# temporary build fails, and an unreadable configuration has its own exit code.
+# Tests for check_kdf_pin_releasable.sh: kdf-internal branches pass, local-only
+# and scratch builds fail, and an unreadable configuration has its own exit code.
 
 set -uo pipefail
 
@@ -33,7 +33,8 @@ expect 0 'main ships' "{\"api\":{\"branch\":\"main\",\"api_commit_hash\":\"$comm
 expect 0 'dev ships' "{\"api\":{\"branch\":\"dev\",\"api_commit_hash\":\"$commit\"}}"
 expect 0 'a feature branch ships' "{\"api\":{\"branch\":\"feat/lifi-integration\",\"api_commit_hash\":\"$commit\"}}"
 expect 1 'a local-only build does not' "{\"api\":{\"branch\":\"local/solana-combined\",\"api_commit_hash\":\"$commit\"}}"
-expect 1 'the temporary Solana mirror build does not ship' "{\"api\":{\"branch\":\"charl-temp/solana-combined\",\"api_commit_hash\":\"$commit\"}}"
+expect 1 'a charl-temp scratch branch does not' "{\"api\":{\"branch\":\"charl-temp/solana-combined\",\"api_commit_hash\":\"$commit\"}}"
+expect 0 'a name merely containing charl-temp ships' "{\"api\":{\"branch\":\"feat/charl-temp-notes\",\"api_commit_hash\":\"$commit\"}}"
 expect 2 'a missing branch cannot be checked' "{\"api\":{\"api_commit_hash\":\"$commit\"}}"
 expect 2 'a non-string branch cannot be checked' "{\"api\":{\"branch\":7,\"api_commit_hash\":\"$commit\"}}"
 expect 2 'malformed JSON cannot be checked' '{"api":'

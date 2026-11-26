@@ -16,12 +16,16 @@ class CoinFiatBalance extends StatefulWidget {
     this.style,
     this.isSelectable = false,
     this.isAutoScrollEnabled = false,
+    this.format = formatUsdValue,
   });
 
   final Coin coin;
   final TextStyle? style;
   final bool isSelectable;
   final bool isAutoScrollEnabled;
+
+  /// Writes the balance's US dollar value.
+  final String Function(double usd) format;
 
   @override
   State<CoinFiatBalance> createState() => _CoinFiatBalanceState();
@@ -94,7 +98,7 @@ class _CoinFiatBalanceState extends State<CoinFiatBalance> {
                   : Text(balanceStr, style: mergedStyle);
             }
 
-            final formattedBalance = formatUsdValue(price * balance);
+            final formattedBalance = widget.format(price * balance);
             final balanceStr = ' ($formattedBalance)';
 
             if (isAutoScrollEnabled) {

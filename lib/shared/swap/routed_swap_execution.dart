@@ -79,6 +79,12 @@ class RoutedSwapExecutor implements SwapExecutor {
       );
     } on RoutedSwapRpcException catch (error) {
       throw SwapStartRejectedException(switch (error) {
+        RoutedSwapInvalidParamException(
+          param: 'from',
+          reason: 'The activated signing policy is not supported for routed swaps',
+        )
+            when SwapNetworks.nonEvmRoutedChainIdOf(offer.from) != null =>
+          SwapStartRejection.signingPolicyUnsupported,
         RoutedSwapCoinNotActiveException() ||
         RoutedSwapPairNotSupportedException() ||
         RoutedSwapAmountOutOfBoundsException() ||

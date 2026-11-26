@@ -69,7 +69,7 @@ class _LegalDocumentBodyState extends State<_LegalDocumentBody> {
                       p: theme.textTheme.bodyMedium,
                       listBullet: theme.textTheme.bodyMedium,
                       a: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.primary,
+                        color: AppPalette.of(context).brandHover,
                         decoration: TextDecoration.underline,
                       ),
                     ),

@@ -15,8 +15,9 @@ void main() {
     List<String> events, {
     Map<String, String> txHashes = const {},
     SwapQuote? accepted,
+    String bought = '3000',
   }) => atomicSnapshotFromSwap(
-    atomicSwapOf('a-1', events, txHashes: txHashes),
+    atomicSwapOf('a-1', events, txHashes: txHashes, bought: bought),
     networks: execNetworks,
     resolveAsset: resolveTicker,
     accepted: accepted,
@@ -143,6 +144,37 @@ void main() {
         'TakerPaymentWaitForSpendFailed, TakerPaymentRefundFailed',
       );
       expect(snapshot.needsAttention, isTrue);
+    });
+
+    group('with the accepted quote, what arrived', () {
+      // A 3000 USDC payment, 10 of which pays the fee to claim it.
+      final accepted = quoteOf(
+        source: SwapLiquiditySource.atomic,
+        expected: '2990',
+        guaranteed: '2990',
+        fees: [
+          SwapFeeComponent(
+            kind: SwapFeeKind.network,
+            amount: d('10'),
+            deductedFromReceive: true,
+            asset: usdc,
+          ),
+        ],
+      );
+      const done = [...paid, 'MakerPaymentSpent', 'Finished'];
+
+      test('is the maker\'s payment less the fee taken from it', () {
+        final snapshot = fromLog(done, accepted: accepted);
+
+        expect(snapshot.outcome!.receivedAmount, d('2990'));
+      });
+
+      test('is more than the minimum after a better fill', () {
+        final snapshot = fromLog(done, accepted: accepted, bought: '3015');
+
+        expect(snapshot.outcome!.receivedAmount, d('3005'));
+        expect(snapshot.minimumReceive, d('2990'));
+      });
     });
 
     test('the accepted quote names what came back or arrived', () {

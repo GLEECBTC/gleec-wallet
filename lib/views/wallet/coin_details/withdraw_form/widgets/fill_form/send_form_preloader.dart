@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
@@ -20,7 +19,7 @@ class FillFormPreloader extends StatelessWidget {
               padding: const EdgeInsets.only(left: 8),
               child: Text(
                 message!,
-                style: theme.currentGlobal.textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
         ],

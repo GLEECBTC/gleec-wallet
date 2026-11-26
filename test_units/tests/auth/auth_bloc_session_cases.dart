@@ -16,6 +16,9 @@ class _Engine implements KomodoDefiLocalAuth {
   int signOuts = 0;
   int registrations = 0;
 
+  /// The seed each wallet was created with, by entry ID.
+  final seeds = <String, String>{};
+
   /// While set, the next sign-in or registration waits inside the engine.
   Completer<void>? reached;
   Completer<void>? release;
@@ -130,6 +133,7 @@ class _Engine implements KomodoDefiLocalAuth {
     }
     registrations++;
     await _work();
+    final entry = provisioningId ?? 'entry-$walletName';
     final user = KdfUser(
       walletId: WalletId.withPubkeyHash(
         walletName,
@@ -137,8 +141,9 @@ class _Engine implements KomodoDefiLocalAuth {
         'pubkey-$walletName',
       ),
       isBip39Seed: true,
-      metadata: {'_wallet_entry_id': 'entry-$walletName', ...initialMetadata},
+      metadata: {'_wallet_entry_id': entry, ...initialMetadata},
     );
+    seeds[entry] = mnemonic?.plaintextMnemonic ?? 'generated $entry';
     users.add(user);
     this.password = password;
     _activate(user);
@@ -168,6 +173,22 @@ class _Engine implements KomodoDefiLocalAuth {
       );
     }
   }
+
+  @override
+  Future<Mnemonic> getMnemonicPlainText(String walletPassword) async {
+    if (walletPassword != password) {
+      throw AuthException(
+        'Incorrect password',
+        type: AuthExceptionType.incorrectPassword,
+      );
+    }
+    return Mnemonic.plaintext(seeds[active?.metadata['_wallet_entry_id']]!);
+  }
+
+  @override
+  Future<Mnemonic> getMnemonicEncrypted() async => Mnemonic.encrypted(
+    EncryptedMnemonicData.fromJson(EncryptedMnemonicData.encryptedDataExample),
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

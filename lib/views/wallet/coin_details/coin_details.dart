@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
@@ -10,6 +11,8 @@ import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/portfolio_events.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info.dart';
@@ -35,6 +38,8 @@ class CoinDetails extends StatefulWidget {
 
 class _CoinDetailsState extends State<CoinDetails> {
   CoinPageType _selectedPageType = CoinPageType.info;
+  late final CoinQuickActionRequest? _quickAction = routingState.walletState
+      .takeQuickAction(widget.coin.abbr);
 
   String _rewardValue = '';
   String _formattedUsdPrice = '';
@@ -64,34 +69,36 @@ class _CoinDetailsState extends State<CoinDetails> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<TransactionHistoryBloc>(
-      create: (ctx) {
-        final bloc = TransactionHistoryBloc(sdk: ctx.read<KomodoDefiSdk>());
-        if (hasTxHistorySupport(widget.coin)) {
-          bloc.add(TransactionHistorySubscribe(coin: widget.coin));
-        }
-        return bloc;
-      },
-      // No BlocBuilder<CoinsBloc, CoinsState> here.
-      //
-      // There used to be one, and its builder ignored `state` entirely - it
-      // only wrapped this GestureDetector. The effect was that every
-      // `CoinsState` emission (a balance change, an activation transition, the
-      // 3-minute price tick, each wave of the balance sweep) rebuilt the whole
-      // coin-details page, including the transaction list's eagerly-built rows.
-      // Descendants that need coin state subscribe to it themselves.
-      child: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          // Detect swipe-back gesture (swipe from left to right)
-          if (details.primaryVelocity != null &&
-              details.primaryVelocity! > 0) {
-            // Only trigger back navigation if we're on the info page
-            if (_selectedPageType == CoinPageType.info) {
-              widget.onBackButtonPressed();
-            }
+    return AppPaletteScope(
+      child: BlocProvider<TransactionHistoryBloc>(
+        create: (ctx) {
+          final bloc = TransactionHistoryBloc(sdk: ctx.read<KomodoDefiSdk>());
+          if (hasTxHistorySupport(widget.coin)) {
+            bloc.add(TransactionHistorySubscribe(coin: widget.coin));
           }
+          return bloc;
         },
-        child: _buildContent(),
+        // No BlocBuilder<CoinsBloc, CoinsState> here.
+        //
+        // There used to be one, and its builder ignored `state` entirely - it
+        // only wrapped this GestureDetector. The effect was that every
+        // `CoinsState` emission (a balance change, an activation transition, the
+        // 3-minute price tick, each wave of the balance sweep) rebuilt the whole
+        // coin-details page, including the transaction list's eagerly-built rows.
+        // Descendants that need coin state subscribe to it themselves.
+        child: GestureDetector(
+          onHorizontalDragEnd: (details) {
+            // Detect swipe-back gesture (swipe from left to right)
+            if (details.primaryVelocity != null &&
+                details.primaryVelocity! > 0) {
+              // Only trigger back navigation if we're on the info page
+              if (_selectedPageType == CoinPageType.info) {
+                widget.onBackButtonPressed();
+              }
+            }
+          },
+          child: _buildContent(),
+        ),
       ),
     );
   }
@@ -103,6 +110,7 @@ class _CoinDetailsState extends State<CoinDetails> {
           coin: widget.coin,
           setPageType: _setPageType,
           onBackButtonPressed: widget.onBackButtonPressed,
+          quickAction: _quickAction,
         );
 
       case CoinPageType.send:

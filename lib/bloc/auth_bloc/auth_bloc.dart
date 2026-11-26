@@ -24,6 +24,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart'
     show WalletOperationDenied;
+import 'package:web_dex/services/wallet_transfer/wallet_transfer_secret.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart'
     show FileSaveCancelledException, FileSaveUnconfirmedException;
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
@@ -33,6 +34,7 @@ part 'auth_bloc_event.dart';
 part 'auth_bloc_logging.dart';
 part 'auth_bloc_state.dart';
 part 'auth_engine_session.dart';
+part 'auth_managed_import.dart';
 part 'auth_managed_sign_in.dart';
 part 'trezor_auth_mixin.dart';
 
@@ -61,6 +63,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     on<AuthRegisterRequested>(_onRegister);
     on<AuthQuickCreateRequested>(_onQuickCreate);
     on<AuthManagedSignInRequested>(_onManagedSignIn);
+    on<AuthManagedImportRequested>(_onManagedImport);
     on<AuthRestoreRequested>(_onRestore);
     on<AuthImportRequested>(_onImport);
     on<AuthLegacyMigrationRequested>(_onLegacyMigration);

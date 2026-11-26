@@ -208,6 +208,7 @@ Swap atomicSwapOf(
   DateTime? at,
   String sell = 'ETH',
   String buy = 'USDC-ERC20',
+  String bought = '3000',
 }) {
   final start = (at ?? DateTime.utc(2026, 9)).millisecondsSinceEpoch;
   return Swap.fromJson({
@@ -228,9 +229,9 @@ Swap atomicSwapOf(
           },
         },
     ],
-    'maker_amount': maker ? '1' : '3000',
+    'maker_amount': maker ? '1' : bought,
     'maker_coin': maker ? sell : buy,
-    'taker_amount': maker ? '3000' : '1',
+    'taker_amount': maker ? bought : '1',
     'taker_coin': maker ? buy : sell,
     'success_events': const ['Started', 'Finished'],
     'error_events': maker ? makerErrorEvents : takerErrorEvents,
@@ -238,22 +239,26 @@ Swap atomicSwapOf(
 }
 
 /// An atomic quote whose plan sells [volume] ETH at [price] USDC each.
-SwapQuote atomicQuoteOf({String volume = '1', String price = '3000'}) =>
-    quoteOf(
-      id: 'atomic',
-      source: SwapLiquiditySource.atomic,
-      routeKind: SwapRouteKind.direct,
-      order: null,
-      sell: volume,
-      guaranteed: '2990',
-      payload: AtomicSwapPlan(
-        base: eth,
-        rel: usdc,
-        volume: d(volume),
-        price: d(price),
-        orderPrice: Rational.parse(price),
-      ),
-    );
+SwapQuote atomicQuoteOf({
+  String volume = '1',
+  String price = '3000',
+  List<SwapFeeComponent>? fees,
+}) => quoteOf(
+  id: 'atomic',
+  source: SwapLiquiditySource.atomic,
+  routeKind: SwapRouteKind.direct,
+  order: null,
+  sell: volume,
+  guaranteed: '2990',
+  fees: fees,
+  payload: AtomicSwapPlan(
+    base: eth,
+    rel: usdc,
+    volume: d(volume),
+    price: d(price),
+    orderPrice: Rational.parse(price),
+  ),
+);
 
 /// An atomic executor over a scripted DEX on a fake clock, recording what
 /// the handle it hands out reports.

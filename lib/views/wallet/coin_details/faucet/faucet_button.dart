@@ -30,6 +30,7 @@ class _FaucetButtonState extends State<FaucetButton> {
   @override
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return BlocConsumer<FaucetBloc, FaucetState>(
       listenWhen: (previous, current) {
@@ -97,7 +98,7 @@ class _FaucetButtonState extends State<FaucetButton> {
                   children: [
                     Icon(
                       Icons.local_drink_rounded,
-                      color: Colors.blue,
+                      color: palette.info,
                       size: isMobile ? 14 : 16,
                     ),
                     const SizedBox(width: 4),
@@ -106,6 +107,9 @@ class _FaucetButtonState extends State<FaucetButton> {
                       style: TextStyle(
                         fontSize: isMobile ? 9 : 12,
                         fontWeight: FontWeight.w500,
+                        // The button's own pick on a light fill is the brand
+                        // colour, short of 4.5:1 on surfaceHigh.
+                        color: palette.text,
                       ),
                     ),
                   ],

@@ -67,6 +67,8 @@ KDF changes are out of scope for this release, so the wallet compensates for the
 
 ## Phase 2 change points
 
+**Status with KDF `fd8249c` ([kdf-internal #49](https://github.com/GLEECBTC/kdf-internal/pull/49)):** Phase 2 is in for TRON and Bitcoin. KDF lists and quotes TRX and TRC-20 tokens on TRON mainnet, and BTC and BTC-segwit, as Section 8 of the contract describes, and the wallet offers them. ZEC stays disabled in KDF. Route legs, candidates before activation and Max now handle both chains, and TRC-20 approvals use the same quote fields as ERC-20. Two points below still hold: a source is one address per asset, which the contract also requires, and a TRC-20 sale with no TRX is refused before it is quoted (`SwapFormIssue.noFeeBalance`), although staked energy can pay some or all of its fee. The rest of this section describes the EVM-only engine that came before #49.
+
 Phase 2 (BTC as the source coin, and Tron) is KDF's to add (contract l.12). The provider already serves Solana, Bitcoin and Sui, and Tron only across networks. It refuses a TRX → USDT-TRC20 quote with "Same-chain operations on Tron are not yet supported" (code 1002, checked 2026-09-29).
 
 Until Phase 2, KDF leaves Tron out at every step, so no source lists TRX or TRC-20 tokens and the picker cannot offer them. This was checked on the pinned build with TRX, USDT-TRC20, ETH and USDC-ERC20 active. `supported_coins` listed only the two EVM coins. Every Tron pair, in either direction, failed with `PairNotSupported` ("TRX is not on a supported EVM chain", `routed_swap/quote.rs:420`). These KDF parts assume EVM:

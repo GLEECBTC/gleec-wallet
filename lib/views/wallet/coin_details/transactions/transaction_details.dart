@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
@@ -62,9 +62,10 @@ class TransactionDetails extends StatelessWidget {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(0, 26, 0, 24),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: theme.custom.subCardBackgroundColor,
+                      decoration: AppSurface.card(
+                        AppPalette.of(context),
+                        radius: 18,
+                        color: AppPalette.of(context).surfaceRaised,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -182,10 +183,9 @@ class TransactionDetails extends StatelessWidget {
         : '- ';
     final double? usd = usdPriceResolver != null
         ? usdPriceResolver!(amount, transaction.assetId.id)
-        : RepositoryProvider.of<CoinsRepo>(
-            context,
-          ).getUsdPriceForAmount(amount, transaction.assetId.id);
-    final formattedUsd = usd == null ? '—' : '\$${formatAmt(usd)}';
+        : RepositoryProvider.of<CoinsRepo>(context)
+              .getUsdPriceForAmount(amount, transaction.assetId.id);
+    final formattedUsd = usd == null ? '—' : FiatFormat.amount(usd);
     final value =
         '$sign$formatted ${Coin.normalizeAbbr(transaction.assetId.id)} ($formattedUsd)';
 
@@ -193,10 +193,8 @@ class TransactionDetails extends StatelessWidget {
       children: [
         SelectableText(
           value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontSize: 22,
-            color: theme.custom.balanceColor,
-          ),
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontSize: 22, color: AppPalette.of(context).text),
         ),
         if (isInternal)
           Padding(
@@ -214,6 +212,7 @@ class TransactionDetails extends StatelessWidget {
     final double buttonHeight = isMobile ? 50 : 40;
     final double buttonWidth = isMobile ? 130 : 150;
     final double fontSize = isMobile ? 12 : 14;
+    final palette = AppPalette.of(context);
     return Row(
       mainAxisSize: MainAxisSize.max,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -224,7 +223,7 @@ class TransactionDetails extends StatelessWidget {
           textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w700,
             fontSize: fontSize,
-            color: theme.custom.defaultGradientButtonTextColor,
+            color: palette.onBrand,
           ),
           onPressed: () {
             final url = getTxExplorerUrl(coin, transaction.txHash ?? '');
@@ -241,11 +240,9 @@ class TransactionDetails extends StatelessWidget {
           width: buttonWidth,
           height: buttonHeight,
           onPressed: onClose,
-          textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-          ),
-          backgroundColor: theme.custom.lightButtonColor,
+          textStyle: Theme.of(context).textTheme.labelLarge
+              ?.copyWith(fontSize: fontSize, fontWeight: FontWeight.w700),
+          backgroundColor: palette.surfaceHigh,
           text: LocaleKeys.done.tr(),
         ),
       ],
@@ -275,15 +272,14 @@ class TransactionDetails extends StatelessWidget {
       final String feeAmount = formatDexAmt(fee.totalFee.toDouble());
       final double? usd = usdPriceResolver != null
           ? usdPriceResolver!(fee.totalFee.toDouble(), _feeCoin)
-          : RepositoryProvider.of<CoinsRepo>(
-              context,
-            ).getUsdPriceForAmount(fee.totalFee.toDouble(), _feeCoin);
-      final formattedUsd = usd == null ? '—' : '\$${formatAmt(usd)}';
+          : RepositoryProvider.of<CoinsRepo>(context)
+                .getUsdPriceForAmount(fee.totalFee.toDouble(), _feeCoin);
+      final formattedUsd = usd == null ? '—' : FiatFormat.amount(usd);
       value = '- ${Coin.normalizeAbbr(_feeCoin)} $feeAmount ($formattedUsd)';
       valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
         fontSize: 14,
         fontWeight: FontWeight.w500,
-        color: theme.custom.decreaseColor,
+        color: AppPalette.of(context).danger,
       );
     }
 

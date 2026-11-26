@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
+import 'package:komodo_ui_kit/src/design_system/app_palette_scope.dart';
 
 class UiSecondaryButton extends StatefulWidget {
   const UiSecondaryButton({
@@ -75,8 +76,12 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
     );
   }
 
+  // The label is drawn in this colour too; brandHover keeps it at 4.5:1 on
+  // the palette's page, card and dialog surfaces, where brand is not.
   Color get _borderColor {
-    return widget.borderColor ?? Theme.of(context).colorScheme.secondary;
+    return widget.borderColor ??
+        AppPaletteScope.maybeOf(context)?.brandHover ??
+        Theme.of(context).colorScheme.secondary;
   }
 
   Color get _shadowColor {
@@ -114,9 +119,11 @@ class _ButtonContent extends StatelessWidget {
 
   TextStyle? _defaultTextStyle(BuildContext context) {
     return Theme.of(context).textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-          color: Theme.of(context).colorScheme.secondary,
-        );
+      fontWeight: FontWeight.bold,
+      fontSize: 14,
+      color:
+          AppPaletteScope.maybeOf(context)?.brandHover ??
+          Theme.of(context).colorScheme.secondary,
+    );
   }
 }

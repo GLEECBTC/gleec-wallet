@@ -1,8 +1,8 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/app_assets.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -53,6 +53,7 @@ class _FillFormCustomFeeState extends State<FillFormCustomFee> {
 class _Collapsed extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Stack(
       children: [
         Container(
@@ -60,7 +61,7 @@ class _Collapsed extends StatelessWidget {
           height: 25,
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.all(Radius.circular(18)),
-            border: Border.all(color: theme.custom.specificButtonBorderColor),
+            border: Border.all(color: palette.border),
           ),
           child: const Padding(
             padding: EdgeInsets.only(left: 13, right: 13),
@@ -75,13 +76,14 @@ class _Collapsed extends StatelessWidget {
 class _Expanded extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Stack(
       children: [
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.all(Radius.circular(18)),
-            border: Border.all(color: theme.custom.specificButtonBorderColor),
+            border: Border.all(color: palette.border),
           ),
           child: Padding(
             padding: const EdgeInsets.only(left: 13, right: 13),

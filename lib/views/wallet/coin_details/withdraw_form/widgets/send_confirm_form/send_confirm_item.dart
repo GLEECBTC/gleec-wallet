@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
 
@@ -178,7 +178,7 @@ class _USDPrice extends StatelessWidget {
       NoticeBannerVariant.warning,
     ).foreground;
     return SelectableText(
-      '\$${formatAmt(usdPrice ?? 0)}',
+      FiatFormat.amount(usdPrice ?? 0),
       textAlign: centerAlign ? TextAlign.center : TextAlign.start,
       style: TextStyle(
         fontWeight: FontWeight.w500,

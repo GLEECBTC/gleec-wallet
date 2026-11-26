@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/app_config/solana_build_config.dart';
 
 class _CatalogBundle extends CachingAssetBundle {
@@ -16,9 +18,30 @@ class _CatalogBundle extends CachingAssetBundle {
   }
 }
 
+/// Production must not depend on a bundled snapshot digest.
+class _UnreadableBundle extends CachingAssetBundle {
+  @override
+  Future<ByteData> load(String key) =>
+      throw StateError('Production read the catalog snapshot: $key');
+}
+
+/// Serves only the listed assets.
+class _FilesBundle extends CachingAssetBundle {
+  _FilesBundle(this.files);
+  final Map<String, List<int>> files;
+
+  @override
+  Future<ByteData> load(String key) async {
+    final content = files[key];
+    if (content == null) throw StateError('Unexpected asset read: $key');
+    return ByteData.sublistView(Uint8List.fromList(content));
+  }
+}
+
 void main() {
   const engine = 'b1ff8f05c880d6f118124cac9ef615aa9d91bb39';
   const coins = 'ca20611537fe84f9398d1a63f3d27a4386fb161d';
+  const production = SolanaBuildConfig.productionEngineCommit;
   final catalog = utf8.encode('{"TESTSOL":{"coin":"TESTSOL"}}');
   final digest = sha256.convert(catalog).toString();
 
@@ -28,7 +51,6 @@ void main() {
     String origin = 'http://localhost:8787',
     String engineCommit = engine,
   }) => SolanaBuildConfig(
-    enabled: true,
     splMaxEnabled: splMax,
     token2022Enabled: token2022,
     engineCommit: engineCommit,
@@ -38,31 +60,225 @@ void main() {
     previewOrigin: origin,
   );
 
-  group('Solana candidate build boundaries', () {
-    test('ordinary builds leave every experimental operation disabled', () {
+  group('Solana production builds', () {
+    test('ordinary builds hold, send and receive Solana assets only', () {
       const config = SolanaBuildConfig();
+      expect(config.mode, SolanaBuildMode.production);
       expect(config.validate, returnsNormally);
-      expect(config.capabilities.enabled, isFalse);
-      expect(config.capabilities.splMaxEnabled, isFalse);
-      expect(config.capabilities.token2022Enabled, isFalse);
-      expect(config.capabilities.devnetTradingEnabled, isFalse);
+      expect(config.capabilities, const SolanaCapabilities(enabled: true));
+      expect(config.requiredEngineCommit, production);
     });
 
-    test('operation flags cannot enable Solana indirectly', () {
+    test('SOLANA_ENABLED=false turns every Solana operation off', () {
+      const config = SolanaBuildConfig(enabled: false);
+      expect(config.mode, SolanaBuildMode.disabled);
+      expect(config.validate, returnsNormally);
+      expect(config.capabilities, const SolanaCapabilities());
       expect(
-        const SolanaBuildConfig(devnetTradingEnabled: true).validate,
+        const SolanaBuildConfig(
+          enabled: false,
+          devnetTradingEnabled: true,
+        ).validate,
         throwsStateError,
       );
     });
 
+    test('SPL Max, Token-2022 and devnet trading stay off', () {
+      for (final config in const [
+        SolanaBuildConfig(splMaxEnabled: true),
+        SolanaBuildConfig(token2022Enabled: true),
+        SolanaBuildConfig(devnetTradingEnabled: true),
+      ]) {
+        expect(config.mode, SolanaBuildMode.production);
+        expect(config.validate, throwsStateError);
+        // Even unvalidated, production grants only the wallet operations.
+        expect(config.capabilities, const SolanaCapabilities(enabled: true));
+      }
+    });
+
+    test(
+      'no preview origin, catalog digest or namespace is required',
+      () async {
+        const config = SolanaBuildConfig();
+        expect(
+          () => config.verifyPreviewOrigin(Uri.parse('https://dex.gleec.com')),
+          returnsNormally,
+        );
+        await config.verifyCatalog(bundle: _UnreadableBundle());
+      },
+    );
+
+    test('any candidate define selects candidate validation', () {
+      for (final config in [
+        const SolanaBuildConfig(engineCommit: engine),
+        const SolanaBuildConfig(coinsCommit: coins),
+        SolanaBuildConfig(catalogSha256: digest),
+        const SolanaBuildConfig(previewOrigin: 'http://localhost:8787'),
+        const SolanaBuildConfig(
+          storageNamespace: 'solana-preview-0123456789ab',
+        ),
+      ]) {
+        expect(config.mode, SolanaBuildMode.candidate);
+        expect(config.validate, throwsStateError);
+      }
+    });
+
+    test('the production engine is the KDF the SDK pins', () {
+      final buildConfig = jsonDecode(
+        File(
+          'sdk/packages/komodo_defi_framework/app_build/'
+          'build_config.json',
+        ).readAsStringSync(),
+      ) as Map<String, dynamic>;
+      final pinned =
+          (buildConfig['api'] as Map<String, dynamic>)['api_commit_hash'];
+      expect(
+        production,
+        pinned,
+        reason:
+            'KDF was repinned. Review Solana on the new engine, then set '
+            'SolanaBuildConfig.productionEngineCommit to it and add it to '
+            'enginesWithOpenWithdrawalDefects unless SPL Max and Token-2022 '
+            'withdrawals were verified there.',
+      );
+    });
+
+    test(
+      'the production engine is listed until its withdrawals are verified',
+      () {
+        expect(
+          SolanaBuildConfig.enginesWithOpenWithdrawalDefects,
+          contains(production),
+        );
+      },
+    );
+
+    test('the running engine must be the pinned production engine', () {
+      const config = SolanaBuildConfig();
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => config.verifyEngineVersion('3.2.0-beta_$production'),
+        returnsNormally,
+      );
+      for (final version in [
+        '3.2.0-beta_46769c4',
+        '3.2.0-beta_$engine',
+        production,
+        '',
+      ]) {
+        expect(
+          () => config.verifyEngineVersion(version),
+          throwsStateError,
+          reason: version,
+        );
+      }
+      expect(
+        () =>
+            const SolanaBuildConfig(enabled: false)
+                .verifyEngineVersion('3.2.0-beta_46769c4'),
+        returnsNormally,
+      );
+    });
+
+    test('longer commit abbreviations still identify the engine', () {
+      // KDF falls back to `git log %h`, which grows with the repository.
+      const config = SolanaBuildConfig();
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 10)}',
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 9)}0',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 6)}',
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('production expects the KDF this build packaged', () async {
+      const older = '46769c4df3b043669eee59508bf1af017157dcdd';
+      final packaged = _FilesBundle({
+        SolanaBuildConfig.sdkBuildConfigAsset: utf8.encode(
+          jsonEncode({
+            'api': {'api_commit_hash': older},
+          }),
+        ),
+      });
+      const config = SolanaBuildConfig();
+      final expected = await config.expectedEngineCommit(bundle: packaged);
+      expect(expected, older);
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_46769c4',
+          expectedCommit: expected,
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+          expectedCommit: expected,
+        ),
+        throwsStateError,
+      );
+      for (final malformed in [
+        '{}',
+        '{"api":{}}',
+        '{"api":{"api_commit_hash":"46769c4"}}',
+        '[]',
+      ]) {
+        await expectLater(
+          config.expectedEngineCommit(
+            bundle: _FilesBundle({
+              SolanaBuildConfig.sdkBuildConfigAsset: utf8.encode(malformed),
+            }),
+          ),
+          throwsStateError,
+          reason: malformed,
+        );
+      }
+    });
+
+    test('unit runs use the compiled production default', () {
+      // CI builds pass no Solana define, so this is what ships.
+      expect(SolanaBuildConfig.environment.mode, SolanaBuildMode.production);
+    });
+  });
+
+  group('Solana candidate build boundaries', () {
+    test('a complete candidate profile selects candidate mode', () {
+      final config = candidate();
+      expect(config.mode, SolanaBuildMode.candidate);
+      expect(config.validate, returnsNormally);
+      expect(config.requiredEngineCommit, engine);
+    });
+
     test('incomplete candidate identities are refused', () {
-      expect(const SolanaBuildConfig(enabled: true).validate, throwsStateError);
+      expect(
+        const SolanaBuildConfig(
+          engineCommit: engine,
+          coinsCommit: coins,
+        ).validate,
+        throwsStateError,
+      );
     });
 
     test('candidate cannot reuse the production catalog namespace', () {
       expect(
         SolanaBuildConfig(
-          enabled: true,
           engineCommit: engine,
           coinsCommit: coins,
           catalogSha256: digest,
@@ -71,6 +287,16 @@ void main() {
         throwsStateError,
       );
     });
+
+    test(
+      'a candidate expects its manifest engine without reading the SDK',
+      () async {
+        expect(
+          await candidate().expectedEngineCommit(bundle: _UnreadableBundle()),
+          engine,
+        );
+      },
+    );
 
     test('known engine withdrawal defects cannot be overridden by flags', () {
       expect(SolanaBuildConfig.enginesWithOpenWithdrawalDefects, {
@@ -111,7 +337,7 @@ void main() {
       );
       expect(
         () =>
-            const SolanaBuildConfig(enabled: true)
+            candidate(origin: '')
                 .verifyPreviewOrigin(Uri.parse('http://localhost:8787')),
         throwsStateError,
       );
@@ -130,6 +356,21 @@ void main() {
       expect(() => config.verifyEngineVersion('b1ff8f0'), throwsStateError);
       expect(
         () => config.verifyEngineVersion('3.2.0-beta_$coins'),
+        throwsStateError,
+      );
+      // A candidate is bound to its own engine, not the production one, and
+      // no caller-supplied commit can stand in for its manifest.
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => config.verifyEngineVersion(
+          '3.2.0-beta_${production.substring(0, 7)}',
+          expectedCommit: production,
+        ),
         throwsStateError,
       );
       for (final version in [

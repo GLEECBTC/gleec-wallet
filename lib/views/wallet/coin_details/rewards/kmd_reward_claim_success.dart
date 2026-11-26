@@ -20,7 +20,7 @@ class KmdRewardClaimSuccess extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData themeData = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return PageLayout(
       header: PageHeader(
@@ -28,11 +28,11 @@ class KmdRewardClaimSuccess extends StatelessWidget {
         onBackButtonPressed: onBackButtonPressed,
         title: LocaleKeys.successClaim.tr(),
       ),
-      content: getContent(themeData),
+      content: getContent(palette),
     );
   }
 
-  Widget getContent(ThemeData themeData) {
+  Widget getContent(AppPalette palette) {
     return Center(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -43,9 +43,7 @@ class KmdRewardClaimSuccess extends StatelessWidget {
           Text(
             LocaleKeys.youClaimed.tr(),
             style: TextStyle(
-              color: themeData.textTheme.bodyMedium?.color?.withValues(
-                alpha: 0.4,
-              ),
+              color: palette.textTertiary,
               fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
@@ -57,11 +55,9 @@ class KmdRewardClaimSuccess extends StatelessWidget {
           ),
           const SizedBox(height: 5.0),
           SelectableText(
-            '\$$formattedUsd',
+            formattedUsd,
             style: TextStyle(
-              color: themeData.textTheme.bodyMedium?.color?.withValues(
-                alpha: 0.7,
-              ),
+              color: palette.textSecondary,
               fontWeight: FontWeight.w500,
               fontSize: 14,
             ),

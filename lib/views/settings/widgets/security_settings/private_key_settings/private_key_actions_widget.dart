@@ -95,6 +95,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final key = Key('private-key-export-${action.name}');
     final onPressed = enabled
         ? () => context.read<PrivateKeyExportBloc>().add(
@@ -141,10 +142,13 @@ class _ActionButton extends StatelessWidget {
         child: child,
       );
     }
+    // The kit draws the label in its border colour, brand by default, which
+    // is under 4.5:1 as text in the dark theme.
     return UiSecondaryButton(
       key: key,
       onPressed: onPressed,
       height: 44,
+      borderColor: palette.brandHover,
       child: child,
     );
   }

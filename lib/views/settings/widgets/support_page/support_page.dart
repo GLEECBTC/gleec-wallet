@@ -26,6 +26,7 @@ class SupportPage extends StatelessWidget {
   }
 
   Widget getSettingContent(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       margin: isMobile
           ? const EdgeInsets.symmetric(horizontal: 15)
@@ -35,10 +36,8 @@ class SupportPage extends StatelessWidget {
       padding: isMobile
           ? null
           : const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Theme.of(context).colorScheme.surface,
-      ),
+      // On mobile the settings wrapper is the card around this page.
+      decoration: isMobile ? null : AppSurface.card(palette),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -59,7 +58,7 @@ class SupportPage extends StatelessWidget {
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
+              color: palette.surface,
               borderRadius: BorderRadius.circular(18.0),
             ),
             child: Stack(
@@ -87,7 +86,7 @@ class SupportPage extends StatelessWidget {
                         height: 12,
                       ),
                       UiBorderButton(
-                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        backgroundColor: palette.surface,
                         prefix: Icon(
                           Icons.discord,
                           color: Theme.of(context).textTheme.bodyMedium?.color,

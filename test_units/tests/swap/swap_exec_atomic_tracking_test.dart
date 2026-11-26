@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 
 import 'swap_exec_atomic_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -25,7 +26,18 @@ void main() {
     () async {
       final rig = await onFakeClock((rig) {
         rig.orders.takers['a-1'] = TakerOrderCancellationReason.none;
-        rig.start();
+        rig.start(
+          atomicQuoteOf(
+            fees: [
+              SwapFeeComponent(
+                kind: SwapFeeKind.network,
+                amount: d('10'),
+                deductedFromReceive: true,
+                asset: usdc,
+              ),
+            ],
+          ),
+        );
         rig.firstPoll();
 
         for (final log in [matched, feePaid, makerPaid, paid, done]) {
@@ -52,6 +64,8 @@ void main() {
       ]);
       expect(rig.seen.skip(1).every((s) => !s.canCancel), isTrue);
       expect(rig.done, isTrue);
+      // The maker's 3000, less the 10 the accepted quote takes on arrival.
+      expect(rig.latest.outcome!.receivedAmount, d('2990'));
     },
   );
 

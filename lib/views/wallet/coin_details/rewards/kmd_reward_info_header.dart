@@ -1,10 +1,10 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/ui/custom_tooltip.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class KmdRewardInfoHeader extends StatelessWidget {
@@ -23,6 +23,7 @@ class KmdRewardInfoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final String rewardText = isThereReward
         ? '+ $coinAbbr ${doubleToString(totalReward)}'
         : LocaleKeys.noClaimableRewards.tr();
@@ -32,7 +33,7 @@ class KmdRewardInfoHeader extends StatelessWidget {
         SelectableText(
           rewardText,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: isThereReward ? theme.custom.increaseColor : null,
+            color: isThereReward ? palette.success : null,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -42,15 +43,16 @@ class KmdRewardInfoHeader extends StatelessWidget {
           Row(
             children: [
               SelectableText(
-                '\$${cutTrailingZeros(formatAmt(totalRewardUsd ?? 0))}',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                FiatFormat.amount(totalRewardUsd ?? 0),
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(color: palette.textTertiary),
               ),
               const SizedBox(width: 6),
               CustomTooltip(
                 maxWidth: 250,
                 padding: const EdgeInsets.all(12),
+                // The tooltip opens in the app overlay, outside the palette.
+                color: palette.surfaceRaised,
                 tooltip: _buildTooltip(context),
                 child: const Icon(Icons.info_outline, size: 24),
               ),
@@ -61,6 +63,7 @@ class KmdRewardInfoHeader extends StatelessWidget {
   }
 
   Widget _buildTooltip(BuildContext context) {
+    final palette = AppPalette.of(context);
     return RichText(
       text: TextSpan(
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
@@ -68,7 +71,7 @@ class KmdRewardInfoHeader extends StatelessWidget {
           TextSpan(text: '${LocaleKeys.kmdRewardSpan1.tr()}('),
           TextSpan(
             text: 'coingecko.com',
-            style: const TextStyle(color: Colors.blue),
+            style: TextStyle(color: palette.brandHover),
             recognizer: TapGestureRecognizer()
               ..onTap = () {
                 launchURLString('https://www.coingecko.com');
@@ -77,7 +80,7 @@ class KmdRewardInfoHeader extends StatelessWidget {
           const TextSpan(text: ', '),
           TextSpan(
             text: 'openrates.io',
-            style: const TextStyle(color: Colors.blue),
+            style: TextStyle(color: palette.brandHover),
             recognizer: TapGestureRecognizer()
               ..onTap = () {
                 launchURLString('https://exchangeratesapi.io');

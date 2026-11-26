@@ -9,6 +9,7 @@ import 'package:web_dex/services/wallet_access/wallet_access_types.dart';
 import 'passkey_test_support.dart';
 
 part 'passkey_credential_removal_cases.dart';
+part 'passkey_unattended_return_cases.dart';
 
 Matcher _fails(WalletAccessFailure failure) => throwsA(
   isA<WalletAccessException>().having((e) => e.failure, 'failure', failure),
@@ -417,6 +418,7 @@ void main() {
     });
 
     _removalCases(() => rig);
+    _unattendedReturnCases(() => rig);
   });
 
   test('the stored form is JSON naming its kind', () async {

@@ -6,6 +6,9 @@ import UIKit
   private var fdMonitorChannel: FlutterMethodChannel?
   private var credentialVault: WalletCredentialVault?
   private var passkeyBridge: WalletPasskeyBridge?
+  private var backupKeychainStore: WalletBackupKeychainStore?
+  private var googleDriveAuth: GoogleDriveAuthBridge?
+  private var deviceControls: DeviceControlsBridge?
 
   override func application(
     _ application: UIApplication,
@@ -30,6 +33,9 @@ import UIKit
     setupFdMonitorChannel(binaryMessenger: engineBridge.applicationRegistrar.messenger())
     credentialVault = WalletCredentialVault(messenger: engineBridge.applicationRegistrar.messenger())
     passkeyBridge = WalletPasskeyBridge(messenger: engineBridge.applicationRegistrar.messenger())
+    backupKeychainStore = WalletBackupKeychainStore(messenger: engineBridge.applicationRegistrar.messenger())
+    googleDriveAuth = GoogleDriveAuthBridge(messenger: engineBridge.applicationRegistrar.messenger())
+    deviceControls = DeviceControlsBridge(messenger: engineBridge.applicationRegistrar.messenger())
   }
 
   private func setupFdMonitorChannel(binaryMessenger: FlutterBinaryMessenger) {

@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
@@ -16,12 +17,11 @@ class _SellMaxButtonState extends State<SellMaxButton> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
         final fontWeight = _hasFocus ? FontWeight.w900 : FontWeight.w500;
-        final color = state.isMaxAmount
-            ? Theme.of(context).colorScheme.primary
-            : null;
+        final color = state.isMaxAmount ? palette.text : palette.textTertiary;
         return InkWell(
           onFocusChange: (value) => setState(() {
             _hasFocus = value;

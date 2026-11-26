@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,17 +20,14 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
-import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
-import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
-import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/shared/constants.dart';
-import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -47,17 +43,23 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info_fiat.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/transactions/transaction_table.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_quick_action_scope.dart';
+import 'package:web_dex/views/wallet/common/open_swap_with_asset.dart';
 
 class CoinDetailsInfo extends StatefulWidget {
   const CoinDetailsInfo({
     required this.coin,
     required this.setPageType,
     required this.onBackButtonPressed,
+    this.quickAction,
     super.key,
   });
   final Coin coin;
   final void Function(CoinPageType) setPageType;
   final VoidCallback onBackButtonPressed;
+
+  /// Send or Receive, asked for from the wallet home, to start on arrival.
+  final CoinQuickActionRequest? quickAction;
 
   @override
   State<CoinDetailsInfo> createState() => _CoinDetailsInfoState();
@@ -141,22 +143,25 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
               CoinsPubkeysRequested(widget.coin.abbr),
             );
           },
-          child: PageLayout(
-            padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
-            header: PageHeader(
-              title: widget.coin.displayName,
-              widgetTitle: widget.coin.mode == CoinMode.segwit
-                  ? const Padding(
-                      padding: EdgeInsets.only(left: 6.0),
-                      child: SegwitIcon(height: 22),
-                    )
-                  : null,
-              backText: _backText,
-              onBackButtonPressed: _onBackButtonPressed,
-              actions: [_buildDisableButton()],
-            ),
-            content: Expanded(
-              child: _EntranceTransition(child: _buildContent(context)),
+          child: CoinQuickActionScope(
+            request: widget.quickAction,
+            child: PageLayout(
+              padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
+              header: PageHeader(
+                title: widget.coin.displayName,
+                widgetTitle: widget.coin.mode == CoinMode.segwit
+                    ? const Padding(
+                        padding: EdgeInsets.only(left: 6.0),
+                        child: SegwitIcon(height: 22),
+                      )
+                    : null,
+                backText: _backText,
+                onBackButtonPressed: _onBackButtonPressed,
+                actions: [_buildDisableButton()],
+              ),
+              content: Expanded(
+                child: _EntranceTransition(child: _buildContent(context)),
+              ),
             ),
           ),
         ),
@@ -375,10 +380,7 @@ class _DesktopContent extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(18.0),
-      ),
+      decoration: AppSurface.card(AppPalette.of(context)),
       child: DexScrollbar(
         scrollController: scrollController,
         isMobile: isMobile,
@@ -467,7 +469,7 @@ class _DesktopCoinDetails extends StatelessWidget {
               isMobile: false,
               selectWidget: setPageType,
               onClickSwapButton: canTradeCoin
-                  ? () => _goToSwap(context, coin)
+                  ? () => openSwapWithAsset(context, coin)
                   : null,
               coin: coin,
             ),
@@ -570,10 +572,7 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(15, 18, 15, 16),
-      decoration: BoxDecoration(
-        color: isMobile ? Theme.of(context).cardColor : null,
-        borderRadius: BorderRadius.circular(18.0),
-      ),
+      decoration: isMobile ? AppSurface.card(AppPalette.of(context)) : null,
       child: Column(
         children: [
           _AssetGlow(
@@ -596,7 +595,7 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
               isMobile: true,
               selectWidget: setPageType,
               onClickSwapButton: canTradeCoin
-                  ? () => _goToSwap(context, coin)
+                  ? () => openSwapWithAsset(context, coin)
                   : null,
               coin: coin,
             ),
@@ -851,11 +850,11 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   /// re-opened seconds after the last fetch showed a placeholder for the whole
   /// duration of a fresh round trip, even though the number was already in
   /// memory. See [build]'s `showGhost`/`isRefreshing` split.
-  Widget _buildGhostValue(ThemeData themeData) {
+  Widget _buildGhostValue(ThemeData themeData, AppPalette palette) {
     final style = themeData.textTheme.titleMedium?.copyWith(
       fontSize: isMobile ? 25 : 22,
       fontWeight: FontWeight.w700,
-      color: theme.custom.headerFloatBoxColor,
+      color: palette.text,
       height: 1.1,
     );
 
@@ -886,7 +885,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
           style: themeData.textTheme.titleSmall!.copyWith(
             fontSize: isMobile ? 25 : 20,
             fontWeight: FontWeight.w500,
-            color: theme.custom.headerFloatBoxColor.withValues(alpha: 0.75),
+            color: palette.text.withValues(alpha: 0.75),
             height: 1.1,
           ),
         ),
@@ -897,6 +896,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeData = Theme.of(context);
+    final palette = AppPalette.of(context);
     final balance = latestBalance?.spendable.toDouble();
 
     // Unconfirmed *and* nothing cached -> skeleton. Unconfirmed *with* a cached
@@ -927,12 +927,12 @@ class CoinDetailsBalanceContent extends StatelessWidget {
             style: themeData.textTheme.titleMedium!.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: theme.custom.headerFloatBoxColor,
+              color: palette.textSecondary,
             ),
           ),
         Flexible(
           child: showGhost
-              ? _buildGhostValue(themeData)
+              ? _buildGhostValue(themeData, palette)
               : Row(
                   mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
                   mainAxisAlignment: isMobile
@@ -947,7 +947,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         style: themeData.textTheme.titleMedium!.copyWith(
                           fontSize: isMobile ? 25 : 22,
                           fontWeight: FontWeight.w700,
-                          color: theme.custom.headerFloatBoxColor.withValues(
+                          color: palette.text.withValues(
                             alpha: isRefreshing ? 0.65 : 1,
                           ),
                           height: 1.1,
@@ -960,7 +960,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                       style: themeData.textTheme.titleSmall!.copyWith(
                         fontSize: isMobile ? 25 : 20,
                         fontWeight: FontWeight.w500,
-                        color: theme.custom.headerFloatBoxColor.withValues(
+                        color: palette.text.withValues(
                           alpha: isRefreshing ? 0.65 : 1,
                         ),
                         height: 1.1,
@@ -974,9 +974,7 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         height: 12,
                         child: CircularProgressIndicator(
                           strokeWidth: 1.5,
-                          color: theme.custom.headerFloatBoxColor.withValues(
-                            alpha: 0.65,
-                          ),
+                          color: palette.textSecondary,
                         ),
                       ),
                     ],
@@ -1087,6 +1085,7 @@ class _FiatBalance extends StatelessWidget {
             child: CoinFiatBalance(
               coin,
               isSelectable: true,
+              format: FiatFormat.amount,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
           ),
@@ -1125,6 +1124,7 @@ class _GetRewardsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return FocusDecorator(
       child: InkWell(
         onTap: coin.isSuspended ? null : onTap,
@@ -1134,8 +1134,8 @@ class _GetRewardsButton extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 110),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: theme.custom.specificButtonBorderColor),
-              color: theme.custom.specificButtonBackgroundColor,
+              border: Border.all(color: palette.border),
+              color: palette.surfaceHigh,
             ),
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 5),
             child: Row(
@@ -1145,8 +1145,7 @@ class _GetRewardsButton extends StatelessWidget {
                   child: SvgPicture.asset(
                     '$assetsPath/ui_icons/rewards.svg',
                     colorFilter: ColorFilter.mode(
-                      Theme.of(context).textTheme.labelLarge?.color ??
-                          Colors.white,
+                      palette.text,
                       BlendMode.srcIn,
                     ),
                     allowDrawingOutsideViewBox: true,
@@ -1166,17 +1165,4 @@ class _GetRewardsButton extends StatelessWidget {
       ),
     );
   }
-}
-
-void _goToSwap(BuildContext context, Coin coin) {
-  // The Swap form opens on this coin; Advanced's taker form is seeded too, so
-  // switching to it keeps the choice.
-  context.read<SwapServices>().requestIntent((
-    pay: coin.abbr,
-    receive: null,
-    amount: null,
-    fiat: false,
-  ));
-  context.read<TakerBloc>().add(TakerSetSellCoin(coin));
-  routingState.selectedMenu = MainMenuValue.dex;
 }

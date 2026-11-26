@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show AppPalette;
 import 'package:web_dex/bloc/fiat/fiat_onramp_form/fiat_form_bloc.dart';
 import 'package:web_dex/bloc/fiat/models/fiat_payment_method.dart';
 import 'package:web_dex/views/fiat/fiat_payment_method_card.dart';
@@ -22,6 +23,10 @@ class FiatPaymentMethodGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final isSelected =
+        selectedPaymentMethod != null &&
+        selectedPaymentMethod!.providerId == providerId;
     return Card(
       margin: EdgeInsets.zero,
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -29,15 +34,7 @@ class FiatPaymentMethodGroup extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: Theme.of(context).primaryColor.withValues(
-            alpha:
-                selectedPaymentMethod != null &&
-                    selectedPaymentMethod!.providerId == providerId
-                ? 1
-                : 0.25,
-          ),
-        ),
+        side: BorderSide(color: isSelected ? palette.brand : palette.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),

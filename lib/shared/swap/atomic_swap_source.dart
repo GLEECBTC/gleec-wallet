@@ -225,8 +225,10 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   @visibleForTesting
   static const claimFeeTimeout = Duration(seconds: 10);
 
-  /// How long after Max is asked the gas to claim a token may still be read,
-  /// so Max answers within the form's own wait for it.
+  /// How long after Max is asked the gas to claim a token, and the offers
+  /// that cap Max, may still be read. Past it, Max settles for KDF's own
+  /// figure, so these reads never hold it past the 25 s the form gives one
+  /// price: all the order book has when another source could answer Max.
   @visibleForTesting
   static const claimFeeDeadline = Duration(seconds: 20);
 

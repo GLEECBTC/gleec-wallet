@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,11 +19,12 @@ class _SettingsResetActivatedCoinsState
     extends State<SettingsResetActivatedCoins> {
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: LocaleKeys.debugSettingsResetActivatedCoins.tr(),
       icon: Icon(
@@ -46,7 +46,10 @@ class _SettingsResetActivatedCoinsState
   PopupDispatcher _createPopupDispatcher(List<Wallet> wallets) {
     final textStyle = Theme.of(context).textTheme.bodyMedium;
     return PopupDispatcher(
-      borderColor: theme.custom.specificButtonBorderColor,
+      // The dialog takes its theme from here, inside the settings palette,
+      // rather than from the app's scaffold.
+      context: context,
+      borderColor: AppPalette.of(context).border,
       width: 320,
       popupContent: wallets.isEmpty
           ? Center(

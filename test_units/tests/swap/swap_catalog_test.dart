@@ -247,14 +247,13 @@ void main() {
         // Every active asset on a served network, until KDF answers.
         expect(assets.status, SwapCatalogStatus.fresh);
         expect(assets.quotable, {eth, usdc});
-        // An inactive token on a served network may be routed once active;
-        // GLEEC's network is not served and BTC is not EVM.
-        expect(assets.onceActive, {paxg});
+        // Both the inactive EVM token and Bitcoin may route after activation.
+        expect(assets.onceActive, {btc, paxg});
 
         final listed = await assets.update!;
         expect(listed.status, SwapCatalogStatus.fresh);
         expect(listed.quotable, {eth});
-        expect(listed.onceActive, {paxg});
+        expect(listed.onceActive, {btc, paxg});
       },
     );
 

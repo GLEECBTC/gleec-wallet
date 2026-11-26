@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -76,6 +75,7 @@ class _SendErrorBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return BlocSelector<WithdrawFormBloc, WithdrawFormState, TextError?>(
       // TODO: Confirm this is the correct error
       selector: (state) => state.transactionError,
@@ -85,7 +85,7 @@ class _SendErrorBody extends StatelessWidget {
         ).textTheme.bodyMedium?.color?.withValues(alpha: .7);
 
         return Material(
-          color: theme.custom.buttonColorDefault,
+          color: palette.surfaceHigh,
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             onTap: error == null

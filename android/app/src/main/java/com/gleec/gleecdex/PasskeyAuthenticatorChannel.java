@@ -5,11 +5,15 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
+import android.os.Build;
 import android.os.CancellationSignal;
 import android.util.Base64;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.credentials.CreateCredentialResponse;
+import androidx.credentials.CreatePublicKeyCredentialRequest;
+import androidx.credentials.CreatePublicKeyCredentialResponse;
 import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
@@ -17,29 +21,39 @@ import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.GetPublicKeyCredentialOption;
 import androidx.credentials.PublicKeyCredential;
+import androidx.credentials.SignalCredentialStateResponse;
+import androidx.credentials.SignalUnknownCredentialRequest;
+import androidx.credentials.exceptions.CreateCredentialCancellationException;
+import androidx.credentials.exceptions.CreateCredentialException;
+import androidx.credentials.exceptions.CreateCredentialInterruptedException;
 import androidx.credentials.exceptions.GetCredentialCancellationException;
 import androidx.credentials.exceptions.GetCredentialException;
 import androidx.credentials.exceptions.GetCredentialInterruptedException;
 import androidx.credentials.exceptions.NoCredentialException;
+import androidx.credentials.exceptions.domerrors.DomError;
+import androidx.credentials.exceptions.domerrors.InvalidStateError;
 import androidx.credentials.exceptions.domerrors.NotAllowedError;
+import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCredentialDomException;
 import androidx.credentials.exceptions.publickeycredential.GetPublicKeyCredentialDomException;
+import androidx.credentials.exceptions.publickeycredential.SignalCredentialStateException;
 import androidx.fragment.app.FragmentActivity;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** One user-verified passkey assertion that evaluates the WebAuthn PRF
- * extension, through Credential Manager. It stores nothing and never sees the
- * wallet credential: the Dart passkey tier checks the reply and wipes the
- * PRF output. Credential Manager enforces Digital Asset Links, and the
- * bridge checks that the returned origin identifies this signed APK. */
+/** One user-verified passkey assertion or creation at a time, evaluating the
+ * WebAuthn PRF extension, through Credential Manager. It stores nothing and
+ * never sees the wallet credential: the Dart passkey tier checks the reply
+ * and wipes the PRF output. Credential Manager enforces Digital Asset Links,
+ * and the bridge checks that the returned origin identifies this signed APK. */
 final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandler {
     private static final String LOG_TAG = "GleecPasskey";
     private static final int ENCODING = Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING;
@@ -79,6 +93,13 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
                 break;
             case "getAssertion":
                 begin(call, result);
+                break;
+            case "register":
+                register(call, result);
+                break;
+            case "reportRemoved":
+                reportRemoved(call);
+                result.success(null);
                 break;
             default:
                 result.notImplemented();
@@ -227,6 +248,181 @@ final class PasskeyAuthenticatorChannel implements MethodChannel.MethodCallHandl
         }
         // Provider configuration, unsupported devices and asset-link failures.
         return "unavailable";
+    }
+
+    /** Creates a discoverable, user-verified passkey and evaluates PRF where
+     * the provider supports it at creation. Dart checks the reply. */
+    private void register(MethodCall call, MethodChannel.Result result) {
+        if (pending != null) { result.error("busy", "Another passkey request is in progress", null); return; }
+        KeyguardManager keyguard =
+            (KeyguardManager) activity.getSystemService(Context.KEYGUARD_SERVICE);
+        if (keyguard == null || !keyguard.isDeviceSecure()) {
+            trace("create", "keyguard", "unavailable");
+            result.error("unavailable", "Passkey request could not be completed", null);
+            return;
+        }
+        final CreatePublicKeyCredentialRequest request;
+        try {
+            request = publicKeyCreation(call);
+        } catch (Exception error) {
+            trace("create", "build", "invalidResponse");
+            result.error("invalidResponse", "Passkey request could not be completed", null);
+            return;
+        }
+        pending = result;
+        cancellation = new CancellationSignal();
+        try {
+            credentials.createCredentialAsync(activity, request, cancellation,
+                ContextCompat.getMainExecutor(activity),
+                new CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>() {
+                    @Override public void onResult(CreateCredentialResponse response) {
+                        if (pending != result) return;
+                        try {
+                            Map<String, Object> registration = registration(activity, response);
+                            trace("create", "response", "accepted");
+                            finish(registration, null);
+                        } catch (Failure failure) {
+                            trace("create", "response", failure.code);
+                            finish(null, failure.code);
+                        } catch (Exception error) {
+                            // Never forward provider exceptions; they can carry data.
+                            trace("create", "response", "invalidResponse");
+                            finish(null, "invalidResponse");
+                        }
+                    }
+
+                    @Override public void onError(@NonNull CreateCredentialException error) {
+                        if (pending != result) return;
+                        String code = createFailureCode(error);
+                        trace("create", "provider", code);
+                        finish(null, code);
+                    }
+                });
+        } catch (RuntimeException error) {
+            // A provider can fail to start before it registers its callback.
+            if (pending == result) {
+                trace("create", "start", "unavailable");
+                finish(null, "unavailable");
+            }
+        }
+    }
+
+    static CreatePublicKeyCredentialRequest publicKeyCreation(MethodCall call) throws Exception {
+        return new CreatePublicKeyCredentialRequest(registrationJson(call));
+    }
+
+    private static String registrationJson(MethodCall call) throws Exception {
+        String rpId = call.argument("rpId");
+        byte[] challenge = call.argument("challenge");
+        byte[] userId = call.argument("userId");
+        String userName = call.argument("userName");
+        String displayName = call.argument("displayName");
+        byte[] salt = call.argument("prfSalt");
+        Number timeout = call.argument("timeoutMs");
+        // Play services refuses an empty display name.
+        if (rpId == null || rpId.isEmpty() || rpId.length() > 253 || challenge == null
+            || challenge.length < 16 || userId == null || userId.length == 0 || userId.length > 64
+            || !isName(userName) || !isName(displayName) || salt == null || salt.length != 32) {
+            throw new Failure("invalidResponse");
+        }
+        JSONArray algorithms = new JSONArray()
+            .put(new JSONObject().put("type", "public-key").put("alg", -7))
+            .put(new JSONObject().put("type", "public-key").put("alg", -257));
+        return new JSONObject()
+            .put("rp", new JSONObject().put("id", rpId).put("name", "Gleec Wallet"))
+            .put("user", new JSONObject().put("id", encode(userId)).put("name", userName)
+                .put("displayName", displayName))
+            .put("challenge", encode(challenge))
+            .put("pubKeyCredParams", algorithms)
+            .put("timeout", timeout == null ? 120000 : timeout.longValue())
+            // A discoverable credential is what providers sync, and the PRF
+            // key differs without verification.
+            .put("authenticatorSelection", new JSONObject().put("residentKey", "required")
+                .put("requireResidentKey", true).put("userVerification", "required"))
+            .put("attestation", "none")
+            .put("extensions", new JSONObject().put("prf",
+                new JSONObject().put("eval", new JSONObject().put("first", encode(salt)))))
+            .toString();
+    }
+
+    private static boolean isName(String value) {
+        return value != null && !value.isEmpty()
+            && value.getBytes(StandardCharsets.UTF_8).length <= 1024;
+    }
+
+    static Map<String, Object> registration(Context context, CreateCredentialResponse response)
+            throws Exception {
+        if (!(response instanceof CreatePublicKeyCredentialResponse)) throw new Failure("invalidResponse");
+        JSONObject json = new JSONObject(
+            ((CreatePublicKeyCredentialResponse) response).getRegistrationResponseJson());
+        JSONObject body = json.getJSONObject("response");
+        byte[] clientData = decode(body.getString("clientDataJSON"));
+        verifyOrigin(context, clientData);
+        Map<String, Object> value = new HashMap<>();
+        value.put("credentialId", decode(json.getString("rawId")));
+        value.put("clientDataJSON", clientData);
+        value.put("attestationObject", decode(body.getString("attestationObject")));
+        value.put("transports", transports(body.optJSONArray("transports")));
+        JSONObject extensions = json.optJSONObject("clientExtensionResults");
+        JSONObject prf = extensions == null ? null : extensions.optJSONObject("prf");
+        JSONObject results = prf == null ? null : prf.optJSONObject("results");
+        // Absent is normal: Dart then compares two sign-ins instead. A JSON
+        // null reads as JSONObject.NULL, not a String.
+        Object first = results == null ? null : results.opt("first");
+        value.put("prfFirst", first instanceof String && !((String) first).isEmpty()
+            ? decode((String) first) : null);
+        return value;
+    }
+
+    /** Hints only. An odd entry is dropped rather than failing a passkey
+     * that now exists. */
+    private static List<String> transports(JSONArray array) {
+        List<String> value = new ArrayList<>();
+        if (array == null) return value;
+        for (int i = 0; i < array.length() && value.size() < 8; i++) {
+            Object item = array.opt(i);
+            if (item instanceof String && !((String) item).isEmpty() && ((String) item).length() <= 32) {
+                value.add((String) item);
+            }
+        }
+        return value;
+    }
+
+    static String createFailureCode(CreateCredentialException error) {
+        if (error instanceof CreateCredentialCancellationException) return "canceled";
+        if (error instanceof CreateCredentialInterruptedException) return "interrupted";
+        if (error instanceof CreatePublicKeyCredentialDomException) {
+            DomError dom = ((CreatePublicKeyCredentialDomException) error).getDomError();
+            // Dismissal and timeout alike, as for assertions.
+            if (dom instanceof NotAllowedError) return "canceled";
+            // Only an excluded credential raises it, and none is excluded.
+            if (dom instanceof InvalidStateError) return "invalidResponse";
+        }
+        // No provider, provider configuration, unsupported devices and asset-link failures.
+        return "unavailable";
+    }
+
+    /** Best effort, answered at once: the provider may hide or delete the
+     * passkey later, or never. The signal API needs Android 15. */
+    private void reportRemoved(MethodCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return;
+        try {
+            String rpId = call.argument("rpId");
+            byte[] credentialId = call.argument("credentialId");
+            if (rpId == null || rpId.isEmpty() || rpId.length() > 253 || credentialId == null
+                || credentialId.length == 0 || credentialId.length > 1023) return;
+            String request = new JSONObject().put("rpId", rpId)
+                .put("credentialId", encode(credentialId)).toString();
+            credentials.signalCredentialStateAsync(new SignalUnknownCredentialRequest(request),
+                ContextCompat.getMainExecutor(activity),
+                new CredentialManagerCallback<SignalCredentialStateResponse, SignalCredentialStateException>() {
+                    @Override public void onResult(SignalCredentialStateResponse response) {}
+
+                    @Override public void onError(@NonNull SignalCredentialStateException error) {}
+                });
+        } catch (Exception ignored) {
+            // Never log provider exceptions.
+        }
     }
 
     private void finish(Map<String, Object> value, String failure) {

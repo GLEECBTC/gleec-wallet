@@ -33,6 +33,15 @@ export 'src/containers/gradient_container.dart';
 // Widgets that handle user interaction and control other parts of the UI.
 export 'src/controls/market_chart_header_controls.dart';
 export 'src/controls/selected_coin_graph_control.dart'; // New control widget
+// Design system
+// The shared colour, type and motion tokens, and the scope that maps the
+// Material theme onto them.
+export 'src/design_system/app_motion.dart';
+export 'src/design_system/app_palette.dart';
+export 'src/design_system/app_palette_scope.dart';
+export 'src/design_system/app_palette_theme.dart';
+export 'src/design_system/app_surface.dart';
+export 'src/design_system/app_text.dart';
 // Fonts
 export 'src/custom_icons/custom_icons.dart';
 // Display

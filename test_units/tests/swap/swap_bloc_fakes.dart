@@ -267,11 +267,13 @@ class SwapBlocHarness {
   }
 }
 
-/// A [FakeQuoteSource] whose Max answer can be held back with [maxGate].
+/// A [FakeQuoteSource] whose Max answer can be held back with [maxGate],
+/// or refused with [maxError].
 class ScriptedQuoteSource extends FakeQuoteSource {
   ScriptedQuoteSource(super.source, {super.respond, super.results});
 
   Completer<void>? maxGate;
+  Object? maxError;
 
   @override
   Future<SwapMaxAmount?> maxAmount({
@@ -282,6 +284,7 @@ class ScriptedQuoteSource extends FakeQuoteSource {
     double? slippage,
   }) async {
     await maxGate?.future;
+    if (maxError case final error?) throw error;
     return super.maxAmount(
       from: from,
       to: to,

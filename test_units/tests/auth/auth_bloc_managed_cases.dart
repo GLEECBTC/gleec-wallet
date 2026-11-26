@@ -169,5 +169,81 @@ void _managedSignInCases() {
         expect(s.engine.active, isNull);
       },
     );
+    group('managed import', () {
+      WalletTransferSecret secret({
+        TransferWalletType type = TransferWalletType.hd,
+        bool confirmed = true,
+      }) => WalletTransferSecret(
+        walletName: 'Moved',
+        type: type,
+        seed: 'moved seed words',
+        phraseConfirmed: confirmed,
+      );
+
+      test(
+        'a moved wallet opens with this device keeping its password',
+        () async {
+          final state = await s.outcomeOf(
+            AuthManagedImportRequested(
+              secret: secret(),
+              walletName: 'Moved',
+              source: ManagedImportSource.movedFromDevice,
+            ),
+          );
+          expect(state.authError, isNull);
+          expect(state.currentUser?.walletId.name, 'Moved');
+          final entry = WalletAccessService.entryId(state.currentUser!);
+          expect(s.engine.seeds[entry], 'moved seed words');
+          expect(s.engine.password, hasLength(32));
+          expect(s.engine.active?.metadata['wallet_provenance'], 'imported');
+          expect(
+            s.engine.active?.metadata['recovery_evidence'],
+            RecoveryEvidence.phraseConfirmed.name,
+          );
+        },
+      );
+
+      test('an unconfirmed phrase stays unconfirmed after the move', () async {
+        final state = await s.outcomeOf(
+          AuthManagedImportRequested(
+            secret: secret(confirmed: false),
+            walletName: 'Moved',
+            source: ManagedImportSource.passkeyBackup,
+          ),
+        );
+        expect(
+          state.currentUser?.metadata['recovery_evidence'],
+          RecoveryEvidence.none.name,
+        );
+      });
+
+      test('a legacy wallet opens with legacy derivation', () async {
+        final state = await s.outcomeOf(
+          AuthManagedImportRequested(
+            secret: secret(type: TransferWalletType.legacy),
+            walletName: 'Moved',
+            source: ManagedImportSource.movedFromDevice,
+          ),
+        );
+        expect(
+          state.currentUser?.walletId.authOptions.derivationMethod,
+          DerivationMethod.iguana,
+        );
+      });
+
+      test('a taken name is reported, never renamed', () async {
+        s.engine.add(name: 'Moved');
+        final state = await s.outcomeOf(
+          AuthManagedImportRequested(
+            secret: secret(),
+            walletName: 'Moved',
+            source: ManagedImportSource.movedFromDevice,
+          ),
+        );
+        expect(state.authError?.type, AuthExceptionType.walletAlreadyExists);
+        expect(state.currentUser, isNull);
+        expect(s.engine.active, isNull);
+      });
+    });
   });
 }

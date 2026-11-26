@@ -2,14 +2,13 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:app_theme/src/dark/theme_custom_dark.dart';
-import 'package:app_theme/src/light/theme_custom_light.dart';
 import 'package:komodo_ui/komodo_ui.dart' show TrendPercentageText;
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show AppPalette;
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 
 class CoinDetailsInfoFiat extends StatelessWidget {
@@ -78,15 +77,11 @@ class _AssetFiatPrice extends StatelessWidget {
           ),
         ),
         isMobile ? const SizedBox(height: 3) : const SizedBox(width: 10),
-        Row(
-          children: [
-            Text('\$', style: style),
-            Text(
-              formatAmt(usdPrice),
-              key: Key('fiat-price-${coin.abbr.toLowerCase()}'),
-              style: style,
-            ),
-          ],
+        Text(
+          FiatFormat.price(usdPrice),
+          key: Key('fiat-price-${coin.abbr.toLowerCase()}'),
+          semanticsLabel: FiatFormat.spokenPrice(usdPrice),
+          style: style,
         ),
       ],
     );
@@ -111,11 +106,7 @@ class _AssetFiatValuePercentageChange extends StatelessWidget {
       },
       builder: (context, state) {
         final change24hPercent = state.get24hChangeForAsset(coin.id);
-
-        final theme = Theme.of(context);
-        final themeCustom = Theme.of(context).brightness == Brightness.dark
-            ? theme.extension<ThemeCustomDark>()!
-            : theme.extension<ThemeCustomLight>()!;
+        final palette = AppPalette.of(context);
 
         return Flex(
           direction: isMobile ? Axis.vertical : Axis.horizontal,
@@ -137,8 +128,8 @@ class _AssetFiatValuePercentageChange extends StatelessWidget {
                 fontSize: isMobile ? 16 : 14,
                 fontWeight: FontWeight.w700,
               ),
-              upColor: themeCustom.increaseColor,
-              downColor: themeCustom.decreaseColor,
+              upColor: palette.success,
+              downColor: palette.danger,
               showIcon: false,
               noValueText: '-',
             ),
@@ -173,6 +164,7 @@ class _AssetFiatBalance extends StatelessWidget {
         isMobile ? const SizedBox(height: 3) : const SizedBox(width: 10),
         CoinFiatBalance(
           coin,
+          format: FiatFormat.amount,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ],

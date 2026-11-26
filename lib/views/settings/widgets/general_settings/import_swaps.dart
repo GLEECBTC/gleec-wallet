@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -51,12 +50,13 @@ class _ImportSwapsState extends State<ImportSwaps> {
   }
 
   Widget _buildSwitcher() {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       width: 146,
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: LocaleKeys.importSwaps.tr(),
       suffix: Icon(
@@ -92,6 +92,7 @@ class _ImportSwapsState extends State<ImportSwaps> {
   Widget _buildStatus() {
     if (!_success && _error == null) return const SizedBox.shrink();
 
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Text(
@@ -99,10 +100,10 @@ class _ImportSwapsState extends State<ImportSwaps> {
         style: TextStyle(
           fontSize: 12,
           color: _success
-              ? theme.custom.successColor
+              ? palette.success
               : _error == null
-                  ? null
-                  : theme.currentGlobal.colorScheme.error,
+              ? null
+              : palette.danger,
         ),
       ),
     );

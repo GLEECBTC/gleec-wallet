@@ -1,5 +1,5 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
 
 class SettingsMenuItem extends StatelessWidget {
@@ -26,11 +26,12 @@ class SettingsMenuItem extends StatelessWidget {
   }
 
   Widget _buildDesktopItem(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: isSelected ? theme.custom.settingsMenuItemBackgroundColor : null,
+        color: isSelected ? palette.selected : null,
       ),
       child: InkWell(
         customBorder: RoundedRectangleBorder(
@@ -49,7 +50,7 @@ class SettingsMenuItem extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: isSelected ? Theme.of(context).primaryColor : null,
+              color: isSelected ? palette.text : null,
             ),
           ),
         ),
@@ -58,6 +59,7 @@ class SettingsMenuItem extends StatelessWidget {
   }
 
   Widget _buildMobileItem(BuildContext context) {
+    final palette = AppPalette.of(context);
     return InkWell(
       onTap: enabled ? () => onTap(menu) : null,
       borderRadius: BorderRadius.circular(18.0),
@@ -69,9 +71,7 @@ class SettingsMenuItem extends StatelessWidget {
           children: [
             Text(
               text,
-              style: TextStyle(
-                color: isSelected ? Theme.of(context).primaryColor : null,
-              ),
+              style: TextStyle(color: isSelected ? palette.brandHover : null),
             ),
             Icon(
               Icons.arrow_forward_ios,

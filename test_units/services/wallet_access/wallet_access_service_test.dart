@@ -23,12 +23,14 @@ import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 import 'passkey/passkey_test_support.dart';
 
+part 'wallet_access_managed_import_cases.dart';
 part 'wallet_access_passkey_reuse_cases.dart';
 part 'wallet_access_review_cases.dart';
 part 'wallet_access_rotation_cases.dart';
 part 'wallet_access_session_cases.dart';
 part 'wallet_access_sign_in_status_cases.dart';
 part 'wallet_access_test_harness.dart';
+part 'wallet_access_unattended_return_cases.dart';
 
 const _password = 'Synthetic-password-123456!';
 const _entry = 'test-wallet-entry-0001';
@@ -40,8 +42,9 @@ KdfUser _user({
   String name = 'Wallet',
   String id = _entry,
   Map<String, dynamic> metadata = const {},
+  AuthOptions options = _options,
 }) => KdfUser(
-  walletId: WalletId.withPubkeyHash(name, _options, _hash),
+  walletId: WalletId.withPubkeyHash(name, options, _hash),
   isBip39Seed: true,
   metadata: {'_wallet_entry_id': id, 'type': 'hdwallet', ...metadata},
 );
@@ -306,6 +309,10 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   KdfUser? active;
   final hooks = <Future<void> Function(WalletId)>[];
   final registrations = <({String name, String id, String password})>[];
+  final registeredOptions = <AuthOptions>[];
+
+  /// The seed each engine wallet was created with, by entry ID.
+  final seeds = <String, String>{};
   final metadataUpdates = <Map<String, dynamic>>[];
   final verifiedWallets = <WalletId>[];
   Completer<void>? verificationReached;
@@ -317,6 +324,13 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   bool failCreationAfterCommitOnce = false;
   bool failEncryptedReadOnce = false;
   bool ownedCollision = false;
+
+  /// What the engine reports for a wallet it creates, when that is not what
+  /// was asked for.
+  AuthOptions? engineOptions;
+
+  /// What register returns, when that is not the wallet it opened.
+  KdfUser Function(KdfUser opened)? registeredAs;
   bool discardMetadataWrite = false;
   void Function()? afterMetadataWrite;
   String enginePassword = _password;
@@ -495,6 +509,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       id: provisioningId!,
       password: password,
     ));
+    registeredOptions.add(options);
     if (collideOnce || ownedCollision) {
       collideOnce = false;
       throw AuthException(
@@ -514,15 +529,33 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       activate(existing.single);
       return existing.single;
     }
-    final user = _user(name: walletName, id: provisioningId);
+    final user = _user(
+      name: walletName,
+      id: provisioningId,
+      options: engineOptions ?? options,
+    );
     users.add(user);
+    seeds[provisioningId] =
+        mnemonic?.plaintextMnemonic ?? 'generated $provisioningId';
     enginePassword = password;
     activate(user);
     if (failCreationAfterCommitOnce) {
       failCreationAfterCommitOnce = false;
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
-    return user;
+    return registeredAs?.call(user) ?? user;
+  }
+
+  @override
+  Future<Mnemonic> getMnemonicPlainText(String walletPassword) async {
+    RpcDispatchGuard.ensureCurrent('get_mnemonic');
+    if (walletPassword != enginePassword) {
+      throw AuthException(
+        'Incorrect password',
+        type: AuthExceptionType.incorrectPassword,
+      );
+    }
+    return Mnemonic.plaintext(seeds[active?.metadata['_wallet_entry_id']]!);
   }
 
   @override
@@ -559,7 +592,9 @@ class _NoPendingTransfers extends Fake
 }
 
 void main() {
+  _managedImportCases();
   _passkeyReuseCases();
+  _unattendedReturnCases();
   _rotationCases();
   _sessionCases();
   _reviewCases();

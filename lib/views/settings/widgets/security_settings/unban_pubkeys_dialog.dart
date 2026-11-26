@@ -16,6 +16,7 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return AlertDialog(
       title: Text(LocaleKeys.unbanPubkeysResults.tr()),
       content: SingleChildScrollView(
@@ -28,7 +29,7 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
               title: LocaleKeys.unbannedPubkeys.plural(result.unbanned.length),
               count: result.unbanned.length,
               items: result.unbanned.entries.toList(),
-              color: Colors.green,
+              color: palette.success,
             ),
             const SizedBox(height: 16),
             _buildResultSection(
@@ -36,7 +37,7 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
               title: LocaleKeys.stillBannedPubkeys.tr(),
               count: result.stillBanned.length,
               items: result.stillBanned.entries.toList(),
-              color: Colors.orange,
+              color: palette.warning,
             ),
             if (result.wereNotBanned.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -47,7 +48,7 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
                 items: result.wereNotBanned
                     .map((address) => MapEntry(address, null))
                     .toList(),
-                color: Colors.grey,
+                color: palette.textTertiary,
               ),
             ],
           ],
@@ -69,6 +70,7 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
     required List<MapEntry<String, BannedPubkeyInfo?>> items,
     required Color color,
   }) {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -115,24 +117,12 @@ class UnbanPubkeysResultDialog extends StatelessWidget {
                         Text(
                           '${LocaleKeys.pubkeyType.tr()}: ${info.type}',
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color
-                                    ?.withValues(alpha: 0.6),
-                              ),
+                              ?.copyWith(color: palette.textTertiary),
                         ),
                         Text(
                           '${LocaleKeys.reason.tr()}: ${info.reason}',
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color
-                                    ?.withValues(alpha: 0.6),
-                              ),
+                              ?.copyWith(color: palette.textTertiary),
                         ),
                       ],
                     ],

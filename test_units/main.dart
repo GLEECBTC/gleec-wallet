@@ -6,6 +6,43 @@ import 'services/wallet_access/passkey/passkey_credential_backend_test.dart'
     as passkey_credential_backend_test;
 import 'views/common/wallet_access/wallet_protection_native_passkey_test.dart'
     as wallet_protection_native_passkey_test;
+import 'services/wallet_access/passkey/security_key/linux_security_key_authenticator_test.dart'
+    as linux_security_key_authenticator_test;
+import 'services/wallet_access/passkey/security_key/security_key_bridge_test.dart'
+    as security_key_bridge_test;
+import 'views/common/wallet_access/security_key_prompt_host_test.dart'
+    as security_key_prompt_host_test;
+import 'services/wallet_transfer/wallet_transfer_config_test.dart'
+    as wallet_transfer_config_test;
+import 'views/wallet_transfer_strings_test.dart'
+    as wallet_transfer_strings_test;
+import 'views/wallet_move/read_wallet_transfer_secret_test.dart'
+    as read_wallet_transfer_secret_test;
+import 'views/wallet_move/wallet_move_receive_test.dart'
+    as wallet_move_receive_test;
+import 'views/wallet_move/wallet_move_send_test.dart' as wallet_move_send_test;
+import 'views/wallet_move/wallet_transfer_entry_points_test.dart'
+    as wallet_transfer_entry_points_test;
+import 'views/wallet_backup/passkey_backup_section_test.dart'
+    as passkey_backup_section_test;
+import 'views/wallet_backup/passkey_backup_setup_test.dart'
+    as passkey_backup_setup_test;
+import 'views/wallet_backup/passkey_backup_restore_test.dart'
+    as passkey_backup_restore_test;
+import 'services/wallet_transfer/wallet_transfer_secret_test.dart'
+    as wallet_transfer_secret_test;
+import 'services/wallet_move/wallet_move_protocol_test.dart'
+    as wallet_move_protocol_test;
+import 'services/wallet_move/wallet_move_vector_test.dart'
+    as wallet_move_vector_test;
+import 'services/wallet_access/passkey/passkey_registration_test.dart'
+    as passkey_registration_test;
+import 'services/wallet_backup/passkey_backup_record_test.dart'
+    as passkey_backup_record_test;
+import 'services/wallet_backup/passkey_backup_service_test.dart'
+    as passkey_backup_service_test;
+import 'services/wallet_backup/stores/backup_stores_test.dart'
+    as backup_stores_test;
 import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
 import 'services/wallet_access/swap_submission_lock_test.dart'
     as swap_submission_lock_test;
@@ -220,6 +257,7 @@ import 'tests/formatter/duration_format_tests.dart';
 import 'tests/formatter/format_amount_tests.dart';
 import 'tests/formatter/format_amount_test_alt_tests.dart';
 import 'tests/formatter/format_dex_amt_tests.dart';
+import 'tests/formatter/fiat_format_tests.dart';
 import 'tests/formatter/formatted_date_tests.dart';
 import 'tests/formatter/leading_zeros_tests.dart';
 import 'tests/formatter/number_without_exponent_tests.dart';
@@ -397,6 +435,7 @@ import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
 import 'tests/swap/swap_bloc_intent_test.dart' as swap_bloc_intent_test;
+import 'tests/swap/swap_bloc_max_silent_test.dart' as swap_bloc_max_silent_test;
 import 'tests/swap/swap_bloc_offers_test.dart' as swap_bloc_offers_test;
 import 'tests/swap/swap_bloc_opening_test.dart' as swap_bloc_opening_test;
 import 'tests/swap/swap_bloc_review_test.dart' as swap_bloc_review_test;
@@ -431,6 +470,8 @@ import 'tests/swap/swap_entry_ui_failures_test.dart'
 import 'tests/swap/swap_entry_ui_fee_shortfall_test.dart'
     as swap_entry_ui_fee_shortfall_test;
 import 'tests/swap/swap_entry_ui_form_test.dart' as swap_entry_ui_form_test;
+import 'tests/swap/swap_entry_ui_max_announce_test.dart'
+    as swap_entry_ui_max_announce_test;
 import 'tests/swap/swap_entry_ui_messages_test.dart'
     as swap_entry_ui_messages_test;
 import 'tests/swap/swap_entry_ui_offers_test.dart' as swap_entry_ui_offers_test;
@@ -597,6 +638,16 @@ import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
 import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
+import 'tests/wallet/wallet_home/wallet_home_assets_test.dart'
+    as wallet_home_assets_test;
+import 'tests/wallet/wallet_home/wallet_home_hero_test.dart'
+    as wallet_home_hero_test;
+import 'tests/wallet/wallet_home/wallet_home_logic_test.dart'
+    as wallet_home_logic_test;
+import 'tests/wallet/wallet_home/wallet_home_wide_test.dart'
+    as wallet_home_wide_test;
+import 'tests/design_system/app_palette_theme_test.dart'
+    as app_palette_theme_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -639,6 +690,34 @@ void main() {
     'wallet_protection_native_passkey_test',
     wallet_protection_native_passkey_test.main,
   );
+  group(
+    'linux_security_key_authenticator_test',
+    linux_security_key_authenticator_test.main,
+  );
+  group('security_key_bridge_test', security_key_bridge_test.main);
+  group('security_key_prompt_host_test', security_key_prompt_host_test.main);
+  group('wallet_transfer_config_test', wallet_transfer_config_test.main);
+  group('wallet_transfer_strings_test', wallet_transfer_strings_test.main);
+  group(
+    'read_wallet_transfer_secret_test',
+    read_wallet_transfer_secret_test.main,
+  );
+  group('wallet_move_receive_test', wallet_move_receive_test.main);
+  group('wallet_move_send_test', wallet_move_send_test.main);
+  group(
+    'wallet_transfer_entry_points_test',
+    wallet_transfer_entry_points_test.main,
+  );
+  group('passkey_backup_section_test', passkey_backup_section_test.main);
+  group('passkey_backup_setup_test', passkey_backup_setup_test.main);
+  group('passkey_backup_restore_test', passkey_backup_restore_test.main);
+  group('wallet_transfer_secret_test', wallet_transfer_secret_test.main);
+  group('wallet_move_protocol_test', wallet_move_protocol_test.main);
+  group('wallet_move_vector_test', wallet_move_vector_test.main);
+  group('passkey_registration_test', passkey_registration_test.main);
+  group('passkey_backup_record_test', passkey_backup_record_test.main);
+  group('passkey_backup_service_test', passkey_backup_service_test.main);
+  group('backup_stores_test', backup_stores_test.main);
   group('wallet_lock_screen_test', wallet_lock_screen_test.main);
   group('wallet_authorization_form_test', wallet_authorization_form_test.main);
   auth_setup_flow_test.main();
@@ -717,6 +796,7 @@ void main() {
     testToStringAmount();
     testLeadingZeros();
     testFormatDexAmount();
+    testFiatFormat();
     testDecimalTextInputFormatter();
     testDurationFormat();
     testNumberWithoutExponent();
@@ -808,6 +888,11 @@ void main() {
   testAuthBloc();
   testWalletOperationIdentity();
   wallet_data_loader_test.main();
+  wallet_home_assets_test.main();
+  wallet_home_hero_test.main();
+  wallet_home_logic_test.main();
+  group('wallet_home_wide_test', wallet_home_wide_test.main);
+  group('app_palette_theme_test', app_palette_theme_test.main);
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();
@@ -982,6 +1067,7 @@ void main() {
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();
   swap_bloc_intent_test.main();
+  swap_bloc_max_silent_test.main();
   swap_bloc_offers_test.main();
   swap_bloc_opening_test.main();
   swap_bloc_review_test.main();
@@ -1006,6 +1092,7 @@ void main() {
   swap_entry_ui_failures_test.main();
   swap_entry_ui_fee_shortfall_test.main();
   swap_entry_ui_form_test.main();
+  swap_entry_ui_max_announce_test.main();
   swap_entry_ui_messages_test.main();
   swap_entry_ui_offers_test.main();
   swap_entry_ui_options_test.main();

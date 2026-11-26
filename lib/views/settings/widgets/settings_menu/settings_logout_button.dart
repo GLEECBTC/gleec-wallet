@@ -1,6 +1,6 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
@@ -26,6 +26,7 @@ class _SettingsLogoutButtonState extends State<SettingsLogoutButton> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return InkWell(
       key: const Key('settings-logout-button'),
       onTap: () {
@@ -45,11 +46,11 @@ class _SettingsLogoutButtonState extends State<SettingsLogoutButton> {
               style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: theme.custom.warningColor,
+                color: palette.danger,
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.exit_to_app, color: theme.custom.warningColor, size: 18),
+            Icon(Icons.exit_to_app, color: palette.danger, size: 18),
           ],
         ),
       ),

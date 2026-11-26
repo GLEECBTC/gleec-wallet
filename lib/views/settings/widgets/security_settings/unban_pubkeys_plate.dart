@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
-import 'package:app_theme/app_theme.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
@@ -31,6 +30,7 @@ class UnbanPubkeysPlate extends StatefulWidget {
 class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return BlocListener<SecuritySettingsBloc, SecuritySettingsState>(
       listener: _handleStateChanges,
       child: BlocBuilder<SecuritySettingsBloc, SecuritySettingsState>(
@@ -47,9 +47,8 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
               text: state.isUnbanningPubkeys
                   ? '${LocaleKeys.unbanPubkeys.tr()}...'
                   : LocaleKeys.unbanPubkeys.tr(),
-              textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: theme.custom.defaultGradientButtonTextColor,
-              ),
+              textStyle: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: palette.onBrand),
             ),
           );
         },
@@ -105,6 +104,7 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
   /// Shows appropriate snackbar based on unban results.
   void _showSnackbar(BuildContext context, UnbanPubkeysResult result) {
     if (!mounted) return;
+    final palette = AppPalette.of(context);
 
     if (result.unbanned.isNotEmpty) {
       // Show success snackbar if any pubkeys were unbanned
@@ -116,9 +116,11 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
               LocaleKeys.unbannedPubkeys.plural(result.unbanned.length),
               softWrap: true,
               overflow: TextOverflow.visible,
+              style: TextStyle(color: palette.success),
             ),
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: palette.successBg,
+          closeIconColor: palette.success,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -132,9 +134,11 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
               LocaleKeys.noBannedPubkeys.tr(),
               softWrap: true,
               overflow: TextOverflow.visible,
+              style: TextStyle(color: palette.info),
             ),
           ),
-          backgroundColor: Colors.blue,
+          backgroundColor: palette.infoBg,
+          closeIconColor: palette.info,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -144,6 +148,7 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
   /// Shows error snackbar when unban operation fails.
   void _showErrorSnackbar(BuildContext context, String error) {
     if (!mounted) return;
+    final palette = AppPalette.of(context);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -153,9 +158,11 @@ class _UnbanPubkeysPlateState extends State<UnbanPubkeysPlate> {
             LocaleKeys.unbanPubkeysFailed.tr(),
             softWrap: true,
             overflow: TextOverflow.visible,
+            style: TextStyle(color: palette.danger),
           ),
         ),
-        backgroundColor: Colors.red,
+        backgroundColor: palette.dangerBg,
+        closeIconColor: palette.danger,
         duration: const Duration(seconds: 5),
       ),
     );

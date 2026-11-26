@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
@@ -43,6 +44,7 @@ void main() {
     SwapQuote quote, {
     SwapReviewStatus status = SwapReviewStatus.ready,
     SwapQuote? previous,
+    SwapStartRejection? rejectionReason,
   }) async {
     swap.emit(
       swapPricedForm(ranked: [quote]).copyWith(
@@ -52,6 +54,7 @@ void main() {
           quote: quote,
           status: status,
           previous: previous,
+          rejectionReason: rejectionReason,
         ),
       ),
     );
@@ -277,6 +280,22 @@ void main() {
         expect(find.byType(SwapBadge), findsNothing);
       });
     }
+
+    testWidgets('a source signing rejection explains how to recover', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        quoteOf(from: btc),
+        status: SwapReviewStatus.rejected,
+        rejectionReason: SwapStartRejection.signingPolicyUnsupported,
+      );
+      expect(
+        find.text(LocaleKeys.swapReviewSigningPolicyBody.tr()),
+        findsOneWidget,
+      );
+      expect(find.text(LocaleKeys.swapReviewRejectedBody.tr()), findsNothing);
+    });
 
     testWidgets('a check in progress says starting waits for it, aloud', (
       tester,

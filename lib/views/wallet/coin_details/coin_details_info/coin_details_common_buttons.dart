@@ -19,6 +19,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
@@ -29,6 +30,7 @@ import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/bitrefill/bitrefill_button.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/contract_address_button.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_quick_action_scope.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_dialog.dart';
 
@@ -606,6 +608,13 @@ class CoinDetailsReceiveButton extends StatelessWidget {
         .state
         .addresses
         .isNotEmpty;
+    if (hasAddresses && !coin.isSuspended) {
+      CoinQuickActionScope.startIfPending(
+        context,
+        CoinQuickAction.receive,
+        () => _handleReceive(context),
+      );
+    }
     final ThemeData themeData = Theme.of(context);
     return UiPrimaryButton(
       key: const Key('coin-details-receive-button'),
@@ -714,6 +723,13 @@ class _CoinDetailsSendButtonState extends State<CoinDetailsSendButton> {
             : snapshot.data?.total ?? Decimal.zero;
         final canSend =
             coin.isActive && (balance > Decimal.zero || hasGasfreeAddress);
+        if (canSend) {
+          CoinQuickActionScope.startIfPending(
+            context,
+            CoinQuickAction.send,
+            () => selectWidget(CoinPageType.send),
+          );
+        }
 
         return UiPrimaryButton(
           key: const Key('coin-details-send-button'),

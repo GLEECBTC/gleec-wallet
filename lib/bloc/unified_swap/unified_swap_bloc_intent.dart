@@ -316,34 +316,24 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       ),
     );
 
-    Map<SwapLiquiditySource, SwapMaxAmount> maxes;
+    final Map<SwapLiquiditySource, SwapMaxAmount> maxes;
     try {
-      maxes = await _repository
-          .maxAmounts(
-            from: pay,
-            to: receive,
-            balance: balance,
-            preferred: preferred,
-            order: selected?.order ?? SwapQuoteOrder.cheapest,
-            slippage: state.slippage,
-          )
-          .timeout(_evaluationTimeout * 3);
+      // Bounded at three pricing timeouts, keeping whatever answered by then:
+      // a source that never answers must not cost the others' Max.
+      maxes = await _repository.maxAmounts(
+        from: pay,
+        to: receive,
+        balance: balance,
+        preferred: preferred,
+        order: selected?.order ?? SwapQuoteOrder.cheapest,
+        slippage: state.slippage,
+        timeout: _evaluationTimeout,
+      );
     } on SwapMaxUnavailableException catch (error) {
       if (version != _maxVersion || !state.checkingMax) return;
       emit(state.copyWith(checkingMax: false));
-      _failEvaluation(emit, error.failure, quiet: false);
-      return;
-    } on TimeoutException {
-      if (version != _maxVersion || !state.checkingMax) return;
-      emit(state.copyWith(checkingMax: false));
-      _failEvaluation(
-        emit,
-        SwapQuoteFailure(
-          source: preferred ?? SwapLiquiditySource.routed,
-          kind: SwapQuoteFailureKind.timeout,
-        ),
-        quiet: false,
-      );
+      // Every source's reason, so one that could not look is still named.
+      _failEvaluation(emit, error.failure, quiet: false, all: error.failures);
       return;
     }
     // Typing, another pair or wallet, or a later Max has taken over.
