@@ -34,6 +34,7 @@ import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_transfer/wallet_transfer_secret.dart';
 
 part 'auth_bloc_managed_cases.dart';
 part 'auth_bloc_session_cases.dart';

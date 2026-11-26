@@ -2296,4 +2296,212 @@ abstract class LocaleKeys {
   static const walletHomeNoAssets = 'walletHomeNoAssets';
   static const walletHomeAssetDetails = 'walletHomeAssetDetails';
   static const walletHomeHiddenAssets = 'walletHomeHiddenAssets';
+  static const walletMoveImportOption = 'walletMoveImportOption';
+  static const walletMoveImportOptionHint = 'walletMoveImportOptionHint';
+  static const walletMoveReceiveTitle = 'walletMoveReceiveTitle';
+  static const walletMoveReceiveStepOld = 'walletMoveReceiveStepOld';
+  static const walletMoveReceiveCodeLabel = 'walletMoveReceiveCodeLabel';
+  static const walletMoveReceiveExpiry = 'walletMoveReceiveExpiry';
+  static const walletMoveReceiveStepScan = 'walletMoveReceiveStepScan';
+  static const walletMoveReceiveRenewed = 'walletMoveReceiveRenewed';
+  static const walletMoveReceiveScan = 'walletMoveReceiveScan';
+  static const walletMoveFailureNotMoveCodeNew =
+      'walletMoveFailureNotMoveCodeNew';
+  static const walletMoveFailureNotMoveCodeOld =
+      'walletMoveFailureNotMoveCodeOld';
+  static const walletMoveFailureWrongStepNew = 'walletMoveFailureWrongStepNew';
+  static const walletMoveFailureWrongStepOld = 'walletMoveFailureWrongStepOld';
+  static const walletMoveFailureVersion = 'walletMoveFailureVersion';
+  static const walletMoveFailureExpired = 'walletMoveFailureExpired';
+  static const walletMoveFailureDamaged = 'walletMoveFailureDamaged';
+  static const walletMoveFailureNotForThisPhone =
+      'walletMoveFailureNotForThisPhone';
+  static const walletMoveFailureStaleOffer = 'walletMoveFailureStaleOffer';
+  static const walletMoveSettingsTitle = 'walletMoveSettingsTitle';
+  static const walletMoveSettingsDescription = 'walletMoveSettingsDescription';
+  static const walletMoveSettingsAction = 'walletMoveSettingsAction';
+  static const walletMoveSendTitle = 'walletMoveSendTitle';
+  static const walletMoveSendIntro = 'walletMoveSendIntro';
+  static const walletMoveSendStepNew = 'walletMoveSendStepNew';
+  static const walletMoveSendStepConfirm = 'walletMoveSendStepConfirm';
+  static const walletMoveSendStepReply = 'walletMoveSendStepReply';
+  static const walletMoveSendWarning = 'walletMoveSendWarning';
+  static const walletMoveSendStays = 'walletMoveSendStays';
+  static const walletMoveSendScan = 'walletMoveSendScan';
+  static const walletMoveSendReplyTitle = 'walletMoveSendReplyTitle';
+  static const walletMoveSendReplyHint = 'walletMoveSendReplyHint';
+  static const walletMoveSendReplyCodeLabel = 'walletMoveSendReplyCodeLabel';
+  static const walletMoveSendReplyCountdown = 'walletMoveSendReplyCountdown';
+  static const walletMoveSendReplyHidden = 'walletMoveSendReplyHidden';
+  static const walletMoveSendInterrupted = 'walletMoveSendInterrupted';
+  static const walletMoveSendUnsupported = 'walletMoveSendUnsupported';
+  static const walletMoveSendReadFailed = 'walletMoveSendReadFailed';
+  static const walletTransferReviewTitle = 'walletTransferReviewTitle';
+  static const walletTransferReviewName = 'walletTransferReviewName';
+  static const walletTransferReviewType = 'walletTransferReviewType';
+  static const walletTransferReviewNewName = 'walletTransferReviewNewName';
+  static const walletTransferPhraseNotConfirmed =
+      'walletTransferPhraseNotConfirmed';
+  static const walletTransferKeepPhrase = 'walletTransferKeepPhrase';
+  static const walletTransferOpening = 'walletTransferOpening';
+  static const passkeyBackupTitle = 'passkeyBackupTitle';
+  static const passkeyBackupDescription = 'passkeyBackupDescription';
+  static const passkeyBackupStatusOff = 'passkeyBackupStatusOff';
+  static const passkeyBackupSetUp = 'passkeyBackupSetUp';
+  static const passkeyBackupAddAnother = 'passkeyBackupAddAnother';
+  static const passkeyBackupStoreICloud = 'passkeyBackupStoreICloud';
+  static const passkeyBackupStoreDrive = 'passkeyBackupStoreDrive';
+  static const passkeyBackupStoreFile = 'passkeyBackupStoreFile';
+  static const passkeyBackupEntryProvider = 'passkeyBackupEntryProvider';
+  static const passkeyBackupEntryProviderUnknown =
+      'passkeyBackupEntryProviderUnknown';
+  static const passkeyBackupEntryCreated = 'passkeyBackupEntryCreated';
+  static const passkeyBackupEntrySynced = 'passkeyBackupEntrySynced';
+  static const passkeyBackupEntryNotSynced = 'passkeyBackupEntryNotSynced';
+  static const passkeyBackupEntryChecked = 'passkeyBackupEntryChecked';
+  static const passkeyBackupEntryNotChecked = 'passkeyBackupEntryNotChecked';
+  static const passkeyBackupCheckHint = 'passkeyBackupCheckHint';
+  static const passkeyBackupCheck = 'passkeyBackupCheck';
+  static const passkeyBackupSaveFile = 'passkeyBackupSaveFile';
+  static const passkeyBackupRemove = 'passkeyBackupRemove';
+  static const passkeyBackupCheckOk = 'passkeyBackupCheckOk';
+  static const passkeyBackupRemoveTitle = 'passkeyBackupRemoveTitle';
+  static const passkeyBackupRemoveBody = 'passkeyBackupRemoveBody';
+  static const passkeyBackupRemoveConfirm = 'passkeyBackupRemoveConfirm';
+  static const passkeyBackupRemoved = 'passkeyBackupRemoved';
+  static const passkeyBackupLoadFailed = 'passkeyBackupLoadFailed';
+  static const passkeyBackupFileSaved = 'passkeyBackupFileSaved';
+  static const passkeyBackupFileCanceled = 'passkeyBackupFileCanceled';
+  static const passkeyBackupFileUnconfirmed = 'passkeyBackupFileUnconfirmed';
+  static const passkeyBackupFileFailed = 'passkeyBackupFileFailed';
+  static const passkeyBackupSetupTitle = 'passkeyBackupSetupTitle';
+  static const passkeyBackupSetupExplainTitle =
+      'passkeyBackupSetupExplainTitle';
+  static const passkeyBackupSetupWhat = 'passkeyBackupSetupWhat';
+  static const passkeyBackupSetupWhereTitle = 'passkeyBackupSetupWhereTitle';
+  static const passkeyBackupSetupWhere = 'passkeyBackupSetupWhere';
+  static const passkeyBackupSetupWhoTitle = 'passkeyBackupSetupWhoTitle';
+  static const passkeyBackupSetupWhoYou = 'passkeyBackupSetupWhoYou';
+  static const passkeyBackupSetupWhoShared = 'passkeyBackupSetupWhoShared';
+  static const passkeyBackupSetupWhoAccount = 'passkeyBackupSetupWhoAccount';
+  static const passkeyBackupSetupStolenDevice =
+      'passkeyBackupSetupStolenDevice';
+  static const passkeyBackupSetupKeepPhrase = 'passkeyBackupSetupKeepPhrase';
+  static const passkeyBackupStoreTitle = 'passkeyBackupStoreTitle';
+  static const passkeyBackupStoreICloudHint = 'passkeyBackupStoreICloudHint';
+  static const passkeyBackupStoreDriveHint = 'passkeyBackupStoreDriveHint';
+  static const passkeyBackupStoreFileHint = 'passkeyBackupStoreFileHint';
+  static const passkeyBackupPromptsTitle = 'passkeyBackupPromptsTitle';
+  static const passkeyBackupPromptAuthorize = 'passkeyBackupPromptAuthorize';
+  static const passkeyBackupPromptCreate = 'passkeyBackupPromptCreate';
+  static const passkeyBackupPromptConfirm = 'passkeyBackupPromptConfirm';
+  static const passkeyBackupPromptDrive = 'passkeyBackupPromptDrive';
+  static const passkeyBackupWorkingTitle = 'passkeyBackupWorkingTitle';
+  static const passkeyBackupWorking = 'passkeyBackupWorking';
+  static const passkeyBackupDoneTitle = 'passkeyBackupDoneTitle';
+  static const passkeyBackupDoneICloud = 'passkeyBackupDoneICloud';
+  static const passkeyBackupDoneDrive = 'passkeyBackupDoneDrive';
+  static const passkeyBackupDoneFile = 'passkeyBackupDoneFile';
+  static const passkeyBackupDoneProvider = 'passkeyBackupDoneProvider';
+  static const passkeyBackupDoneNotSynced = 'passkeyBackupDoneNotSynced';
+  static const passkeyBackupDoneNextTitle = 'passkeyBackupDoneNextTitle';
+  static const passkeyBackupDoneNext = 'passkeyBackupDoneNext';
+  static const passkeyBackupSaveFileAction = 'passkeyBackupSaveFileAction';
+  static const passkeyBackupSaveFileLater = 'passkeyBackupSaveFileLater';
+  static const passkeyBackupUnsupportedWallet =
+      'passkeyBackupUnsupportedWallet';
+  static const passkeyBackupReadFailed = 'passkeyBackupReadFailed';
+  static const passkeyBackupFailureNotConfigured =
+      'passkeyBackupFailureNotConfigured';
+  static const passkeyBackupFailureUnavailable =
+      'passkeyBackupFailureUnavailable';
+  static const passkeyBackupFailureCanceled = 'passkeyBackupFailureCanceled';
+  static const passkeyBackupFailurePrfUnavailable =
+      'passkeyBackupFailurePrfUnavailable';
+  static const passkeyBackupFailureLocalOnly = 'passkeyBackupFailureLocalOnly';
+  static const passkeyBackupFailureCreatedElsewhere =
+      'passkeyBackupFailureCreatedElsewhere';
+  static const passkeyBackupFailureNotReproducible =
+      'passkeyBackupFailureNotReproducible';
+  static const passkeyBackupFailureStoreUnavailable =
+      'passkeyBackupFailureStoreUnavailable';
+  static const passkeyBackupFailureStoreUnavailableAny =
+      'passkeyBackupFailureStoreUnavailableAny';
+  static const passkeyBackupFailureStorageFailed =
+      'passkeyBackupFailureStorageFailed';
+  static const passkeyBackupFailureNoBackupFound =
+      'passkeyBackupFailureNoBackupFound';
+  static const passkeyBackupFailureWrongPasskey =
+      'passkeyBackupFailureWrongPasskey';
+  static const passkeyBackupFailureDamaged = 'passkeyBackupFailureDamaged';
+  static const passkeyBackupFailureOtherRelyingParty =
+      'passkeyBackupFailureOtherRelyingParty';
+  static const passkeyBackupFailureNewerVersion =
+      'passkeyBackupFailureNewerVersion';
+  static const passkeyBackupFailureInterrupted =
+      'passkeyBackupFailureInterrupted';
+  static const passkeyBackupFailureGeneric = 'passkeyBackupFailureGeneric';
+  static const passkeyBackupRestoreOption = 'passkeyBackupRestoreOption';
+  static const passkeyBackupRestoreOptionHint =
+      'passkeyBackupRestoreOptionHint';
+  static const passkeyBackupRestoreTitle = 'passkeyBackupRestoreTitle';
+  static const passkeyBackupRestoreIntro = 'passkeyBackupRestoreIntro';
+  static const passkeyBackupRestoreFromICloud =
+      'passkeyBackupRestoreFromICloud';
+  static const passkeyBackupRestoreFromICloudHint =
+      'passkeyBackupRestoreFromICloudHint';
+  static const passkeyBackupRestoreFromDrive = 'passkeyBackupRestoreFromDrive';
+  static const passkeyBackupRestoreFromDriveHint =
+      'passkeyBackupRestoreFromDriveHint';
+  static const passkeyBackupRestoreFromFile = 'passkeyBackupRestoreFromFile';
+  static const passkeyBackupRestoreFromFileHint =
+      'passkeyBackupRestoreFromFileHint';
+  static const passkeyBackupRestoreSearching = 'passkeyBackupRestoreSearching';
+  static const passkeyBackupRestoreFoundTitle =
+      'passkeyBackupRestoreFoundTitle';
+  static const passkeyBackupRestoreFoundHint = 'passkeyBackupRestoreFoundHint';
+  static const passkeyBackupRestoreItem = 'passkeyBackupRestoreItem';
+  static const passkeyBackupRestoreNoneFound = 'passkeyBackupRestoreNoneFound';
+  static const passkeyBackupRestoreOtherPlace =
+      'passkeyBackupRestoreOtherPlace';
+  static const passkeyBackupRestoreUnlockingTitle =
+      'passkeyBackupRestoreUnlockingTitle';
+  static const passkeyBackupRestoreUnlocking = 'passkeyBackupRestoreUnlocking';
+  static const passkeyBackupRestoreFileRejected =
+      'passkeyBackupRestoreFileRejected';
+  static const walletMoveCheckCodeLabel = 'walletMoveCheckCodeLabel';
+  static const walletMoveCheckCodeSpoken = 'walletMoveCheckCodeSpoken';
+  static const walletMoveReviewCheckHint = 'walletMoveReviewCheckHint';
+  static const walletMoveReviewCodesMatch = 'walletMoveReviewCodesMatch';
+  static const walletMoveReviewCodesDiffer = 'walletMoveReviewCodesDiffer';
+  static const walletMoveReceiveDiscarded = 'walletMoveReceiveDiscarded';
+  static const passkeyBackupEntryFileNotSaved =
+      'passkeyBackupEntryFileNotSaved';
+  static const passkeyBackupEntryUnfinished = 'passkeyBackupEntryUnfinished';
+  static const passkeyBackupSaveFileNow = 'passkeyBackupSaveFileNow';
+  static const walletMoveScannerTitle = 'walletMoveScannerTitle';
+  static const walletMoveScannerOldPhone = 'walletMoveScannerOldPhone';
+  static const walletMoveScannerNewPhone = 'walletMoveScannerNewPhone';
+  static const walletMoveCameraDenied = 'walletMoveCameraDenied';
+  static const walletMoveCameraUnavailable = 'walletMoveCameraUnavailable';
+  static const walletMoveOpenSettings = 'walletMoveOpenSettings';
+  static const walletMoveCheckCodeWorking = 'walletMoveCheckCodeWorking';
+  static const walletMoveCheckCodeFailed = 'walletMoveCheckCodeFailed';
+  static const walletMoveSendClearedTitle = 'walletMoveSendClearedTitle';
+  static const walletMoveSendCleared = 'walletMoveSendCleared';
+  static const walletMoveSendClearedWithCode = 'walletMoveSendClearedWithCode';
+  static const walletMoveSendShowAgain = 'walletMoveSendShowAgain';
+  static const walletMoveSendTooLarge = 'walletMoveSendTooLarge';
+  static const walletMoveReceiveCleared = 'walletMoveReceiveCleared';
+  static const walletTransferScreenLockNote = 'walletTransferScreenLockNote';
+  static const passkeyBackupPromptSavedICloud =
+      'passkeyBackupPromptSavedICloud';
+  static const passkeyBackupPromptSavedDrive = 'passkeyBackupPromptSavedDrive';
+  static const passkeyBackupPromptSaveFile = 'passkeyBackupPromptSaveFile';
+  static const passkeyBackupRestorePrfUnavailable =
+      'passkeyBackupRestorePrfUnavailable';
+  static const passkeyBackupCheckNamed = 'passkeyBackupCheckNamed';
+  static const passkeyBackupSaveFileNamed = 'passkeyBackupSaveFileNamed';
+  static const passkeyBackupRemoveNamed = 'passkeyBackupRemoveNamed';
+  static const passkeyBackupRemoveFileNote = 'passkeyBackupRemoveFileNote';
 }

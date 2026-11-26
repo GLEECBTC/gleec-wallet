@@ -54,6 +54,30 @@ class AuthQuickCreateRequested extends AuthBlocEvent {
   final bool useDeviceProtection;
 }
 
+/// Where a wallet opened by [AuthManagedImportRequested] came from.
+enum ManagedImportSource { movedFromDevice, passkeyBackup }
+
+/// Opens a wallet moved from another device or restored from a passkey
+/// backup. Like quick create, this device keeps a generated password, so
+/// nothing is typed. The wallet's own name is used; a name already taken
+/// here fails with `walletAlreadyExists` instead of being changed silently.
+class AuthManagedImportRequested extends AuthBlocEvent {
+  const AuthManagedImportRequested({
+    required this.secret,
+    required this.walletName,
+    required this.source,
+    this.useDeviceProtection = true,
+  });
+
+  final WalletTransferSecret secret;
+
+  /// The name to save it under: the secret's own, or one the user chose
+  /// because that one is taken here.
+  final String walletName;
+  final ManagedImportSource source;
+  final bool useDeviceProtection;
+}
+
 class AuthManagedSignInRequested extends AuthBlocEvent {
   const AuthManagedSignInRequested({
     required this.wallet,

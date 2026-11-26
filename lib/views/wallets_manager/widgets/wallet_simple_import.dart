@@ -25,6 +25,7 @@ import 'package:web_dex/views/wallets_manager/widgets/custom_seed_checkbox.dart'
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_type_dropdown.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
+import 'package:web_dex/views/wallet_move/wallet_transfer_import_options.dart';
 
 part 'wallet_simple_import_phrase.dart';
 
@@ -34,6 +35,8 @@ class WalletSimpleImport extends StatefulWidget {
     required this.onUploadFiles,
     required this.onCancel,
     this.fileLoader,
+    this.onMoveFromDevice,
+    this.onRestoreFromPasskey,
     super.key,
   });
 
@@ -51,6 +54,10 @@ class WalletSimpleImport extends StatefulWidget {
 
   /// Picks the encrypted wallet file. Defaults to the platform's picker.
   final FileLoader? fileLoader;
+
+  /// The no-typing ways in; each row shows only where it can work.
+  final VoidCallback? onMoveFromDevice;
+  final VoidCallback? onRestoreFromPasskey;
 
   @override
   State<WalletSimpleImport> createState() => _WalletImportWrapperState();
@@ -164,6 +171,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport>
                       _WalletFilePicker(
                         fileLoader: widget.fileLoader,
                         onUploadFiles: widget.onUploadFiles,
+                      ),
+                      WalletTransferImportOptions(
+                        onMoveFromDevice: widget.onMoveFromDevice,
+                        onRestoreFromPasskey: widget.onRestoreFromPasskey,
                       ),
                     ],
                     const SizedBox(height: 20),

@@ -22,6 +22,7 @@ import 'wallet_lock_policy.dart';
 export 'wallet_access_types.dart';
 
 part 'wallet_access_deletion.dart';
+part 'wallet_access_import.dart';
 part 'wallet_access_records.dart';
 part 'wallet_access_sign_in_status.dart';
 part 'wallet_engine_session.dart';
@@ -321,6 +322,28 @@ class WalletAccessService {
         lostProtection: record.protection,
       );
 
+  /// Opens a wallet moved from another device or restored from a backup,
+  /// under a password this device generates and keeps, as [createWallet]
+  /// does. An interrupted import resumes only for the same name and type,
+  /// and the engine's seed must equal [mnemonic] before it counts. A name
+  /// already taken fails with `walletAlreadyExists`; it is never changed.
+  Future<KdfUser> importWallet({
+    required String walletName,
+    required WalletType walletType,
+    required String mnemonic,
+    required Map<String, dynamic> initialMetadata,
+    bool useDeviceProtection = true,
+  }) => _runAccessOperation(
+    (revision) => _importWallet(
+      walletName: walletName,
+      walletType: walletType,
+      mnemonic: mnemonic,
+      initialMetadata: initialMetadata,
+      useDeviceProtection: useDeviceProtection,
+      revision: revision,
+    ),
+  );
+
   /// One pending operation survives process death. No seed is generated here:
   /// the SDK reserves the ID and safely resumes its persisted engine wallet.
   Future<KdfUser> createWallet({
@@ -355,66 +378,13 @@ class WalletAccessService {
       final users = await _sdk.auth.getUsers();
       final name = _nextWalletName(users);
       final id = const Uuid().v4();
-      final capability = await _backend.capabilities();
-      if (!capability.available) {
-        throw const WalletAccessException(WalletAccessFailure.unavailable);
-      }
-      password = SecurityUtils.generatePasswordSecure(32);
-      var protected =
-          deviceEnrollmentEnabled &&
-          useDeviceProtection &&
-          capability.deviceAuthentication;
-      final key = 'gleec.wallet.$id';
-      _ensureRevision(revision);
-      try {
-        await unlockCoordinator.runSystemPrompt(
-          () => _backend.write(key, password, requireAuthentication: protected),
-        );
-        if (await unlockCoordinator.runSystemPrompt(
-              () => _backend.read(
-                key,
-                reason: 'Confirm wallet protection',
-                purpose: 'verifyWrite',
-                requireAuthentication: protected,
-              ),
-            ) !=
-            password) {
-          throw const WalletAccessException(WalletAccessFailure.storageFailed);
-        }
-      } on WalletAccessException catch (error) {
-        final declinedProtection =
-            protected &&
-            error.failure == WalletAccessFailure.canceled &&
-            _isRevisionCurrent(revision);
-        if (!declinedProtection) {
-          // The write may have landed before its confirmation failed. No
-          // record or engine wallet refers to this new key yet, so nothing
-          // else would ever remove it.
-          try {
-            await unlockCoordinator.runSystemPrompt(() => _backend.delete(key));
-          } on Object {
-            // The failure being reported is the one that matters.
-          }
-          _ensureRevision(revision);
-          rethrow;
-        }
-        // This is an explicitly new wallet with no previous protection.
-        // Cancellation never downgrades a persisted/protected wallet.
-        // Nothing has been registered with KDF yet. Remove only this new
-        // scratch item before honoring the choice to set protection later.
-        await _backend.delete(key);
-        if (await _backend.metadata(key) != null) rethrow;
-        protected = false;
-        await _backend.write(key, password, requireAuthentication: false);
-        if (await _backend.read(key, reason: 'Confirm wallet storage') !=
-            password) {
-          throw const WalletAccessException(WalletAccessFailure.storageFailed);
-        }
-      }
-      final info = await _backend.metadata(key);
-      if (info == null) {
-        throw const WalletAccessException(WalletAccessFailure.storageFailed);
-      }
+      final provisioned = await _provisionCredential(
+        id,
+        useDeviceProtection: useDeviceProtection,
+        revision: revision,
+      );
+      password = provisioned.password;
+      final info = provisioned.info;
       record = WalletAccessRecord(
         entryId: id,
         walletName: name,
