@@ -35,7 +35,7 @@ void main() {
         activated: {eth, usdc, btc},
       );
       // Every active asset on a served network, while KDF works.
-      expect(assets.quotable, {eth, usdc});
+      expect(assets.quotable, {eth, usdc, btc});
       expect(kdf.calls, 1);
 
       kdf.gate.complete();

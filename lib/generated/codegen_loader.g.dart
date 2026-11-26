@@ -1613,6 +1613,7 @@ abstract class LocaleKeys {
   static const swapReviewChangedBody = 'swapReviewChangedBody';
   static const swapReviewRejectedTitle = 'swapReviewRejectedTitle';
   static const swapReviewRejectedBody = 'swapReviewRejectedBody';
+  static const swapReviewSigningPolicyBody = 'swapReviewSigningPolicyBody';
   static const swapReviewUnconfirmedTitle = 'swapReviewUnconfirmedTitle';
   static const swapReviewUnconfirmedBody = 'swapReviewUnconfirmedBody';
   static const swapReviewHighImpactTitle = 'swapReviewHighImpactTitle';
