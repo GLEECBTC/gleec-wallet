@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui/komodo_ui.dart';
@@ -151,7 +150,7 @@ class _ContractAddressCopyButton extends StatelessWidget {
       child: Icon(
         Icons.copy,
         size: isMobile ? 14 : 10,
-        color: theme.currentGlobal.textTheme.bodyLarge?.color,
+        color: Theme.of(context).textTheme.bodyLarge?.color,
       ),
     );
   }

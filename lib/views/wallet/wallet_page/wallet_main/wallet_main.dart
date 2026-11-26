@@ -44,14 +44,12 @@ import 'package:web_dex/views/dex/dex_helpers.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/wallet_page/charts/coin_prices_chart.dart';
-import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_swap_status.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/assets_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_handler.dart'
     show ZhtlcConfigurationHandler;
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/active_coins_list.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_manage_section.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_view.dart';
-import 'package:web_dex/views/wallet/wallet_page/wallet_main/wallet_overview.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
@@ -185,24 +183,29 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
             isLoggedIn &&
             walletType == WalletType.hdwallet;
 
-        if (isMobile && isLoggedIn) {
+        // Signed in, every screen size gets the wallet home; what follows it
+        // is the signed-out view of the market.
+        if (isLoggedIn) {
           final wallet = authState.currentUser!.wallet;
-          return ZhtlcConfigurationHandler(
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerSignal: _onPointerSignal,
-              child: WalletHomeView(
-                scrollController: _scrollController,
-                arrrActivationService:
-                    RepositoryProvider.of<ArrrActivationService>(context),
-                notices: [
-                  if (!wallet.isHW) _WalletSetupReminder(wallet: wallet),
-                  if (showMultiAddressNotice)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: _MultiAddressWalletNotice(),
-                    ),
-                ],
+          return AppPaletteScope(
+            paintCanvas: false,
+            child: ZhtlcConfigurationHandler(
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerSignal: _onPointerSignal,
+                child: WalletHomeView(
+                  scrollController: _scrollController,
+                  arrrActivationService:
+                      RepositoryProvider.of<ArrrActivationService>(context),
+                  notices: [
+                    if (!wallet.isHW) _WalletSetupReminder(wallet: wallet),
+                    if (showMultiAddressNotice)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: _MultiAddressWalletNotice(),
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -212,9 +215,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
           child: PageLayout(
             showBackupNotice: false,
             noBackground: true,
-            header: (isMobile && !isLoggedIn)
-                ? PageHeader(title: LocaleKeys.wallet.tr())
-                : null,
+            header: isMobile ? PageHeader(title: LocaleKeys.wallet.tr()) : null,
             padding: EdgeInsets.zero,
             // Removed page padding here
             content: Expanded(
@@ -228,35 +229,6 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                     key: const Key('wallet-page-scroll-view'),
                     controller: _scrollController,
                     slivers: [
-                      // Add a SizedBox at the top of the sliver list for spacing
-                      if (isLoggedIn) ...[
-                        if (!isMobile)
-                          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                        SliverToBoxAdapter(
-                          child: WalletOverview(
-                            key: const Key('wallet-overview'),
-                            onPortfolioGrowthPressed: () =>
-                                _tabController.animateTo(1),
-                            onPortfolioProfitLossPressed: () =>
-                                _tabController.animateTo(2),
-                            onAssetsPressed: () => _tabController.animateTo(0),
-                          ),
-                        ),
-                        const SliverToBoxAdapter(child: WalletSwapStatus()),
-                        if (authState.currentUser?.wallet.isHW == false)
-                          SliverToBoxAdapter(
-                            child: _WalletSetupReminder(
-                              wallet: authState.currentUser!.wallet,
-                            ),
-                          ),
-                        const SliverToBoxAdapter(child: Gap(24)),
-                        if (showMultiAddressNotice) ...[
-                          const SliverToBoxAdapter(
-                            child: _MultiAddressWalletNotice(),
-                          ),
-                          const SliverToBoxAdapter(child: Gap(16)),
-                        ],
-                      ],
                       SliverPersistentHeader(
                         pinned: true,
                         delegate: _SliverTabBarDelegate(
@@ -264,12 +236,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                             controller: _tabController,
                             tabs: [
                               Tab(text: LocaleKeys.assets.tr()),
-                              if (isLoggedIn)
-                                Tab(text: LocaleKeys.portfolioGrowth.tr())
-                              else
-                                Tab(text: LocaleKeys.statistics.tr()),
-                              if (isLoggedIn)
-                                Tab(text: LocaleKeys.profitAndLoss.tr()),
+                              Tab(text: LocaleKeys.statistics.tr()),
                             ],
                           ),
                         ),

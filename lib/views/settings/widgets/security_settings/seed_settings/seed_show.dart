@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -226,6 +225,7 @@ class _TitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -242,20 +242,19 @@ class _TitleRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: theme.custom.warningColor.withValues(alpha: 0.1),
-            border: Border.all(color: theme.custom.warningColor),
+            color: palette.warningBg,
+            border: Border.all(color: palette.warning),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
-              Icon(Icons.warning, color: theme.custom.warningColor),
+              Icon(Icons.warning, color: palette.warning),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   LocaleKeys.copyWarning.tr(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: theme.custom.warningColor,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: palette.warning),
                 ),
               ),
             ],

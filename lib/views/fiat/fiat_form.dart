@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,7 +13,7 @@ import 'package:web_dex/bloc/fiat/models/i_currency.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/forms/fiat/fiat_amount_input.dart';
-import 'package:web_dex/shared/ui/gradient_border.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_wrapper.dart';
 import 'package:web_dex/views/fiat/fiat_action_tab.dart';
 import 'package:web_dex/views/fiat/fiat_inputs.dart';
@@ -110,9 +109,8 @@ class _FiatFormState extends State<FiatForm> {
                   if (state.fiatMode == FiatMode.offramp)
                     Center(child: Text(LocaleKeys.comingSoon.tr()))
                   else
-                    GradientBorder(
-                      innerColor: dexPageColors.frontPlate,
-                      gradient: dexPageColors.formPlateGradient,
+                    DecoratedBox(
+                      decoration: AppSurface.card(AppPalette.of(context)),
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
                         child: Column(
@@ -307,7 +305,7 @@ class _FiatFormState extends State<FiatForm> {
               '$content\n\n${LocaleKeys.errorDetails.tr()}: '
               '${state.providerError}';
         }
-        icon = const Icon(Icons.error_outline, color: Colors.red);
+        icon = Icon(Icons.error_outline, color: AppPalette.of(context).danger);
     }
 
     await showAdaptiveDialog<void>(
@@ -333,13 +331,15 @@ extension on FiatAmountValidationError {
     final fiatId = state.selectedFiat.value?.symbol ?? '';
     switch (this) {
       case FiatAmountValidationError.aboveMaximum:
+        final max = state.maxFiatAmount;
         return LocaleKeys.fiatMaximumAmount.tr(
-          args: [state.maxFiatAmount?.toString() ?? '', fiatId],
+          args: [max == null ? '' : FiatFormat.number(max.toDouble()), fiatId],
         );
       case FiatAmountValidationError.invalid:
       case FiatAmountValidationError.belowMinimum:
+        final min = state.minFiatAmount;
         return LocaleKeys.fiatMinimumAmount.tr(
-          args: [state.minFiatAmount?.toStringAsFixed(2) ?? '', fiatId],
+          args: [min == null ? '' : FiatFormat.number(min.toDouble()), fiatId],
         );
       case FiatAmountValidationError.empty:
         return null;

@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -100,52 +103,98 @@ class _WalletHomeViewState extends State<WalletHomeView> {
           0,
     );
 
+    final wide = !isMobile;
+    final actions = WalletQuickActions(
+      highlight: isEmpty ? WalletQuickAction.receive : null,
+    );
+
     // A Material rather than a plain colour, so presses on the canvas show.
     return Material(
       color: palette.canvas,
-      child: CustomScrollView(
-        key: const Key('wallet-page-scroll-view'),
-        controller: widget.scrollController,
-        slivers: [
-          const SliverToBoxAdapter(child: WalletHomeHeader()),
-          const SliverToBoxAdapter(
-            child: WalletBalanceHero(key: Key('wallet-overview')),
-          ),
-          SliverToBoxAdapter(
-            child: WalletQuickActions(
-              highlight: isEmpty ? WalletQuickAction.receive : null,
-            ),
-          ),
-          const SliverToBoxAdapter(child: WalletSwapStatus()),
-          for (final notice in widget.notices)
-            SliverToBoxAdapter(child: _OnPalette(child: notice)),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          SliverToBoxAdapter(child: SizedBox(key: _toolbarAnchor)),
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: WalletAssetsToolbarDelegate(
-              section: _section,
-              onSection: _selectSection,
-              searchOpen: _searchOpen,
-              onSearchOpen: _openSearch,
-              onSearchClose: _closeSearch,
-              searchController: _searchController,
-              searchFocusNode: _searchFocusNode,
-              onSearchChanged: (value) =>
-                  setState(() => _searchPhrase = value.trim().toLowerCase()),
-              textScaler: MediaQuery.textScalerOf(context),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 4)),
-          ..._sectionSlivers(hideZeroBalances),
-          // Few results would leave too little to scroll, and the field would
-          // slide down from the top as the user types.
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: _searchOpen ? MediaQuery.sizeOf(context).height : 32,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A wide screen keeps the home to a centred column. The scroll view
+          // itself stays full width, so the wheel scrolls it from anywhere.
+          final inset = wide
+              ? math.max(
+                  0.0,
+                  (constraints.maxWidth - WalletHomeGeometry.wideContentWidth) /
+                      2,
+                )
+              : 0.0;
+          Widget column(Widget sliver) => inset == 0
+              ? sliver
+              : SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: inset),
+                  sliver: sliver,
+                );
+          return CustomScrollView(
+            key: const Key('wallet-page-scroll-view'),
+            controller: widget.scrollController,
+            slivers: [
+              // On a wide screen the top bar already names the wallet.
+              SliverToBoxAdapter(
+                child: wide
+                    ? const SizedBox(height: 16)
+                    : const WalletHomeHeader(),
+              ),
+              column(
+                const SliverToBoxAdapter(
+                  child: WalletBalanceHero(key: Key('wallet-overview')),
+                ),
+              ),
+              column(
+                SliverToBoxAdapter(
+                  child: wide
+                      ? Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: actions,
+                          ),
+                        )
+                      : actions,
+                ),
+              ),
+              column(const SliverToBoxAdapter(child: WalletSwapStatus())),
+              for (final notice in widget.notices)
+                column(SliverToBoxAdapter(child: _OnPalette(child: notice))),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              SliverToBoxAdapter(child: SizedBox(key: _toolbarAnchor)),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: WalletAssetsToolbarDelegate(
+                  section: _section,
+                  onSection: _selectSection,
+                  // A phrase carried over from the wide layout stays in
+                  // view, so a filtered list never looks short of assets.
+                  searchOpen:
+                      _searchOpen || (!wide && _searchPhrase.isNotEmpty),
+                  onSearchOpen: _openSearch,
+                  onSearchClose: _closeSearch,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onSearchChanged: (value) => setState(
+                    () => _searchPhrase = value.trim().toLowerCase(),
+                  ),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  inlineSearch: wide,
+                  addAssets: wide,
+                  inset: inset,
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 4)),
+              for (final sliver in _sectionSlivers(hideZeroBalances))
+                column(sliver),
+              // Few results would leave too little to scroll, and the field
+              // would slide down from the top as the user types.
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: _searchOpen ? MediaQuery.sizeOf(context).height : 32,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -162,6 +211,8 @@ class _WalletHomeViewState extends State<WalletHomeView> {
           );
         },
         arrrActivationService: widget.arrrActivationService,
+        // Off a phone the toolbar offers it.
+        showAddAssets: isMobile,
       ),
     ],
     WalletHomeSection.growth => const [

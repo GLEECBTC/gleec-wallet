@@ -613,6 +613,10 @@ import 'tests/wallet/wallet_home/wallet_home_hero_test.dart'
     as wallet_home_hero_test;
 import 'tests/wallet/wallet_home/wallet_home_logic_test.dart'
     as wallet_home_logic_test;
+import 'tests/wallet/wallet_home/wallet_home_wide_test.dart'
+    as wallet_home_wide_test;
+import 'tests/design_system/app_palette_theme_test.dart'
+    as app_palette_theme_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -834,6 +838,8 @@ void main() {
   wallet_home_assets_test.main();
   wallet_home_hero_test.main();
   wallet_home_logic_test.main();
+  group('wallet_home_wide_test', wallet_home_wide_test.main);
+  group('app_palette_theme_test', app_palette_theme_test.main);
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();

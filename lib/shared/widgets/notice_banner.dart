@@ -1,5 +1,6 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show AppPaletteScope;
 
 /// Semantic tone of a [NoticeBanner].
 enum NoticeBannerVariant { info, warning, success, critical }
@@ -79,6 +80,32 @@ class NoticeBanner extends StatelessWidget {
     BuildContext context,
     NoticeBannerVariant variant,
   ) {
+    final palette = AppPaletteScope.maybeOf(context);
+    if (palette != null) {
+      return switch (variant) {
+        NoticeBannerVariant.info => NoticeBannerStyle(
+          background: palette.surfaceHigh,
+          foreground: palette.text,
+          accent: palette.info,
+        ),
+        NoticeBannerVariant.warning => NoticeBannerStyle(
+          background: palette.warningBg,
+          foreground: palette.warning,
+          accent: palette.warning,
+        ),
+        NoticeBannerVariant.critical => NoticeBannerStyle(
+          background: palette.dangerBg,
+          foreground: palette.danger,
+          accent: palette.danger,
+        ),
+        NoticeBannerVariant.success => NoticeBannerStyle(
+          background: palette.successBg,
+          foreground: palette.success,
+          accent: palette.success,
+        ),
+      };
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final scheme = theme.extension<ColorSchemeExtension>();

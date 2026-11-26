@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_section_card.dart';
@@ -20,7 +19,7 @@ class SecurityActionPlate extends StatelessWidget {
   /// [status] One status row under the description
   /// [details] Further controls of the section, below its header
   /// [showWarningIndicator] Whether to show a warning indicator next to the title
-  /// [warningIndicatorColor] Optional color for the warning indicator (defaults to decrease color)
+  /// [warningIndicatorColor] Optional color for the warning indicator (defaults to danger color)
   /// [iconColor] Optional color for the icon (defaults to primary color)
   /// [buttonTextColor] Optional color for the button text (defaults to theme color)
   const SecurityActionPlate({
@@ -237,6 +236,7 @@ class _ActionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final textAlign = isInRowLayout ? TextAlign.left : TextAlign.center;
     final text = Semantics(
       header: true,
@@ -260,7 +260,7 @@ class _ActionTitle extends StatelessWidget {
           width: 7,
           height: 7,
           decoration: BoxDecoration(
-            color: warningIndicatorColor ?? theme.custom.decreaseColor,
+            color: warningIndicatorColor ?? palette.danger,
             borderRadius: BorderRadius.circular(7 / 2),
           ),
         ),
@@ -311,6 +311,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final width = fullWidth ? double.infinity : SecurityActionPlate.actionWidth;
     const height = 48.0;
 
@@ -320,9 +321,8 @@ class _ActionButton extends StatelessWidget {
       width: width,
       height: height,
       text: actionText,
-      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: buttonTextColor ?? theme.custom.defaultGradientButtonTextColor,
-      ),
+      textStyle: Theme.of(context).textTheme.labelLarge
+          ?.copyWith(color: buttonTextColor ?? palette.onBrand),
     );
   }
 }

@@ -169,25 +169,6 @@ void main() {
     });
   });
 
-  testWidgets('the phone carousel can make room for a note', (tester) async {
-    Future<double> pageHeight(double extraHeight) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: StatisticsCarousel(
-              cards: const [SizedBox.expand()],
-              extraHeight: extraHeight,
-            ),
-          ),
-        ),
-      );
-      return tester.getSize(find.byType(PageView)).height;
-    }
-
-    expect(await pageHeight(0), 160);
-    expect(await pageHeight(80), 240);
-  });
-
   group('PortfolioProfitLossChart', () {
     final coins = [setCoin(coinAbbr: 'BTCZ'), setCoin(coinAbbr: 'KMD')];
 

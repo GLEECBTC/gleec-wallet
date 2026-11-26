@@ -1,5 +1,6 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/src/design_system/app_palette_scope.dart';
 
 class UiCheckbox extends StatelessWidget {
   const UiCheckbox({
@@ -27,6 +28,9 @@ class UiCheckbox extends StatelessWidget {
   Widget build(BuildContext context) {
     final onTap = onChanged;
     final borderRadius = BorderRadius.circular(size / 3.6);
+    final palette = AppPaletteScope.maybeOf(context);
+    final fill = palette?.brand ?? theme.custom.defaultCheckboxColor;
+    final outline = palette?.controlBorder ?? theme.custom.borderCheckboxColor;
 
     return Material(
       type: MaterialType.transparency,
@@ -43,15 +47,10 @@ class UiCheckbox extends StatelessWidget {
                 key: checkboxKey,
                 constraints: BoxConstraints.tightFor(width: size, height: size),
                 decoration: BoxDecoration(
-                  color: value
-                      ? theme.custom.defaultCheckboxColor
-                      : theme.custom.noColor,
+                  color: value ? fill : theme.custom.noColor,
                   borderRadius: borderRadius,
                   border: Border.all(
-                    color: borderColor ??
-                        (value
-                            ? theme.custom.defaultCheckboxColor
-                            : theme.custom.borderCheckboxColor),
+                    color: borderColor ?? (value ? fill : outline),
                   ),
                 ),
                 child: value
@@ -59,7 +58,9 @@ class UiCheckbox extends StatelessWidget {
                         child: Icon(
                           Icons.check,
                           size: size * 0.8,
-                          color: theme.custom.checkCheckboxColor,
+                          color:
+                              palette?.onBrand ??
+                              theme.custom.checkCheckboxColor,
                         ),
                       )
                     : const SizedBox.shrink(),

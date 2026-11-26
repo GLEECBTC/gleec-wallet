@@ -19,9 +19,10 @@ class TrezorWithdrawProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Dialog(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: palette.surfaceRaised,
+      shape: AppSurface.cardShape(palette, radius: 12),
       child: Container(
         width: 400,
         padding: const EdgeInsets.all(24),
@@ -39,12 +40,15 @@ class TrezorWithdrawProgressDialog extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message,
-              style: trezorDialogDescription,
+              style: trezorDialogDescription.copyWith(
+                color: palette.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             UiLightButton(
               text: LocaleKeys.cancel.tr(),
+              backgroundColor: palette.surfaceHigh,
               onPressed: () => onCancel(),
             ),
           ],

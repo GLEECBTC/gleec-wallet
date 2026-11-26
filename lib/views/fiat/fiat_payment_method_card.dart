@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show AppPalette;
 import 'package:web_dex/bloc/fiat/models/fiat_payment_method.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
@@ -31,6 +32,7 @@ class FiatPaymentMethodCardState extends State<FiatPaymentMethodCard> {
 
     final relativePercent = widget.paymentMethodData.relativePercent;
     final isBestOffer = relativePercent == Decimal.zero;
+    final palette = AppPalette.of(context);
 
     return InkWell(
       onTap: () {
@@ -44,11 +46,7 @@ class FiatPaymentMethodCardState extends State<FiatPaymentMethodCard> {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: Theme.of(
-              context,
-            ).primaryColor.withValues(alpha: isSelected ? 1 : 0.25),
-          ),
+          side: BorderSide(color: isSelected ? palette.brand : palette.border),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -82,7 +80,9 @@ class FiatPaymentMethodCardState extends State<FiatPaymentMethodCard> {
                 if (isBestOffer)
                   Chip(
                     label: Text(LocaleKeys.bestOffer.tr()),
-                    backgroundColor: Colors.green,
+                    labelStyle: TextStyle(color: palette.success),
+                    backgroundColor: palette.successBg,
+                    side: BorderSide(color: palette.success),
                   )
                 else
                   Text(

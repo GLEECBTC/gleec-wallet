@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -70,12 +69,13 @@ class _ShowSwapDataState extends State<ShowSwapData> {
 
   /// Builds the button that shows or hides the raw swap data in a text field.
   Widget _buildSwitcherButton() {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       width: 160,
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: LocaleKeys.showSwapData.tr(),
       suffix: Icon(
@@ -120,12 +120,13 @@ class _ShowSwapDataState extends State<ShowSwapData> {
 
   /// Builds the export button that downloads all swap data as a JSON file.
   Widget _buildExportButton() {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       width: 160,
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: LocaleKeys.exportSwapData.tr(),
       icon: _isDownloading

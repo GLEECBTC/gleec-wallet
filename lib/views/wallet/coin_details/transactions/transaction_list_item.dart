@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +9,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/ui/custom_tooltip.dart';
 import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
@@ -61,9 +61,8 @@ class _TransactionListRowState extends State<TransactionListRow> {
     if (_isInternalTransfer || _isDirectionUnknown) {
       return Theme.of(context).textTheme.bodyMedium?.color;
     }
-    return _isReceived
-        ? theme.custom.increaseColor
-        : theme.custom.decreaseColor;
+    final palette = AppPalette.of(context);
+    return _isReceived ? palette.success : palette.danger;
   }
 
   bool _hasFocus = false;
@@ -178,7 +177,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
             child: AutoScrollText(
               text: formatTransactionDateTime(widget.transaction),
               style: isMobile
-                  ? TextStyle(color: Colors.grey[400])
+                  ? TextStyle(color: AppPalette.of(context).textTertiary)
                   : const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
@@ -270,7 +269,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
         children: [
           Text(
             '${LocaleKeys.memo.tr()}:',
-            style: theme.currentGlobal.textTheme.bodyLarge,
+            style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 6),
           ConstrainedBox(
@@ -282,11 +281,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
           ),
         ],
       ),
-      child: Icon(
-        Icons.note,
-        size: 14,
-        color: theme.currentGlobal.colorScheme.onSurface,
-      ),
+      child: Icon(Icons.note, size: 14, color: AppPalette.of(context).text),
     );
   }
 
@@ -296,11 +291,12 @@ class _TransactionListRowState extends State<TransactionListRow> {
         .getPriceForAsset(widget.transaction.assetId)
         ?.price;
     final usdChanges = price == null ? null : price * _displayAmount;
-    final prefix = _sign.isEmpty ? '' : '$_sign ';
     // This is a current spot valuation, not the value at the transaction date.
     final value = usdChanges == null
         ? '—'
-        : '$prefix\$${formatAmt(usdChanges.abs().toDouble())}';
+        : _sign.isEmpty
+        ? FiatFormat.amount(usdChanges.abs().toDouble())
+        : FiatFormat.signedAmount(usdChanges.toDouble());
     final explanation = usdChanges == null
         ? LocaleKeys.transactionFiatUnavailable.tr()
         : LocaleKeys.transactionCurrentValue.tr();

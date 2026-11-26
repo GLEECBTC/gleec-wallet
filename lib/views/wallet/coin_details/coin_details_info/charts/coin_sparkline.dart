@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
     show SparklineRepository;
 import 'package:komodo_defi_types/komodo_defi_types.dart' show AssetId;
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show AppPalette;
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
 class CoinSparkline extends StatelessWidget {
@@ -32,8 +33,8 @@ class CoinSparkline extends StatelessWidget {
               maxHeight: 35,
               child: SparklineChart(
                 data: snapshot.data!,
-                positiveLineColor: Colors.green,
-                negativeLineColor: Colors.red,
+                positiveLineColor: AppPalette.of(context).success,
+                negativeLineColor: AppPalette.of(context).danger,
                 lineThickness: 1.0,
                 isCurved: true,
               ),

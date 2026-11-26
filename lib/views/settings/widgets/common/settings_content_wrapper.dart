@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class SettingsContentWrapper extends StatelessWidget {
   const SettingsContentWrapper({super.key, required this.child});
@@ -6,13 +7,11 @@ class SettingsContentWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return SingleChildScrollView(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 15),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18.0),
-          color: Theme.of(context).cardColor,
-        ),
+        decoration: AppSurface.card(palette),
         child: child,
       ),
     );

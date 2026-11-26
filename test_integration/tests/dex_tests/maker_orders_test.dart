@@ -28,18 +28,22 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   String? truncatedUuid;
 
   final Finder makeOrderTab = find.byKey(const Key('make-order-tab'));
-  final Finder sellCoinSelectButton =
-      find.byKey(const Key('maker-form-sell-switcher'));
+  final Finder sellCoinSelectButton = find.byKey(
+    const Key('maker-form-sell-switcher'),
+  );
   final Finder sellCoinSearchField = find.descendant(
     of: find.byKey(const Key('maker-sell-coins-table')),
     matching: find.byKey(const Key('search-field')),
   );
-  final Finder sellCoinItem =
-      find.byKey(const Key('Coin-table-item-$sellCoin'));
-  final Finder sellAmountField =
-      find.byKey(const Key('maker-sell-amount-input'));
-  final Finder buyCoinSelectButton =
-      find.byKey(const Key('maker-form-buy-switcher'));
+  final Finder sellCoinItem = find.byKey(
+    const Key('Coin-table-item-$sellCoin'),
+  );
+  final Finder sellAmountField = find.byKey(
+    const Key('maker-sell-amount-input'),
+  );
+  final Finder buyCoinSelectButton = find.byKey(
+    const Key('maker-form-buy-switcher'),
+  );
   final Finder buyCoinSearchField = find.descendant(
     of: find.byKey(const Key('maker-buy-coins-table')),
     matching: find.byKey(const Key('search-field')),
@@ -47,8 +51,9 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   final Finder buyCoinItem = find.byKey(const Key('Coin-table-item-$buyCoin'));
   final Finder buyAmountField = find.byKey(const Key('maker-buy-amount-input'));
   final Finder makeOrderButton = find.byKey(const Key('make-order-button'));
-  final Finder makeOrderConfirmButton =
-      find.byKey(const Key('make-order-confirm-button'));
+  final Finder makeOrderConfirmButton = find.byKey(
+    const Key('make-order-confirm-button'),
+  );
   final Finder orderListItem = find.byType(OrderItem);
   // The details page renders the id through CopiedText under a `uuid-<id>`
   // key, so match that prefix. The old fixed `maker-order-uuid` key is not
@@ -141,10 +146,7 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   // Open order details page
   expect(orderListItem, findsOneWidget);
   await tester.tap(
-    find.descendant(
-      of: orderListItem,
-      matching: find.byType(FocusableWidget),
-    ),
+    find.descendant(of: orderListItem, matching: find.byType(FocusableWidget)),
   );
   print('🔍 MAKER ORDER: Opened order details');
   await tester.pumpAndSettle();
@@ -189,8 +191,7 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
   print('🔍 dragged until doc coin item visible');
-  final docText = docCoinBalance.evaluate().single.widget as AutoScrollText;
-  final String? docBalanceStr = docText.text.split(' ').firstOrNull;
+  final String? docBalanceStr = await _shownAmount(tester, docCoinBalance);
   print('🔍 doc balance str: $docBalanceStr');
   final double? docBalance = double.tryParse(docBalanceStr ?? '');
   print('🔍 doc balance: $docBalance');
@@ -217,8 +218,7 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
     description: 'the MARTY row in the wallet list',
   );
   print('🔍 dragged until marty coin item visible');
-  final martyText = martyCoinBalance.evaluate().single.widget as AutoScrollText;
-  final String? martyBalanceStr = martyText.text.split(' ').firstOrNull;
+  final String? martyBalanceStr = await _shownAmount(tester, martyCoinBalance);
   print('🔍 marty balance str: $martyBalanceStr');
   final double? martyBalance = double.tryParse(martyBalanceStr ?? '');
   print('🔍 marty balance: $martyBalance');
@@ -233,26 +233,39 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   }
 }
 
+/// The number a wallet row shows for what it holds, `5.7694` of
+/// "5.7694 MARTY", once the row has its balance: it draws placeholder bars
+/// until then.
+Future<String?> _shownAmount(WidgetTester tester, Finder amount) async {
+  await tester.pumpUntilFound(
+    amount,
+    timeout: const Duration(seconds: 30),
+    describeTarget: 'the amount held on $amount',
+  );
+  final shown = switch (amount.evaluate().single.widget) {
+    final Text text => text.data,
+    final AutoScrollText text => text.text,
+    _ => null,
+  };
+  return shown?.split(' ').firstOrNull?.replaceAll(',', '');
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets(
-    'Run maker order tests:',
-    (WidgetTester tester) async {
-      print('🔍 MAIN: Starting maker order test suite');
-      tester.testTextInput.register();
-      await app.main();
-      await tester.pumpAndSettle();
+  testWidgets('Run maker order tests:', (WidgetTester tester) async {
+    print('🔍 MAIN: Starting maker order test suite');
+    tester.testTextInput.register();
+    await app.main();
+    await tester.pumpAndSettle();
 
-      print('🔍 MAIN: Accepting alpha warning');
-      await acceptAlphaWarning(tester);
+    print('🔍 MAIN: Accepting alpha warning');
+    await acceptAlphaWarning(tester);
 
-      await restoreWalletToTest(tester);
-      print('🔍 MAIN: Wallet restored');
-      await tester.pumpAndSettle();
+    await restoreWalletToTest(tester);
+    print('🔍 MAIN: Wallet restored');
+    await tester.pumpAndSettle();
 
-      await testMakerOrder(tester);
-      print('🔍 MAIN: Maker order test completed successfully');
-    },
-    semanticsEnabled: false,
-  );
+    await testMakerOrder(tester);
+    print('🔍 MAIN: Maker order test completed successfully');
+  }, semanticsEnabled: false);
 }

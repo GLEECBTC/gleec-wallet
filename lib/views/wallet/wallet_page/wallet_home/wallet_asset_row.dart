@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
+    show SparklineRepository;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
@@ -10,8 +12,11 @@ import 'package:web_dex/shared/utils/balance_format.dart';
 import 'package:web_dex/shared/utils/extensions/sdk_extensions.dart';
 import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/coin_sparkline.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/asset_display_name.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_home/wallet_home_style.dart';
+
+part 'wallet_asset_row_price.dart';
 
 /// One asset in the wallet: its logo, name and network, and market price
 /// with the 24h change; on the right, what is held, in dollars and in coins.
@@ -38,6 +43,14 @@ class WalletAssetRow extends StatefulWidget {
 
   /// Clips the press highlight to the group's corners.
   final BorderRadius? borderRadius;
+
+  /// The market price on a row, a dash until there is one.
+  static const priceKey = Key('wallet-asset-price');
+
+  /// The amount held on the row for [abbr], under the key the older wallet
+  /// list gave it.
+  static Key amountKey(String abbr) =>
+      Key('coin-balance-asset-${abbr.toLowerCase()}');
 
   @override
   State<WalletAssetRow> createState() => _WalletAssetRowState();
@@ -93,6 +106,8 @@ class _WalletAssetRowState extends State<WalletAssetRow> {
           child: InkWell(
             onTap: widget.onTap,
             onLongPress: widget.onLongPress,
+            // A right click is the long press of a mouse.
+            onSecondaryTap: widget.onLongPress,
             borderRadius: widget.borderRadius,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -101,35 +116,49 @@ class _WalletAssetRowState extends State<WalletAssetRow> {
                 Padding(
                   padding: WalletHomeGeometry.rowPadding,
                   child: LayoutBuilder(
-                    builder: (context, constraints) => Row(
-                      children: [
-                        AssetLogo.ofId(
-                          coin.id,
-                          size: WalletHomeGeometry.logoSize,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _NameAndPrice(
+                    builder: (context, constraints) =>
+                        constraints.maxWidth >= WalletHomeGeometry.wideRowFrom
+                        ? _WideRow(
+                            coin: coin,
                             name: names.name,
                             network: names.network,
                             price: price,
                             change: change,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth * 0.42,
-                          ),
-                          child: _Holding(
                             balance: balance,
-                            price: price,
-                            symbol: coin.id.symbol.configSymbol,
                             hidden: hidden,
+                          )
+                        : Row(
+                            children: [
+                              AssetLogo.ofId(
+                                coin.id,
+                                size: WalletHomeGeometry.logoSize,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _NameAndPrice(
+                                  name: names.name,
+                                  network: names.network,
+                                  price: price,
+                                  change: change,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth * 0.42,
+                                ),
+                                child: _Holding(
+                                  balance: balance,
+                                  price: price,
+                                  symbol: coin.id.symbol.configSymbol,
+                                  hidden: hidden,
+                                  amountKey: WalletAssetRow.amountKey(
+                                    coin.abbr,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -147,12 +176,16 @@ class _NameAndPrice extends StatelessWidget {
     required this.network,
     required this.price,
     required this.change,
+    this.showPrice = true,
   });
 
   final String name;
   final String? network;
   final double? price;
   final double? change;
+
+  /// Off where the price has a column of its own.
+  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -181,51 +214,80 @@ class _NameAndPrice extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 3),
-        _PriceLine(price: price, change: change),
+        if (showPrice) ...[
+          const SizedBox(height: 3),
+          _PriceLine(price: price, change: change),
+        ],
       ],
     );
   }
 }
 
-/// The market price and its 24h change, which stay visible when balances
-/// are hidden: they are public, not the user's.
-class _PriceLine extends StatelessWidget {
-  const _PriceLine({required this.price, required this.change});
+/// The row on a wide screen: the price with its 24h change, the week's
+/// sparkline and the holding each take a column, so they line up down the
+/// list.
+class _WideRow extends StatelessWidget {
+  const _WideRow({
+    required this.coin,
+    required this.name,
+    required this.network,
+    required this.price,
+    required this.change,
+    required this.balance,
+    required this.hidden,
+  });
 
+  final Coin coin;
+  final String name;
+  final String? network;
   final double? price;
   final double? change;
+  final double? balance;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
-    final price = this.price;
-    final change = this.change;
-    final style = WalletHomeText.detail(context);
-    if (price == null) return Text('—', style: style);
-    return Semantics(
-      label: [
-        FiatFormat.spokenPrice(price),
-        if (change != null) FiatFormat.percent(change),
-      ].join(', '),
-      excludeSemantics: true,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: AlignmentDirectional.centerStart,
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: FiatFormat.price(price)),
-              if (change != null)
-                TextSpan(
-                  text: '  ${FiatFormat.percent(change)}',
-                  style: TextStyle(color: trendColor(context, change)),
-                ),
-            ],
+    // Only the app provides one; without it the row has no sparkline.
+    final sparklines = context.read<SparklineRepository?>();
+    return Row(
+      children: [
+        AssetLogo.ofId(coin.id, size: WalletHomeGeometry.logoSize),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 4,
+          child: _NameAndPrice(
+            name: name,
+            network: network,
+            price: price,
+            change: change,
+            showPrice: false,
           ),
-          style: style,
-          maxLines: 1,
         ),
-      ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 3,
+          child: _PriceColumn(price: price, change: change),
+        ),
+        if (sparklines != null) ...[
+          const SizedBox(width: 24),
+          SizedBox(
+            width: 90,
+            height: 36,
+            child: CoinSparkline(coinId: coin.id, repository: sparklines),
+          ),
+        ],
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 3,
+          child: _Holding(
+            balance: balance,
+            price: price,
+            symbol: coin.id.symbol.configSymbol,
+            hidden: hidden,
+            amountKey: WalletAssetRow.amountKey(coin.abbr),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -236,12 +298,14 @@ class _Holding extends StatelessWidget {
     required this.price,
     required this.symbol,
     required this.hidden,
+    required this.amountKey,
   });
 
   final double? balance;
   final double? price;
   final String symbol;
   final bool hidden;
+  final Key amountKey;
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +349,14 @@ class _Holding extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        _fit(Text(amount, maxLines: 1, style: WalletHomeText.detail(context))),
+        _fit(
+          Text(
+            amount,
+            key: amountKey,
+            maxLines: 1,
+            style: WalletHomeText.detail(context),
+          ),
+        ),
       ],
     );
   }

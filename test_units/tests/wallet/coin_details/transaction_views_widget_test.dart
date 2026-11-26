@@ -132,7 +132,7 @@ void testTransactionViewsWidgets() {
             ),
           );
           expect(
-            find.text(price == '0' ? r'- $0.00' : r'- $2.00'),
+            find.text(price == '0' ? r'$0.00' : '−\$2.00'),
             findsOneWidget,
           );
           expect(find.text('—'), findsNothing);

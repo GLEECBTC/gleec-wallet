@@ -6,11 +6,19 @@ import 'package:web_dex/shared/ui/gradient_border.dart';
 import 'package:web_dex/shared/ui/ui_tab_bar/ui_tab.dart';
 
 class UiTabBar extends StatefulWidget {
-  const UiTabBar({Key? key, required this.currentTabIndex, required this.tabs})
-    : super(key: key);
+  const UiTabBar({
+    Key? key,
+    required this.currentTabIndex,
+    required this.tabs,
+    this.decoration,
+  }) : super(key: key);
 
   final int currentTabIndex;
   final List<UiTab> tabs;
+
+  /// The bar's frame in place of the trading form's gradient border, for a
+  /// screen drawn on the shared palette.
+  final BoxDecoration? decoration;
 
   @override
   State<UiTabBar> createState() => _UiTabBarState();
@@ -28,25 +36,32 @@ class _UiTabBarState extends State<UiTabBar> {
       useFlexible: !isScrollable,
       isMobileLayout: isMobileLayout,
     );
+    final content = Container(
+      constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
+      padding: const EdgeInsets.all(2),
+      child: SizedBox(
+        height: 36,
+        child: FocusTraversalGroup(
+          child: isScrollable
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: tabs),
+                )
+              : Row(children: tabs),
+        ),
+      ),
+    );
+    final decoration = widget.decoration;
+    if (decoration != null) {
+      // A Container insets its child by the decoration's border, as the
+      // gradient border's padding does.
+      return Container(decoration: decoration, child: content);
+    }
     return GradientBorder(
       borderRadius: const BorderRadius.all(Radius.circular(36)),
       innerColor: dexPageColors.frontPlate,
       gradient: dexPageColors.formPlateGradient,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
-        padding: const EdgeInsets.all(2),
-        child: SizedBox(
-          height: 36,
-          child: FocusTraversalGroup(
-            child: isScrollable
-                ? SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: tabs),
-                  )
-                : Row(children: tabs),
-          ),
-        ),
-      ),
+      child: content,
     );
   }
 

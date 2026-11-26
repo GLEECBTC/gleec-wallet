@@ -331,6 +331,7 @@ class _ControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -342,6 +343,7 @@ class _ControlButtons extends StatelessWidget {
               constraints: const BoxConstraints(minHeight: 48),
               child: UiBorderButton(
                 key: const Key('seed-confirm-clear-button'),
+                backgroundColor: palette.surfaceHigh,
                 height: isMobile ? 52 : 40,
                 onPressed: onClearPressed,
                 text: LocaleKeys.clear.tr(),

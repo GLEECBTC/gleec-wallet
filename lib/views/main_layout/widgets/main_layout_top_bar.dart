@@ -11,7 +11,7 @@ import 'package:web_dex/release_options.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/balance_utils.dart';
 import 'package:web_dex/shared/utils/extensions/sdk_extensions.dart';
-import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/views/common/header/actions/account_switcher.dart';
 
 class MainLayoutTopBar extends StatelessWidget {
@@ -54,7 +54,7 @@ class MainLayoutTopBar extends StatelessWidget {
                 text: LocaleKeys.balance.tr(),
                 secondaryText: hideBalances
                     ? '\$$maskedBalanceText'
-                    : '\$${formatAmt(totalBalance)}',
+                    : FiatFormat.amount(totalBalance),
                 onTap: null,
               ),
             );

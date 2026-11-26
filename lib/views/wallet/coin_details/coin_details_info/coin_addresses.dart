@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,6 +20,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+import 'package:web_dex/shared/utils/fiat_format.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -476,7 +476,7 @@ class _AddressVariantTag extends StatelessWidget {
       LocaleKeys.addressRowStandardTag.tr(),
       key: const Key('address-row-standard-tag'),
       style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
+        color: AppPalette.of(context).textTertiary,
       ),
     );
   }
@@ -534,6 +534,7 @@ class _GaslessRecoveryBanner extends StatelessWidget {
               const SizedBox(height: 8),
               TextButton.icon(
                 key: const Key('gasless-official-recovery-action'),
+                style: TextButton.styleFrom(foregroundColor: style.foreground),
                 onPressed: () => launchURLString(
                   tronGaslessRecoveryUrl(isTestnet: isTestnet),
                 ),
@@ -743,16 +744,15 @@ class _CoinAddressesState extends State<CoinAddresses>
             final List<AddressRailRow> visibleRows = showAll
                 ? rows
                 : rows.take(_collapsedLimit).toList();
+            final palette = AppPalette.of(context);
 
             return SliverToBoxAdapter(
               child: Column(
                 children: [
                   Card(
                     margin: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    color: theme.custom.dexPageTheme.frontPlate,
+                    shape: AppSurface.cardShape(palette, radius: 16),
+                    color: palette.surface,
                     child: Padding(
                       padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
                       child: Column(
@@ -956,10 +956,11 @@ class AddressCard extends StatelessWidget {
         variant != AddressDisplayVariant.gasfree || gaslessReceiveEnabled;
     final gaslessReceiveChecking =
         gaslessReceiveStatus == GaslessReceiveStatus.checking;
+    final palette = AppPalette.of(context);
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
-      color: theme.custom.dexPageTheme.emptyPlace,
+      shape: AppSurface.cardShape(palette, radius: 16),
+      color: palette.surfaceRaised,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         child: LayoutBuilder(
@@ -1123,8 +1124,8 @@ class _Balance extends StatelessWidget {
       );
     }
     final price = coin.lastKnownUsdPrice(context.sdk);
-    final usdValue = price == null ? null : price * total.toDouble();
-    final fiat = hideBalances ? maskedBalanceText : formatUsdValue(usdValue);
+    final usdValue = price == null ? 0.0 : price * total.toDouble();
+    final fiat = hideBalances ? maskedBalanceText : FiatFormat.amount(usdValue);
 
     return Text(
       hideBalances
@@ -2032,6 +2033,7 @@ class CreateButton extends StatelessWidget {
         canCreateNewAddress &&
         status != FormStatus.submitting &&
         createAddressStatus != FormStatus.submitting;
+    final palette = AppPalette.of(context);
 
     return Semantics(
       button: true,
@@ -2042,9 +2044,10 @@ class CreateButton extends StatelessWidget {
         child: UiPrimaryButton(
           height: 48,
           borderRadius: 24,
-          backgroundColor: isMobile
-              ? theme.custom.dexPageTheme.emptyPlace
-              : null,
+          backgroundColor: isMobile ? palette.surfaceHigh : null,
+          // The button's own pick for a light fill is the brand colour, which
+          // is short of 4.5:1 on surfaceHigh.
+          textStyle: isMobile ? TextStyle(color: palette.text) : null,
           text: createAddressStatus == FormStatus.submitting
               ? '${LocaleKeys.creating.tr()}...'
               : LocaleKeys.createAddress.tr(),
@@ -2118,17 +2121,14 @@ class QrCode extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
+                    // Dark modules on light in both themes: some scanners
+                    // cannot read an inverted code.
                     child: QrImageView(
                       data: address,
-                      backgroundColor: Theme.of(context)
-                          .textTheme
-                          .bodyMedium!
-                          .color!,
-                      eyeStyle: QrEyeStyle(
-                        color: theme.custom.dexPageTheme.emptyPlace,
-                      ),
+                      backgroundColor: AppPalette.light.surface,
+                      eyeStyle: QrEyeStyle(color: AppPalette.light.text),
                       dataModuleStyle: QrDataModuleStyle(
-                        color: theme.custom.dexPageTheme.emptyPlace,
+                        color: AppPalette.light.text,
                       ),
                       version: QrVersions.auto,
                       size: qrSize,

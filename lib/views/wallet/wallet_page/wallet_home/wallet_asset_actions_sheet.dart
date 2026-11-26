@@ -24,6 +24,7 @@ Future<void> showWalletAssetActions(BuildContext context, Coin coin) {
   return showModalBottomSheet<void>(
     context: context,
     useSafeArea: true,
+    constraints: walletSheetConstraints,
     backgroundColor: SwapPalette.of(context).surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

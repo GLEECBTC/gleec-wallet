@@ -101,6 +101,10 @@ class BalanceHeroContent extends StatelessWidget {
   static const emptyHintKey = Key('wallet-home-empty-hint');
   static const changeKey = Key('wallet-home-change');
 
+  /// The total, under the key the desktop overview gave it, which the
+  /// integration tests find the wallet page by.
+  static const totalKey = Key('overview-current-value');
+
   @override
   Widget build(BuildContext context) {
     final total = this.total;
@@ -113,6 +117,7 @@ class BalanceHeroContent extends StatelessWidget {
           children: [
             _Caption(hidden: hidden, onToggleHidden: onToggleHidden),
             GestureDetector(
+              key: totalKey,
               onLongPress: onCopy,
               child: AnimatedSwitcher(
                 duration: SwapMotion.of(context, SwapMotion.reveal),

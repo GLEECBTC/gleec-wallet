@@ -456,6 +456,7 @@ class WithdrawFormContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       buildWhen: (prev, curr) =>
           prev.step != curr.step ||
@@ -479,10 +480,7 @@ class WithdrawFormContent extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+                    decoration: AppSurface.card(palette),
                     child: _buildStep(state.step),
                   ),
                 ),
@@ -700,6 +698,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final fee = preview.fee;
     final feeAssetId = _resolveFeeAssetId(context, state.asset, fee);
     final symbol = state.asset.id.symbol.configSymbol;
@@ -711,7 +710,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
     final sameAssetFee = feeAssetId == state.asset.id;
     final totalDeducted = sameAssetFee ? recipientAmount + fee.totalFee : null;
     final labelStyle = theme.textTheme.labelLarge?.copyWith(
-      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
+      color: palette.textTertiary,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -851,6 +850,7 @@ class _WithdrawPreviewDestination extends StatelessWidget {
     required Widget child,
   }) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Container(
       width: double.infinity,
@@ -870,9 +870,7 @@ class _WithdrawPreviewDestination extends StatelessWidget {
               Text(
                 label,
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.textTheme.bodySmall?.color?.withValues(
-                    alpha: 0.72,
-                  ),
+                  color: palette.textTertiary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -932,6 +930,7 @@ class _WithdrawPreviewDestination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final destinationTitle = Text(
       LocaleKeys.withdrawDestination.tr(),
       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -996,9 +995,7 @@ class _WithdrawPreviewDestination extends StatelessWidget {
                 Text(
                   LocaleKeys.memo.tr(),
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withValues(
-                      alpha: 0.72,
-                    ),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2474,6 +2471,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     required Widget child,
   }) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2483,7 +2481,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
+              color: palette.textTertiary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -2497,6 +2495,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final txHash = result.txHash;
     final explorerUrl = txHash == null || txHash.isEmpty
         ? null
@@ -2569,9 +2568,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                     args: [_formatTrimmedDecimal(totalDeducted), symbol],
                   ),
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withValues(
-                      alpha: 0.72,
-                    ),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2582,9 +2579,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                 child: Text(
                   LocaleKeys.recipientAddress.tr(),
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withValues(
-                      alpha: 0.72,
-                    ),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -3181,6 +3176,7 @@ class _RecipientAddressWithNotificationState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final statusColor = theme.colorScheme.primary;
 
     return Column(
@@ -3213,7 +3209,7 @@ class _RecipientAddressWithNotificationState
                 child: Text(
                   LocaleKeys.addressConvertedToMixedCase.tr(),
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: statusColor,
+                    color: palette.text,
                   ),
                 ),
               ),

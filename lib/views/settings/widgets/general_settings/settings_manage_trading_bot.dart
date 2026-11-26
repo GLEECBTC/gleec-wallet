@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -60,12 +59,13 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
   }
 
   Widget _buildExportButton(BuildContext context) {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       width: 180,
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: 'exportMakerOrders'.tr(),
       icon: _isExporting
@@ -80,12 +80,13 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
   }
 
   Widget _buildImportButton(BuildContext context) {
+    final palette = AppPalette.of(context);
     return UiBorderButton(
       width: 180,
       height: 32,
       borderWidth: 1,
-      borderColor: theme.custom.specificButtonBorderColor,
-      backgroundColor: theme.custom.specificButtonBackgroundColor,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceHigh,
       fontWeight: FontWeight.w500,
       text: 'importMakerOrders'.tr(),
       icon: _isImporting
@@ -257,10 +258,15 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
 
+    final palette = AppPalette.of(context);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+        content: Text(
+          message,
+          style: isError ? TextStyle(color: palette.danger) : null,
+        ),
+        backgroundColor: isError ? palette.dangerBg : null,
+        closeIconColor: isError ? palette.danger : null,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
@@ -23,6 +24,7 @@ class SettingsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return BlocBuilder<AuthBloc, AuthBlocState>(
       builder: (context, state) {
         final showSecurity = state.currentUser?.wallet.isHW == false;
@@ -39,10 +41,7 @@ class SettingsMenu extends StatelessWidget {
             mainAxisSize: MainAxisSize.max,
             children: [
               Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(18.0),
-                ),
+                decoration: AppSurface.card(palette),
                 child: Column(
                   mainAxisSize: MainAxisSize.max,
                   children: menuItems

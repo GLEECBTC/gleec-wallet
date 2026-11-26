@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,6 +10,7 @@ class ConvertAddressButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return UiPrimaryButton(
       text: LocaleKeys.convert.tr(),
       width: 80,
@@ -18,7 +18,7 @@ class ConvertAddressButton extends StatelessWidget {
       textStyle: TextStyle(
         fontWeight: FontWeight.w700,
         fontSize: 12,
-        color: theme.custom.defaultGradientButtonTextColor,
+        color: palette.onBrand,
       ),
       onPressed: () => context.read<WithdrawFormBloc>().add(
         const WithdrawFormConvertAddressRequested(),

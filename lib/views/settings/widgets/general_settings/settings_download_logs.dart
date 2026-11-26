@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +20,7 @@ class _SettingsDownloadLogsState extends State<SettingsDownloadLogs> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return SettingsSection(
       title: LocaleKeys.logs.tr(),
       child: Wrap(
@@ -31,8 +31,8 @@ class _SettingsDownloadLogsState extends State<SettingsDownloadLogs> {
             width: 146,
             height: 32,
             borderWidth: 1,
-            borderColor: theme.custom.specificButtonBorderColor,
-            backgroundColor: theme.custom.specificButtonBackgroundColor,
+            borderColor: palette.border,
+            backgroundColor: palette.surfaceHigh,
             fontWeight: FontWeight.w500,
             text: LocaleKeys.debugSettingsDownloadButton.tr(),
             icon: _isDownloadFile

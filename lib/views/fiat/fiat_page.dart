@@ -1,7 +1,7 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/fiat/banxa_fiat_provider.dart';
@@ -55,30 +55,28 @@ class _FiatPageState extends State<FiatPage> with TickerProviderStateMixin {
       coinsRepository,
     );
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    return BlocProvider(
-      create: (_) => FiatFormBloc(
-        repository: fiatRepository,
-        coinsRepo: coinsRepository,
-        sdk: sdk,
-      ),
-      child: MultiBlocListener(
-        listeners: [
-          BlocListener<AuthBloc, AuthBlocState>(
-            listener: _handleAuthStateChange,
-          ),
-          BlocListener<FiatFormBloc, FiatFormState>(
-            listenWhen: (previous, current) =>
-                previous.fiatOrderStatus != current.fiatOrderStatus,
-            listener: _handleOrderStatusChange,
-          ),
-        ],
-        child: _showSwap
-            ? TradingDetails(
-                uuid: routingState.fiatState.uuid,
-              )
-            : FiatPageLayout(
-                activeTabIndex: _activeTabIndex,
-              ),
+    return AppPaletteScope(
+      child: BlocProvider(
+        create: (_) => FiatFormBloc(
+          repository: fiatRepository,
+          coinsRepo: coinsRepository,
+          sdk: sdk,
+        ),
+        child: MultiBlocListener(
+          listeners: [
+            BlocListener<AuthBloc, AuthBlocState>(
+              listener: _handleAuthStateChange,
+            ),
+            BlocListener<FiatFormBloc, FiatFormState>(
+              listenWhen: (previous, current) =>
+                  previous.fiatOrderStatus != current.fiatOrderStatus,
+              listener: _handleOrderStatusChange,
+            ),
+          ],
+          child: _showSwap
+              ? TradingDetails(uuid: routingState.fiatState.uuid)
+              : FiatPageLayout(activeTabIndex: _activeTabIndex),
+        ),
       ),
     );
   }
@@ -136,10 +134,6 @@ class FiatPageLayout extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 650),
           margin: isMobile ? const EdgeInsets.only(top: 14) : null,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: _backgroundColor(context),
-            borderRadius: BorderRadius.circular(18.0),
-          ),
           child: Column(
             children: [
               // TODO: Future feature to show fiat purchase history. Until then,
@@ -164,14 +158,6 @@ class FiatPageLayout extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color? _backgroundColor(BuildContext context) {
-    if (isMobile) {
-      final ThemeMode mode = theme.mode;
-      return mode == ThemeMode.dark ? null : Theme.of(context).cardColor;
-    }
-    return null;
   }
 }
 

@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,7 +32,7 @@ class TransactionTable extends StatelessWidget {
       return SliverToBoxAdapter(
         child: _ErrorMessage(
           text: LocaleKeys.txHistoryNoTransactions.tr(),
-          textColor: theme.currentGlobal.textTheme.bodyLarge?.color,
+          textColor: AppPalette.of(context).textTertiary,
         ),
       );
     }
@@ -90,7 +89,7 @@ class TransactionTable extends StatelessWidget {
           return SliverToBoxAdapter(
             child: _ErrorMessage(
               text: errorText,
-              textColor: theme.currentGlobal.colorScheme.error,
+              textColor: AppPalette.of(context).danger,
               onRetry: () => context.read<TransactionHistoryBloc>().add(
                 TransactionHistorySubscribe(coin: coin),
               ),
@@ -151,7 +150,7 @@ class _ErrorMessage extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              color: theme.currentGlobal.scaffoldBackgroundColor,
+              color: Theme.of(context).scaffoldBackgroundColor,
             ),
             padding: const EdgeInsets.symmetric(vertical: 20),
             margin: const EdgeInsets.fromLTRB(0, 30, 0, 20),

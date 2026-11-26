@@ -1,7 +1,7 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
@@ -103,7 +103,7 @@ class _SettingsModeSelector extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? Theme.of(context).primaryColor
-                              : theme.custom.noColor,
+                              : Colors.transparent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -155,22 +155,22 @@ class _SettingsModeSelector extends StatelessWidget {
   Color _getColor(ThemeMode mode, BuildContext context) {
     switch (mode) {
       case ThemeMode.dark:
-        return const Color.fromRGBO(14, 16, 27, 1);
+        return AppPalette.dark.surface;
       case ThemeMode.light:
-        return const Color.fromRGBO(255, 255, 255, 1);
+        return AppPalette.light.surface;
       case ThemeMode.system:
-        return const Color.fromRGBO(0, 0, 0, 0);
+        return Colors.transparent;
     }
   }
 
   Color _getTextColor(ThemeMode mode, BuildContext context) {
     switch (mode) {
       case ThemeMode.dark:
-        return const Color.fromRGBO(255, 255, 255, 1);
+        return AppPalette.dark.text;
       case ThemeMode.light:
-        return const Color.fromRGBO(125, 144, 161, 1);
+        return AppPalette.light.text;
       case ThemeMode.system:
-        return const Color.fromRGBO(0, 0, 0, 0);
+        return Colors.transparent;
     }
   }
 }

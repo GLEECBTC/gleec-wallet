@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -150,6 +149,7 @@ class _EmptyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double verticalPadding = isMobile ? 50 : 70;
+    final palette = AppPalette.of(context);
     return SliverToBoxAdapter(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -160,14 +160,14 @@ class _EmptyList extends StatelessWidget {
             LocaleKeys.noTransactionsTitle.tr(),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontSize: isMobile ? 14 : 18,
-              color: theme.custom.noTransactionsTextColor,
+              color: palette.textTertiary,
             ),
           ),
           Text(
             LocaleKeys.noTransactionsDescription.tr(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontSize: isMobile ? 12 : 14,
-              color: theme.custom.noTransactionsTextColor,
+              color: palette.textTertiary,
             ),
           ),
           SizedBox(height: verticalPadding),
