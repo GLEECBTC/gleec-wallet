@@ -1,0 +1,181 @@
+{
+  "TESTSOL": {
+    "coin": "TESTSOL",
+    "type": "SOLANA",
+    "name": "Solana (Devnet)",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}?cluster=devnet",
+    "explorer_address_url": "address/{ADDRESS}?cluster=devnet",
+    "supported": [],
+    "active": false,
+    "is_testnet": true,
+    "currently_enabled": false,
+    "wallet_only": false,
+    "fname": "Solana (Devnet)",
+    "mm2": 1,
+    "decimals": 9,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANA",
+      "protocol_data": {}
+    },
+    "derivation_path": "m/44'/501'",
+    "nodes": [
+      {
+        "url": "https://api.devnet.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}?cluster=devnet"
+  },
+  "TESTUSDC-TESTSOL": {
+    "coin": "TESTUSDC-TESTSOL",
+    "type": "SOLANATOKEN",
+    "name": "USD Coin (Solana Devnet)",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "",
+    "explorer_url": "https://explorer.solana.com/",
+    "explorer_tx_url": "tx/{TX}?cluster=devnet",
+    "explorer_address_url": "address/{ADDRESS}?cluster=devnet",
+    "supported": [],
+    "active": false,
+    "is_testnet": true,
+    "currently_enabled": false,
+    "wallet_only": false,
+    "fname": "USD Coin (Solana Devnet)",
+    "mm2": 1,
+    "avg_blocktime": 0.4,
+    "required_confirmations": 1,
+    "protocol": {
+      "type": "SOLANATOKEN",
+      "protocol_data": {
+        "platform": "TESTSOL",
+        "decimals": 6,
+        "mint_address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "program_id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      }
+    },
+    "derivation_path": "m/44'/501'",
+    "parent_coin": "TESTSOL",
+    "decimals": 6,
+    "nodes": [
+      {
+        "url": "https://api.devnet.solana.com"
+      }
+    ],
+    "explorer_block_url": "block/{BLOCK}?cluster=devnet"
+  },
+  "MARTY": {
+    "coin": "MARTY",
+    "type": "Smart Chain",
+    "name": "MARTY",
+    "coinpaprika_id": "",
+    "coingecko_id": "",
+    "livecoinwatch_id": "",
+    "explorer_url": "https://marty.explorer.dexstats.info/",
+    "explorer_tx_url": "tx/",
+    "explorer_address_url": "address/",
+    "supported": [],
+    "active": false,
+    "is_testnet": true,
+    "currently_enabled": false,
+    "wallet_only": false,
+    "sign_message_prefix": "Komodo Signed Message:\n",
+    "asset": "MARTY",
+    "fname": "MARTY",
+    "is_privacy_coin": true,
+    "rpcport": 52592,
+    "pubtype": 60,
+    "p2shtype": 85,
+    "wiftype": 188,
+    "txversion": 4,
+    "overwintered": 1,
+    "mm2": 1,
+    "required_confirmations": 1,
+    "avg_blocktime": 60,
+    "protocol": {
+      "type": "UTXO"
+    },
+    "derivation_path": "m/44'/141'",
+    "trezor_coin": "Komodo",
+    "electrum": [
+      {
+        "url": "marty.electrum1.cipig.net:10021",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ],
+        "protocol": "TCP"
+      },
+      {
+        "url": "marty.electrum1.cipig.net:20021",
+        "protocol": "SSL",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ]
+      },
+      {
+        "url": "marty.electrum1.cipig.net:30021",
+        "protocol": "WSS",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ]
+      },
+      {
+        "url": "marty.electrum2.cipig.net:10021",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ],
+        "protocol": "TCP"
+      },
+      {
+        "url": "marty.electrum2.cipig.net:20021",
+        "protocol": "SSL",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ]
+      },
+      {
+        "url": "marty.electrum2.cipig.net:30021",
+        "protocol": "WSS",
+        "contact": [
+          {
+            "email": "cipi@komodoplatform.com"
+          },
+          {
+            "discord": "cipi#4502"
+          }
+        ]
+      }
+    ],
+    "explorer_block_url": "block/"
+  }
+}
